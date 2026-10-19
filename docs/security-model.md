@@ -53,7 +53,8 @@ does not recognise: an unknown error becomes `console error`.
 ## Side channels
 
 - **Timing.** A run's response leaves the console only at the next multiple of
-  `answer_quantum` (default 5 s) after the run started; a fetch failure after approval too.
+  `answer_quantum` (default 5 s) after the run started; a fetch failure after approval too, and
+  `release` (deleting a larger file takes longer), refusal included.
   Residual: a plan that takes longer than one quantum shows it took longer (one more multiple).
 - **The console window.** At desktop security level 1 the agent's account can read the console's
   window. It shows the agent's own request, the plugin metadata and the outcome codes; causes,

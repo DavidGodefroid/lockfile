@@ -242,15 +242,23 @@ func (b *Backend) answers(ctx context.Context, req ipc.Request, env console.Env)
 	return console.OKResp(req.ID, answers.Result{Handle: p.Handle, Answers: out})
 }
 
-// release deletes a fetched file now.
+// release deletes a fetched file now. The unlink takes longer for a larger
+// file, so the reply, a refusal included, leaves at the next quantum like a
+// run's.
 func (b *Backend) release(ctx context.Context, req ipc.Request, env console.Env) ipc.Response {
 	var p rpc.HandleParams
 	if r := console.Decode(req, &p); r != nil {
 		return *r
 	}
+	pol := policyOf(env)
+	if pol == nil {
+		return console.ErrResp(req.ID, ipc.CodeInternal, msgInternal)
+	}
+	start := b.o.Now()
 	h := workspace.Handle(p.Handle)
 	b.forget(h)
-	if err := b.ws.Release(h); err != nil {
+	err := b.ws.Release(h)
+	if answers.Quantize(ctx, start, pol.P.AnswerQuantum, b.o.Now) != nil || err != nil {
 		return product.Refuse(req.ID, answers.CodeHandleExpired)
 	}
 	env.Audit(Record{Base: stamp(ctx, b.o.Profile, audit.EventRun, "released"), Handle: p.Handle})

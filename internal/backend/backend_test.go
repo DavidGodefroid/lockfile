@@ -481,6 +481,24 @@ func TestQuantumAppliesToRun(t *testing.T) {
 	}
 }
 
+func TestQuantumAppliesToRelease(t *testing.T) {
+	h := newHarness(t, "test.answer1")
+	pr, _ := h.plan(t, rpc.PlanParams{Key: "invoices/a.pdf", Plugins: []string{"test.answer1"}})
+	res, _ := h.runPlan(t, pr.PlanID)
+	for _, c := range []struct {
+		handle, code string
+	}{{res.Handle, ""}, {"f_unknown000", "handle_expired"}} {
+		start := time.Now()
+		resp := h.call(peerCtx(1000), rpc.MethodRelease, rpc.HandleParams{Handle: c.handle})
+		if refusalCode(resp) != c.code {
+			t.Fatalf("release %s: %+v", c.handle, resp.Error)
+		}
+		if d := time.Since(start); d < time.Second {
+			t.Fatalf("release %s answered after %v, before the 1s quantum", c.handle, d)
+		}
+	}
+}
+
 func TestAnswersRecallAndRelease(t *testing.T) {
 	h := newHarness(t, "test.answer1", "test.answer0")
 	pr, _ := h.plan(t, rpc.PlanParams{Key: "invoices/a.pdf", Plugins: []string{"test.answer1"}})

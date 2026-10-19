@@ -123,7 +123,7 @@ lockfile audit [--since 24h] [--json]           # console account only
 | `lockfile run PLAN_ID` | `lockfile_run` | run an approved plan once |
 | `lockfile plan --handle H --plugin X… --run` | `lockfile_plan` + `lockfile_run` | follow-up on the same file |
 | `lockfile answers HANDLE` | `lockfile_answers` | answers already given |
-| `lockfile release HANDLE` | `lockfile_release` | delete the fetched file now |
+| `lockfile release HANDLE` | `lockfile_release` | delete the fetched file now (answers at the next `answer_quantum`) |
 
 Every command takes `--json` and `--profile P` (optional when one console runs). Exit codes
 depend on the outcome only, never on an answer: 0 answered, 1 no console or error, 2 refused, 3
