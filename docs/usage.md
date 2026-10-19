@@ -91,7 +91,8 @@ In a separated setup every `plugin` and `marketplace` command, `list` and `verif
 refuses to run outside the lockfile account (from another account the store looks empty).
 
 The official marketplace's signer is pinned in the binary. An unofficial marketplace needs
-its name typed when added, is flagged on every approval screen and in every agent result,
+its name typed when added (in a terminal: a typed name is never read from a pipe, nor the
+plugin name `plugin update` asks for), is flagged on every approval screen and in every agent result,
 and never runs in auto mode. Keyless signers only in v0.2 (`--public-key` is refused).
 
 A running console sees an installed plugin or an added marketplace as a policy loosening:

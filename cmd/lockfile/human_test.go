@@ -1,6 +1,8 @@
 package main
 
 import (
+	"io"
+	"os"
 	"strings"
 	"testing"
 
@@ -8,6 +10,20 @@ import (
 
 	"github.com/DavidGodefroid/lockfile/internal/product"
 )
+
+// A typed confirmation is read from a terminal only: the right name piped
+// in is refused.
+func TestTypedConfirmationNeedsTerminal(t *testing.T) {
+	h, _ := humanEnv(t, "official")
+	h.terminal = func(io.Reader) bool { return false }
+	code, _, errText := runArgs(t, "acme\n", addArgs("acme")...)
+	if code != product.ExitDenied || !strings.Contains(errText, "terminal") {
+		t.Fatalf("piped name: exit %d: %s", code, errText)
+	}
+	if _, err := os.Stat(h.configPath); !os.IsNotExist(err) {
+		t.Fatal("marketplace added from a pipe")
+	}
+}
 
 // The read-only human commands are gated too: from the agent's account
 // the store is empty, and "plugin verify" exiting 0 on it is false
