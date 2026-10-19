@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/DavidGodefroid/lockkit/config"
 )
 
 // The config file is the human's: these writers append or cut whole
@@ -95,6 +97,51 @@ func AppendMarketplace(path string, r RawMarketplace) (Trust, error) {
 	fmt.Fprintf(&b, "[[marketplaces]]\nname = %s\nindex_url = %s\nidentity_regexp = %s\noidc_issuer = %s\n",
 		tomlString(t.Name), tomlString(t.IndexURL), tomlString(t.IdentityRegexp), tomlString(t.OIDCIssuer))
 	return t, writeConfig(path, []byte(b.String()), mode)
+}
+
+// AppendProfile adds [profiles.<name>] with the given keys (TOML names;
+// string, int or bool values, written in the order of keys) at the end of
+// the config file at path, after checking the whole file with Parse.
+func AppendProfile(path, name string, keys []string, values map[string]any) error {
+	production, _ := values["production"].(bool)
+	if err := config.CheckProfileName(name, production); err != nil {
+		return err
+	}
+	data, mode, err := readConfig(path)
+	if err != nil {
+		return err
+	}
+	if len(data) > 0 {
+		f, err := Parse(data, path)
+		if err != nil {
+			return err
+		}
+		if _, ok := f.Profiles[name]; ok {
+			return fmt.Errorf("profile %s already exists: edit the config file to change it", name)
+		}
+	}
+	var b strings.Builder
+	b.Write(data)
+	if len(data) > 0 && !strings.HasSuffix(string(data), "\n") {
+		b.WriteString("\n")
+	}
+	if len(data) > 0 {
+		b.WriteString("\n")
+	}
+	fmt.Fprintf(&b, "[profiles.%s]\n", name)
+	for _, k := range keys {
+		switch v := values[k].(type) {
+		case string:
+			fmt.Fprintf(&b, "%s = %s\n", k, tomlString(v))
+		case int:
+			fmt.Fprintf(&b, "%s = %d\n", k, v)
+		case bool:
+			fmt.Fprintf(&b, "%s = %t\n", k, v)
+		default:
+			return fmt.Errorf("profile %s: unsupported value for %s", name, k)
+		}
+	}
+	return writeConfig(path, []byte(b.String()), mode)
 }
 
 var (
