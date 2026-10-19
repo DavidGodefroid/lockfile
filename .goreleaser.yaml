@@ -1,0 +1,82 @@
+# GoReleaser configuration for lockfile.
+#
+# Local dry run (no signing, no publishing):
+#   goreleaser check
+#   goreleaser release --snapshot --clean --skip=sign
+#
+# A tag v* pushed to GitHub runs .github/workflows/release.yml, which puts
+# cosign on PATH for the keyless signature.
+version: 2
+
+project_name: lockfile
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: lockfile
+    main: ./cmd/lockfile
+    binary: lockfile
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X github.com/DavidGodefroid/lockfile/internal/product.Version=v{{ .Version }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: lockfile
+    ids: [lockfile]
+    formats: [tar.gz]
+    # `lockfile update` and scripts/install.sh download this name.
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    # Explicit list: docs/ also holds local-only material that must never ship.
+    files:
+      - LICENSE
+      - README.md
+      - CHANGELOG.md
+      - docs/usage.md
+      - docs/security-model.md
+      - docs/plugin-contract.md
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+# Keyless cosign signature of the checksum file (GitHub OIDC in CI). Verify
+# with:
+#   cosign verify-blob --bundle checksums.txt.sigstore.json \
+#     --certificate-identity-regexp '^https://github\.com/DavidGodefroid/lockfile/\.github/workflows/release\.yml@refs/tags/v[0-9]' \
+#     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+#     checksums.txt
+signs:
+  - id: cosign
+    cmd: cosign
+    artifacts: checksum
+    signature: "${artifact}.sigstore.json"
+    args:
+      - sign-blob
+      - --bundle=${signature}
+      - --yes
+      - ${artifact}
+    output: true
+
+changelog:
+  sort: asc
+  use: git
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+release:
+  github:
+    owner: DavidGodefroid
+    name: lockfile
+  prerelease: auto
+  draft: false
