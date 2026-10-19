@@ -9,7 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -151,6 +153,12 @@ type Options struct {
 	// fetch fail).
 	Path    string
 	Backend func(*backend.Options)
+	// Shared runs the console as in a separated setup: its socket in a
+	// shared directory (mode 2750, this process's group) and its own uid
+	// faked as another account's, so that this process is served only as
+	// a client, and only while Clients (nil: always) allows it.
+	Shared  bool
+	Clients func() bool
 }
 
 // Console is a running test console.
@@ -160,7 +168,41 @@ type Console struct {
 	Work    string
 	Root    string
 	Profile string
-	done    chan error
+	// SharedDir is the socket directory of a Shared console.
+	SharedDir string
+	// PluginDir is the plugin store (tests tamper with it).
+	PluginDir string
+	// StartLines is how many lines the console printed before it listened
+	// (start-up: isolation, policy review, status).
+	StartLines int
+	done       chan error
+}
+
+// separated turns iso into a separated setup whose console account is a
+// fake uid and whose clients group is this process's group.
+func separated(t testing.TB, iso *console.IsolationEnv, clients func() bool) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("/tmp", "lfsock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	if err := os.Chmod(dir, 0o750|os.ModeSetgid); err != nil {
+		t.Fatal(err)
+	}
+	g, err := user.LookupGroupId(strconv.Itoa(os.Getgid()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const consoleUID = 99999
+	me := os.Getuid()
+	sys := &sysconf.Config{ServiceUser: "tester", ClientGroup: g.Name, SocketDir: dir, X11: sysconf.X11Refuse}
+	iso.LoadSys = func() (*sysconf.Config, error) { return sys, nil }
+	iso.UID = func() int { return consoleUID }
+	iso.LoginUID = func() (int, bool) { return consoleUID, true }
+	iso.TerminalOwner = func() (int, bool) { return consoleUID, true }
+	iso.ClientAllowed = func(_ *sysconf.Config, uid int) bool { return uid == me && (clients == nil || clients()) }
+	return dir
 }
 
 // Start runs a console serving profile "samples" until the test ends.
@@ -211,6 +253,10 @@ func Start(t testing.TB, o Options) *Console {
 		testenv.Install(t, store, p.Name, testenv.BuildPlugin(t, bin), q, to)
 	}
 	c := &Console{IO: NewScriptIO(o.Answers...), Work: filepath.Join(t.TempDir(), "work"), Root: root, Profile: "samples", done: make(chan error, 1)}
+	c.PluginDir = store.Dir
+	if o.Shared {
+		c.SharedDir = separated(t, iso, o.Clients)
+	}
 	state := t.TempDir()
 	bo := backend.Options{ConfigPath: cfg, Profile: "samples", StateDir: state, PluginDir: store.Dir, WorkDir: c.Work}
 	if o.Backend != nil {
@@ -239,6 +285,7 @@ func Start(t testing.TB, o Options) *Console {
 	})
 	select {
 	case c.Socket = <-ready:
+		c.StartLines = c.IO.Lines()
 	case err := <-c.done:
 		t.Fatalf("console exited before listening: %v\n%s", err, c.IO.Output())
 	case <-time.After(30 * time.Second):
