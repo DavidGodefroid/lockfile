@@ -35,6 +35,21 @@ func Main() {
 	os.Exit(126)
 }
 
+const (
+	// asHeadroom is the address space a plugin gets above its memory
+	// limit. A Go program reserves about 600 MiB at start (page allocator
+	// summaries, arena hints) and fails below 768 MiB in total.
+	asHeadroom = 1 << 30
+	// threadAllowance is how many tasks a plugin may add to its uid. A Go
+	// plugin needs GOMAXPROCS threads plus a few; the margin absorbs other
+	// tasks of the uid (the console, other consoles) starting while it runs.
+	// A plugin over it gets EAGAIN from clone (the Go runtime then dies):
+	// the account keeps tasks for the console.
+	threadAllowance = 512
+	// maxTasks bounds the search for the uid's task count (PID_MAX_LIMIT).
+	maxTasks = 1 << 22
+)
+
 func trampoline(args []string) error {
 	if len(args) != 2 {
 		return fmt.Errorf("trampoline: want 2 arguments, got %d", len(args))
@@ -57,6 +72,10 @@ func trampoline(args []string) error {
 
 	if err := llsys.AllThreadsPrctl(unix.PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0); err != nil {
 		return fmt.Errorf("no_new_privs: %w", err)
+	}
+	nproc, err := nprocLimit()
+	if err != nil {
+		return fmt.Errorf("rlimit nproc: %w", err)
 	}
 	abi, err := llsys.LandlockGetABIVersion()
 	if err != nil || abi < 1 {
@@ -82,11 +101,19 @@ func trampoline(args []string) error {
 		{unix.RLIMIT_CORE, 0, 0},
 		{unix.RLIMIT_FSIZE, 0, 0},
 		{unix.RLIMIT_CPU, cpu, cpu + 1},
-		// Memory is RLIMIT_DATA, not RLIMIT_AS: the Go runtime reserves
-		// (PROT_NONE) far more address space than it uses and cannot start
-		// under a 1 GiB RLIMIT_AS. RLIMIT_DATA counts the private writable
-		// memory actually mapped.
+		// Memory is RLIMIT_DATA: the private writable memory actually
+		// mapped. RLIMIT_DATA does not count shared, grows-down or
+		// read-only mappings (seccomp refuses the first two), so RLIMIT_AS
+		// bounds everything at the limit plus asHeadroom: the Go runtime
+		// reserves (PROT_NONE) more address space than it uses and cannot
+		// start under an RLIMIT_AS near the memory limit.
 		{unix.RLIMIT_DATA, mem, mem},
+		{unix.RLIMIT_AS, mem + asHeadroom, mem + asHeadroom},
+		// RLIMIT_NPROC counts every task (thread) of the real uid, the
+		// console's and other plugins' included, so it is set relative to
+		// what the uid runs now (measured, see uidTasks): the plugin may
+		// add threadAllowance tasks. Not enforced for root.
+		{unix.RLIMIT_NPROC, nproc, nproc},
 	} {
 		if err := unix.Setrlimit(rl.res, &unix.Rlimit{Cur: rl.cur, Max: rl.max}); err != nil {
 			return fmt.Errorf("rlimit %d: %w", rl.res, err)
@@ -97,4 +124,68 @@ func trampoline(args []string) error {
 	}
 	err = syscall.Exec(pluginPath, []string{"plugin"}, []string{protocolEnv})
 	return fmt.Errorf("exec plugin: %w", err)
+}
+
+// uidTasks measures how many tasks the kernel counts against RLIMIT_NPROC
+// for this process's real uid: the smallest soft limit under which a fork
+// still succeeds, minus one. /proc cannot tell: tasks in other pid
+// namespaces, or hidden by hidepid, are counted by the kernel but not
+// listed. It leaves the soft limit changed; the caller sets the final one.
+// ok is false when no fork succeeds up to max.
+func uidTasks(max uint64) (n uint64, ok bool) {
+	if !forkUnder(max, max) {
+		return 0, false
+	}
+	lo, hi := uint64(1), max // forkUnder(hi) holds
+	for lo < hi {
+		mid := lo + (hi-lo)/2
+		if forkUnder(mid, max) {
+			hi = mid
+		} else {
+			lo = mid + 1
+		}
+	}
+	return lo - 1, true
+}
+
+// forkUnder reports whether a child process can be created with the soft
+// RLIMIT_NPROC at limit. The child exits at once without running Go code.
+func forkUnder(limit, max uint64) bool {
+	if err := unix.Setrlimit(unix.RLIMIT_NPROC, &unix.Rlimit{Cur: limit, Max: max}); err != nil {
+		return false
+	}
+	pid, _, errno := syscall.RawSyscall(syscall.SYS_CLONE, uintptr(syscall.SIGCHLD), 0, 0)
+	if errno != 0 {
+		return false
+	}
+	if pid == 0 {
+		syscall.RawSyscall(syscall.SYS_EXIT_GROUP, 0, 0, 0)
+	}
+	var ws syscall.WaitStatus
+	for {
+		if _, err := syscall.Wait4(int(pid), &ws, 0, nil); err != syscall.EINTR {
+			break
+		}
+	}
+	return true
+}
+
+// nprocLimit is the RLIMIT_NPROC of the plugin: the uid's tasks now plus
+// threadAllowance, never above the current hard limit.
+func nprocLimit() (uint64, error) {
+	var cur unix.Rlimit
+	if err := unix.Getrlimit(unix.RLIMIT_NPROC, &cur); err != nil {
+		return 0, err
+	}
+	max := cur.Max
+	if max > maxTasks {
+		max = maxTasks
+	}
+	n, ok := uidTasks(max)
+	if !ok {
+		// Forks fail for another reason (a cgroup pids limit, memory):
+		// keep the inherited limit, the cgroup already caps the tasks.
+		return cur.Max, nil
+	}
+	return min(n+threadAllowance, cur.Max), nil
 }

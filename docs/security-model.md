@@ -11,7 +11,7 @@ console the agent cannot drive, in an account the agent cannot read.
 | The agent cannot drive the console | lockkit's isolation checks: the console runs in its own login session (or a desktop terminal of its own account, Wayland only), refuses X11 on production, refuses relays |
 | Only the clients group reaches the console | socket in `/run/lockfile` (2750, setgid group `lockfile-clients`), socket 0660, kernel peer credentials checked on every connection |
 | The agent cannot replace the binary the console runs | `/usr/local/bin/lockfile` owned by root; `install` refuses a user-writable source unless its sha256 is pinned |
-| A plugin cannot read anything but its input, nor talk to the network | Landlock (execute + read on its own binary only; TCP denied with ABI ≥ 4), seccomp (no sockets, ptrace, mount, bpf, keyctl, second execve, System V IPC, POSIX message queues, signals to other processes including through a descriptor owner), rlimits, empty environment, input as a read-only fd 3, stdout capped at 3 bytes, stderr discarded |
+| A plugin cannot read anything but its input, nor talk to the network | Landlock (execute + read on its own binary only; TCP denied with ABI ≥ 4), seccomp (no sockets, ptrace, mount, bpf, keyctl, second execve, System V IPC, POSIX message queues, signals to other processes including through a descriptor owner, shared anonymous memory), rlimits (CPU, data and address space, a task cap relative to the account's tasks), empty environment, input as a read-only fd 3, stdout capped at 3 bytes, stderr discarded |
 | A plugin answers only its signed question | the manifest's question/1/0 are signed with the binary; marketplace review; a changed question is a loosening the human types to accept |
 | Plugins and releases are what their publisher built | cosign keyless signatures checked through lockkit `update` (index, manifest, binary, lockfile releases); no unsigned mode; a missing cosign refuses |
 | The agent cannot widen the policy | no IPC method installs, trusts or loosens anything; `change.request` only queues text for the human |
@@ -77,3 +77,7 @@ does not recognise: an unknown error becomes `console error`.
 - A question can itself be about content ("is the amount above 10 000?"): the marketplace's
   review rule refuses such questions; an unofficial marketplace may not.
 - `fetch_failed` and `plugin_error` each carry one symbol that depends on the file.
+- Plugin resource caps are availability limits, not isolation: the task cap is `RLIMIT_NPROC`
+  set to the account's current task count (measured from the kernel) plus 512, so it is shared
+  with whatever else the account starts meanwhile, and root ignores it (the console never runs
+  as root). Memory is bounded by `RLIMIT_DATA` and `RLIMIT_AS` (limit + 1 GiB).

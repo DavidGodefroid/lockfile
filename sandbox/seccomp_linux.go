@@ -99,7 +99,8 @@ func numberBlocks() []bpf.Instruction {
 
 // conditional returns the rules that depend on arguments: signals and
 // limits may target only the plugin itself (pid self, the trampoline's pid
-// kept across exec), and clone may only make threads.
+// kept across exec), clone may only make threads, and mmap may not make
+// shared anonymous or grows-down mappings.
 func conditional(info *arch.Info, self int) ([]seccomp.NameWithConditions, error) {
 	notSelf := seccomp.Condition{Argument: 0, Operation: seccomp.NotEqual, Value: uint64(self)}
 	rules := []seccomp.NameWithConditions{
@@ -110,6 +111,14 @@ func conditional(info *arch.Info, self int) ([]seccomp.NameWithConditions, error
 		// pid 0 is the caller itself.
 		{Name: "prlimit64", Conditions: seccomp.ArgumentConditions{notSelf, {Argument: 0, Operation: seccomp.NotEqual, Value: 0}}},
 		{Name: "clone", Conditions: seccomp.ArgumentConditions{{Argument: 0, Operation: seccomp.BitsNotSet, Value: unix.CLONE_THREAD}}},
+		// Memory RLIMIT_DATA does not count (RLIMIT_AS bounds it too): shared
+		// anonymous memory and grows-down mappings. flags is an unsigned
+		// long, so the library's 64-bit test is exact.
+		{Name: "mmap", Conditions: seccomp.ArgumentConditions{{Argument: 3, Operation: seccomp.BitsSet, Value: unix.MAP_GROWSDOWN}}},
+		{Name: "mmap", Conditions: seccomp.ArgumentConditions{
+			{Argument: 3, Operation: seccomp.BitsSet, Value: unix.MAP_SHARED},
+			{Argument: 3, Operation: seccomp.BitsSet, Value: unix.MAP_ANONYMOUS},
+		}},
 	}
 	for _, r := range rules {
 		if _, ok := info.SyscallNames[r.Name]; !ok {

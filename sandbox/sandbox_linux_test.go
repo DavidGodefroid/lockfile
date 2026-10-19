@@ -165,6 +165,22 @@ func TestMemoryLimit(t *testing.T) {
 	wantFailure(t, o, r, pluginspec.CauseExitCode, pluginspec.CauseSignal)
 }
 
+// RLIMIT_DATA counts private writable memory only: shared anonymous,
+// grows-down and read-only mappings must be refused or bounded too.
+func TestMemoryLimitBypass(t *testing.T) {
+	l := defaultLimits
+	l.Memory = 256 << 20
+	o, r := run(t, plugin(t, "mmapbypass"), l)
+	wantAnswer(t, o, r, false)
+}
+
+// A plugin cannot exhaust the tasks of the console's account: thread
+// creation stops at the cap and the runtime dies.
+func TestThreadCap(t *testing.T) {
+	o, r := run(t, plugin(t, "threads"), defaultLimits)
+	wantFailure(t, o, r, pluginspec.CauseExitCode, pluginspec.CauseSignal)
+}
+
 func TestBigStdout(t *testing.T) {
 	o, r := run(t, plugin(t, "bigout"), defaultLimits)
 	wantFailure(t, o, r, pluginspec.CauseOutputTooLong)
