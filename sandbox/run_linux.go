@@ -144,18 +144,21 @@ func Run(ctx context.Context, s Spec) (pluginspec.Outcome, Report, error) {
 	_ = cmd.Wait()
 	rep.Duration = time.Since(start)
 
-	grace := time.NewTimer(drainGrace)
-	defer grace.Stop()
+	// One deadline for both pipes: a closed channel, readable by each select
+	// (a timer's channel fires once).
+	grace := make(chan struct{})
+	t := time.AfterFunc(drainGrace, func() { close(grace) })
+	defer t.Stop()
 	var out stdout
 	select {
 	case out = <-outc:
-	case <-grace.C:
+	case <-grace:
 		outR.Close()
 		out = <-outc
 	}
 	select {
 	case rep.StderrBytes = <-errc:
-	case <-grace.C:
+	case <-grace:
 		errR.Close()
 		rep.StderrBytes = <-errc
 	}

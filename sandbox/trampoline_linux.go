@@ -48,9 +48,12 @@ func trampoline(args []string) error {
 		return fmt.Errorf("trampoline: memory: %w", err)
 	}
 	runtime.LockOSThread()
-	// The plugin keeps fds 0-3 only.
-	syscall.CloseOnExec(fdBinary)
-	syscall.CloseOnExec(fdStatus)
+	// The plugin keeps fds 0-3 only, whatever the console left inheritable.
+	if err := unix.CloseRange(fdBinary, ^uint(0), unix.CLOSE_RANGE_CLOEXEC); err != nil {
+		for fd := fdBinary; fd < 4096; fd++ {
+			syscall.CloseOnExec(fd)
+		}
+	}
 
 	if err := llsys.AllThreadsPrctl(unix.PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0); err != nil {
 		return fmt.Errorf("no_new_privs: %w", err)
@@ -67,7 +70,8 @@ func trampoline(args []string) error {
 	if err := landlock.V10.BestEffort().Restrict(rule); err != nil {
 		return fmt.Errorf("%s: landlock: %v", ErrUnsupported, err)
 	}
-	filter, err := buildFilter()
+	// The pid survives the exec: the plugin may signal and limit only it.
+	filter, err := buildFilter(os.Getpid())
 	if err != nil {
 		return fmt.Errorf("%s: seccomp: %v", ErrUnsupported, err)
 	}
