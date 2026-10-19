@@ -174,6 +174,27 @@ func TestSweepOrphans(t *testing.T) {
 	}
 }
 
+// A work_dir pointed by mistake at a directory with other content keeps that
+// content: only entries the workspace creates (32 hex characters) go.
+func TestSweepOnlyOwnEntries(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "audit.log"), []byte("keep"), 0o600)
+	os.MkdirAll(filepath.Join(dir, "plugins", "pdf.x"), 0o700)
+	os.MkdirAll(filepath.Join(dir, strings.Repeat("ab", 16)), 0o700)
+	os.MkdirAll(filepath.Join(dir, strings.Repeat("AB", 16)), 0o700)
+	m := open(t, dir, 1<<20, time.Hour, nil)
+	if _, _, err := m.Create(strings.NewReader("x"), 10); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Close(); err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(entries(t, dir), " ")
+	if got != strings.Repeat("AB", 16)+" audit.log plugins" {
+		t.Fatalf("left %q", got)
+	}
+}
+
 func TestReleaseUnknownHandle(t *testing.T) {
 	m := open(t, t.TempDir(), 1<<20, time.Hour, nil)
 	defer m.Close()
