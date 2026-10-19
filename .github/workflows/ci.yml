@@ -31,6 +31,8 @@ jobs:
             grep -E -- '--- FAIL|_test\.go:[0-9]+:|^FAIL|panic:' test.log | head -40 | sed 's/^/::error::/'
             exit 1
           }
+      - name: go test (integration)
+        run: go test -count=1 -tags integration ./test/integration/...
 
   lint:
     name: lint (staticcheck, govulncheck)
@@ -44,6 +46,6 @@ jobs:
           go-version: "1.26.x"
           check-latest: true
       - name: staticcheck
-        run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...
+        run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 -tags integration ./...
       - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 -tags integration ./...
