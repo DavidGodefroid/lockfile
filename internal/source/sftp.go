@@ -25,6 +25,8 @@ type SFTPConfig struct {
 type SFTPCreds struct {
 	Password   string
 	PrivateKey []byte
+	// Passphrase decrypts PrivateKey when it is encrypted.
+	Passphrase []byte
 }
 
 type sftpSource struct {
@@ -47,7 +49,13 @@ func NewSFTP(cfg SFTPConfig, creds SFTPCreds) (Source, error) {
 	}
 	var auth []ssh.AuthMethod
 	if len(creds.PrivateKey) > 0 {
-		signer, err := ssh.ParsePrivateKey(creds.PrivateKey)
+		var signer ssh.Signer
+		var err error
+		if len(creds.Passphrase) > 0 {
+			signer, err = ssh.ParsePrivateKeyWithPassphrase(creds.PrivateKey, creds.Passphrase)
+		} else {
+			signer, err = ssh.ParsePrivateKey(creds.PrivateKey)
+		}
 		if err != nil {
 			return nil, wrap("sftp private key", err)
 		}
