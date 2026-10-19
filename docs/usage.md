@@ -87,6 +87,9 @@ lockfile marketplace add acme --index https://plugins.acme.example/index.json \
 lockfile marketplace list | remove NAME
 ```
 
+In a separated setup every `plugin` and `marketplace` command, `list` and `verify` included,
+refuses to run outside the lockfile account (from another account the store looks empty).
+
 The official marketplace's signer is pinned in the binary. An unofficial marketplace needs
 its name typed when added, is flagged on every approval screen and in every agent result,
 and never runs in auto mode. Keyless signers only in v0.2 (`--public-key` is refused).

@@ -222,6 +222,9 @@ func pluginList(e env, args []string) int {
 	if len(args) != 0 {
 		return usageErr(e, pluginUsage)
 	}
+	if err := serviceAccount(); err != nil {
+		return failHuman(e, "plugin list", err)
+	}
 	store, err := pluginStore()
 	if err != nil {
 		return failHuman(e, "plugin list", err)
@@ -251,6 +254,10 @@ func pluginList(e env, args []string) int {
 func pluginVerify(e env, args []string) int {
 	if len(args) > 1 {
 		return usageErr(e, pluginUsage)
+	}
+	// From another account the store is empty: "ok" would be false assurance.
+	if err := serviceAccount(); err != nil {
+		return failHuman(e, "plugin verify", err)
 	}
 	store, err := pluginStore()
 	if err != nil {

@@ -108,6 +108,9 @@ func marketplaceList(e env, args []string) int {
 	if len(args) != 0 {
 		return usageErr(e, marketplaceUsage)
 	}
+	if err := serviceAccount(); err != nil {
+		return failHuman(e, "marketplace list", err)
+	}
 	fmt.Fprintf(e.stdout, "official  %s  (signer %s)\n", marketplace.OfficialIndexURL, verify.Official.IdentityRegexp)
 	path, err := configPath()
 	if err != nil {
