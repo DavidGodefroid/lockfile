@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -287,6 +288,35 @@ func TestSuccessfulResultsChecked(t *testing.T) {
 				t.Fatalf("err = %#v", err)
 			}
 		})
+	}
+}
+
+func TestResolveTextsAndSingleProbe(t *testing.T) {
+	dir := runtimeDir(t)
+	var probes atomic.Int32
+	counted := func(profile string) func(ipc.Request) ipc.Response {
+		return func(req ipc.Request) ipc.Response {
+			probes.Add(1)
+			return statusOf(profile, false)(req)
+		}
+	}
+	fakeConsole(t, filepath.Join(dir, "user-a.sock"), "a", counted("a"))
+	if p, err := Resolve("", ""); err != nil || p != "a" {
+		t.Fatalf("one console: %q %v", p, err)
+	}
+	if n := probes.Load(); n != 1 {
+		t.Fatalf("%d probes for one call, want 1", n)
+	}
+	fakeConsole(t, filepath.Join(dir, "user-b.sock"), "b", statusOf("b", false))
+	var ce *Error
+	if _, err := Resolve("", ""); !errors.As(err, &ce) || ce.Msg != severalText {
+		t.Fatalf("several: %v", err)
+	}
+	if _, err := Resolve("a", "b"); !errors.As(err, &ce) || ce.Msg != pinnedText {
+		t.Fatalf("pinned: %v", err)
+	}
+	if p, err := Resolve("a", "a"); err != nil || p != "a" {
+		t.Fatalf("pinned same: %q %v", p, err)
 	}
 }
 

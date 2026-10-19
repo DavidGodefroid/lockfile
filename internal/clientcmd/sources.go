@@ -236,7 +236,7 @@ func helloProfile(ctx context.Context, path string) (string, bool) {
 	return resp.Result.Profile, true
 }
 
-// SourceNames lists the profiles of the running consoles (mcpkit.Profiles).
+// SourceNames lists the profiles of the running consoles.
 func SourceNames() ([]string, error) {
 	src, err := Sources(context.Background())
 	if err != nil {
@@ -249,32 +249,46 @@ func SourceNames() ([]string, error) {
 	return names, nil
 }
 
+// Fixed texts of Resolve; lockkit's own texts name config files that
+// lockfile does not have, so they are never passed on.
+const (
+	pinnedText  = "this lockfile MCP server is pinned to one profile: leave the profile out"
+	severalText = "several lockfile consoles are running: pass the profile (lockfile sources lists them)"
+)
+
+// pinnedProfile is the profile of a pinned MCP server's call: lockkit's
+// rule (the argument may only repeat the pinned profile), lockfile's text.
+func pinnedProfile(pinned, arg string) (string, error) {
+	p, err := mcpkit.Profiles{Product: product.P, Pinned: pinned}.Resolve(arg)
+	if err != nil {
+		return "", &Error{Kind: KindOther, Msg: pinnedText}
+	}
+	return p, nil
+}
+
 // Resolve picks the profile of a call: pinned (MCP --profile), given, or
-// the only running console's. A given profile no console serves is the
-// unknown_profile refusal naming its start command.
+// the only running console's, probing the consoles once. A given profile
+// no console serves is the unknown_profile refusal naming its start
+// command.
 func Resolve(pinned, arg string) (string, error) {
-	if pinned == "" && arg != "" {
-		names, err := SourceNames()
-		if err != nil {
-			return "", err
-		}
+	if pinned != "" {
+		return pinnedProfile(pinned, arg)
+	}
+	names, err := SourceNames()
+	if err != nil {
+		return "", err
+	}
+	if arg != "" {
 		if !slices.Contains(names, arg) {
 			return "", unknownProfile(arg)
 		}
 		return arg, nil
 	}
-	if pinned == "" {
-		names, err := SourceNames()
-		if err != nil {
-			return "", err
-		}
-		if len(names) == 0 {
-			return "", &Error{Kind: KindNoConsole, Msg: NoConsoleText}
-		}
+	switch len(names) {
+	case 0:
+		return "", &Error{Kind: KindNoConsole, Msg: NoConsoleText}
+	case 1:
+		return names[0], nil
 	}
-	p, err := mcpkit.Profiles{Product: product.P, Pinned: pinned, List: SourceNames}.Resolve(arg)
-	if err != nil {
-		return "", &Error{Kind: KindOther, Msg: err.Error()}
-	}
-	return p, nil
+	return "", &Error{Kind: KindOther, Msg: severalText}
 }
