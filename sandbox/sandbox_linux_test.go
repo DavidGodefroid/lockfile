@@ -230,6 +230,14 @@ func TestNoSignalsToOthers(t *testing.T) {
 	wantAnswer(t, o, r, false)
 }
 
+// System V IPC objects and POSIX message queues outlive the plugin and are
+// shared with every account in the IPC namespace: a covert channel to the
+// agent account that Landlock does not cover.
+func TestNoSysVIPC(t *testing.T) {
+	o, r := run(t, plugin(t, "sysvipc"), defaultLimits)
+	wantAnswer(t, o, r, false)
+}
+
 func TestNoFork(t *testing.T) {
 	o, r := run(t, plugin(t, "fork"), defaultLimits)
 	wantAnswer(t, o, r, false)

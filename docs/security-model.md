@@ -11,7 +11,7 @@ console the agent cannot drive, in an account the agent cannot read.
 | The agent cannot drive the console | lockkit's isolation checks: the console runs in its own login session (or a desktop terminal of its own account, Wayland only), refuses X11 on production, refuses relays |
 | Only the clients group reaches the console | socket in `/run/lockfile` (2750, setgid group `lockfile-clients`), socket 0660, kernel peer credentials checked on every connection |
 | The agent cannot replace the binary the console runs | `/usr/local/bin/lockfile` owned by root; `install` refuses a user-writable source unless its sha256 is pinned |
-| A plugin cannot read anything but its input, nor talk to the network | Landlock (execute + read on its own binary only; TCP denied with ABI ≥ 4), seccomp (no sockets, ptrace, mount, bpf, keyctl, second execve), rlimits, empty environment, input as a read-only fd 3, stdout capped at 3 bytes, stderr discarded |
+| A plugin cannot read anything but its input, nor talk to the network | Landlock (execute + read on its own binary only; TCP denied with ABI ≥ 4), seccomp (no sockets, ptrace, mount, bpf, keyctl, second execve, System V IPC, POSIX message queues), rlimits, empty environment, input as a read-only fd 3, stdout capped at 3 bytes, stderr discarded |
 | A plugin answers only its signed question | the manifest's question/1/0 are signed with the binary; marketplace review; a changed question is a loosening the human types to accept |
 | Plugins and releases are what their publisher built | cosign keyless signatures checked through lockkit `update` (index, manifest, binary, lockfile releases); no unsigned mode; a missing cosign refuses |
 | The agent cannot widen the policy | no IPC method installs, trusts or loosens anything; `change.request` only queues text for the human |
@@ -49,6 +49,12 @@ does not recognise: an unknown error becomes `console error`.
   location (bucket and prefix, host and base directory, or path), and **a reason the human types
   with a denial (`n <reason>`) is echoed in the window** by lockkit: do not type file details there.
 - **Exit codes** depend on the outcome only, never on an answer.
+- **Plugin IPC.** System V shared memory, message queues and semaphores, and POSIX message
+  queues, outlive the plugin and are reachable by every account in the same IPC namespace;
+  Landlock does not cover them. seccomp refuses every one of these system calls (`EPERM`). The
+  plugin stays in the host IPC namespace: an unprivileged IPC namespace needs a user namespace,
+  which Ubuntu 24.04+ restricts through AppArmor by default and which would hand the plugin
+  in-namespace capabilities; the seccomp denial is the control.
 
 ## Data at rest
 

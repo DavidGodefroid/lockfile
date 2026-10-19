@@ -44,6 +44,14 @@ var denied = []string{
 	"setpriority", "ioprio_set", "sched_setaffinity", "sched_setscheduler", "sched_setparam", "sched_setattr",
 	// Child processes: only threads (clone with CLONE_THREAD, below).
 	"fork", "vfork", "clone3",
+	// System V IPC and POSIX message queues are not files: Landlock does
+	// not see them, the objects outlive the plugin, and every account in
+	// the same IPC namespace (the agent's too) can attach to a segment or
+	// queue made with permissive modes. A covert channel to the agent.
+	"shmget", "shmat", "shmdt", "shmctl",
+	"msgget", "msgsnd", "msgrcv", "msgctl",
+	"semget", "semop", "semtimedop", "semctl",
+	"mq_open", "mq_unlink", "mq_timedsend", "mq_timedreceive", "mq_notify", "mq_getsetattr",
 }
 
 // available keeps the names this architecture has (arm64 has no chmod,
