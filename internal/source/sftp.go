@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"io"
+	"io/fs"
 	"net"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/pkg/sftp"
@@ -107,20 +109,63 @@ func (s sftpSource) dial(ctx context.Context) (sftpConn, error) {
 	return sftpConn{ssh: sc, sftp: fc}, nil
 }
 
-func (s sftpSource) path(key string) (string, error) {
+// errOutsideBase is the cause of a key whose path on the server goes
+// through a symbolic link or resolves outside base_dir.
+var errOutsideBase = errors.New("path leaves base_dir on the server")
+
+// open checks key, dials, and returns the key's path once the server shows
+// it inside base_dir: CheckKey is lexical, the server's file system is not.
+// Every component below base_dir is Lstat'ed and must not be a symbolic
+// link, and the server's canonical path must stay under base_dir's.
+func (s sftpSource) open(ctx context.Context, key string) (sftpConn, string, error) {
 	k, err := CheckKey("", key)
 	if err != nil {
-		return "", err
+		return sftpConn{}, "", err
 	}
-	return path.Join(s.cfg.BaseDir, k), nil
+	c, err := s.dial(ctx)
+	if err != nil {
+		return sftpConn{}, "", err
+	}
+	p, err := contained(c.sftp, s.cfg.BaseDir, k)
+	if err != nil {
+		c.Close()
+		return sftpConn{}, "", err
+	}
+	return c, p, nil
+}
+
+func contained(c *sftp.Client, base, key string) (string, error) {
+	cur := base
+	for _, seg := range strings.Split(key, "/") {
+		cur = path.Join(cur, seg)
+		fi, err := c.Lstat(cur)
+		if err != nil {
+			return "", wrap("sftp lstat", err)
+		}
+		if fi.Mode()&fs.ModeSymlink != 0 {
+			return "", wrap("sftp", errOutsideBase)
+		}
+	}
+	b := base
+	if b == "" {
+		b = "."
+	}
+	rb, err := c.RealPath(b)
+	if err != nil {
+		return "", wrap("sftp realpath", err)
+	}
+	rp, err := c.RealPath(cur)
+	if err != nil {
+		return "", wrap("sftp realpath", err)
+	}
+	if !strings.HasPrefix(rp, strings.TrimSuffix(rb, "/")+"/") {
+		return "", wrap("sftp", errOutsideBase)
+	}
+	return cur, nil
 }
 
 func (s sftpSource) Stat(ctx context.Context, key string) (ObjectInfo, error) {
-	p, err := s.path(key)
-	if err != nil {
-		return ObjectInfo{}, err
-	}
-	c, err := s.dial(ctx)
+	c, p, err := s.open(ctx, key)
 	if err != nil {
 		return ObjectInfo{}, err
 	}
@@ -143,11 +188,7 @@ type sftpFile struct {
 func (f sftpFile) Close() error { return errors.Join(f.File.Close(), f.conn.Close()) }
 
 func (s sftpSource) Open(ctx context.Context, key string) (io.ReadCloser, error) {
-	p, err := s.path(key)
-	if err != nil {
-		return nil, err
-	}
-	c, err := s.dial(ctx)
+	c, p, err := s.open(ctx, key)
 	if err != nil {
 		return nil, err
 	}
