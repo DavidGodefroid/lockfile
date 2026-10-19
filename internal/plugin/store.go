@@ -260,6 +260,10 @@ func (s Store) Remove(name string) error {
 	return nil
 }
 
+// RemoveAll deletes the whole store (a staging store, once its plugin is
+// copied into the real one).
+func (s Store) RemoveAll() error { return removeAll(s.Dir) }
+
 func readNoFollow(path string) ([]byte, error) {
 	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
 	if err != nil {
