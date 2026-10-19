@@ -161,3 +161,9 @@ func ParseBytes(s string) (int64, error) {
 	}
 	return n * mult, nil
 }
+
+// ValidName reports whether s is a valid plugin name.
+func ValidName(s string) bool { return nameRe.MatchString(s) }
+
+// ValidVersion reports whether s is an exact X.Y.Z version.
+func ValidVersion(s string) bool { return versionRe.MatchString(s) }
