@@ -71,6 +71,7 @@ answer_quantum = "5s"         # results leave the console only on multiples of t
 Credentials: S3 takes the access key id as `user` and the secret access key as the secret;
 SFTP `auth = "password"` takes user + password; `auth = "key"` reads the private key (mode
 0600 or stricter, no symlink) in the lockfile account and takes its passphrase as the secret.
+A leading `~/` in `key` and `known_hosts` is the lockfile account's home.
 On SFTP a key whose path below `base_dir` goes through a symbolic link on the server, or that
 the server resolves outside `base_dir`, is not fetched (`fetch_failed`).
 `lockfile forget --profile P` deletes a keychain secret.

@@ -62,7 +62,13 @@ func connect(p profile.Profile, c console.Credentials) (*session, error) {
 			defer secrets.Wipe(key)
 			creds.PrivateKey, creds.Passphrase = key, c.Secret
 		}
-		src, err := source.NewSFTP(p.SFTP, creds)
+		cfg := p.SFTP
+		kh, err := expandHome(cfg.KnownHosts)
+		if err != nil {
+			return nil, errKnownHosts
+		}
+		cfg.KnownHosts = kh
+		src, err := source.NewSFTP(cfg, creds)
 		if err != nil {
 			return nil, err
 		}
@@ -77,16 +83,31 @@ func connect(p profile.Profile, c console.Credentials) (*session, error) {
 	return nil, fmt.Errorf("unknown source %q", p.Source)
 }
 
+// errKnownHosts is the error of a known_hosts path whose "~/" cannot be
+// resolved; it names the option, never the path.
+var errKnownHosts = errors.New("sftp: the known_hosts path cannot be resolved in the lockfile account")
+
+// expandHome resolves a leading "~/" against the home of the account the
+// console runs in (the lockfile account); other paths are kept as they are.
+func expandHome(path string) (string, error) {
+	rest, ok := strings.CutPrefix(path, "~/")
+	if !ok {
+		return path, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return "", errors.New("no home directory")
+	}
+	return filepath.Join(home, rest), nil
+}
+
 // readKeyFile reads the private key at path ("~/" is the lockfile
 // account's home) without following a symlink, refusing a key others may
 // read.
 func readKeyFile(path string) ([]byte, error) {
-	if rest, ok := strings.CutPrefix(path, "~/"); ok {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, errKeyFile
-		}
-		path = filepath.Join(home, rest)
+	path, err := expandHome(path)
+	if err != nil {
+		return nil, errKeyFile
 	}
 	fd, err := syscall.Open(path, syscall.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
 	if err != nil {
