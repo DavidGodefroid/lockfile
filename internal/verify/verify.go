@@ -5,6 +5,7 @@ package verify
 import (
 	"context"
 	"errors"
+	"regexp"
 )
 
 // TrustRoot is who may sign: a keyless identity (certificate identity
@@ -20,6 +21,15 @@ type TrustRoot struct {
 var Official = TrustRoot{
 	IdentityRegexp: `^https://github\.com/DavidGodefroid/lockfile-marketplace/\.github/workflows/release\.yml@refs/tags/`,
 	OIDCIssuer:     "https://token.actions.githubusercontent.com",
+}
+
+// OfficialRelease is the trust root of one official plugin version: the
+// release workflow run on that version's exact tag, <name>/v<version>. A
+// plugin binary or manifest signed by the run of another tag is refused.
+func OfficialRelease(name, version string) TrustRoot {
+	r := Official
+	r.IdentityRegexp += regexp.QuoteMeta(name+"/v"+version) + "$"
+	return r
 }
 
 // Validate checks that exactly one kind of trust root is set.

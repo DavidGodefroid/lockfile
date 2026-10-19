@@ -19,13 +19,25 @@ const OfficialIndexURL = "https://davidgodefroid.github.io/lockfile-marketplace/
 type Marketplace struct {
 	Name     string
 	IndexURL string
-	Root     verify.TrustRoot
-	Official bool
+	// Root signs the index.
+	Root verify.TrustRoot
+	// ReleaseRoot, when set, is the narrower root that must have signed one
+	// plugin version's manifest and binaries; otherwise Root.
+	ReleaseRoot func(name, version string) verify.TrustRoot
+	Official    bool
 }
 
 // Official is the marketplace whose identity is pinned in this binary.
 func Official() Marketplace {
-	return Marketplace{Name: plugin.OfficialMarketplace, IndexURL: OfficialIndexURL, Root: verify.Official, Official: true}
+	return Marketplace{Name: plugin.OfficialMarketplace, IndexURL: OfficialIndexURL, Root: verify.Official,
+		ReleaseRoot: verify.OfficialRelease, Official: true}
+}
+
+func (m Marketplace) releaseRoot(name, version string) verify.TrustRoot {
+	if m.ReleaseRoot != nil {
+		return m.ReleaseRoot(name, version)
+	}
+	return m.Root
 }
 
 // DiffManifests lists what changed between two manifests of a plugin.

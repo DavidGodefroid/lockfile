@@ -30,11 +30,13 @@ type Plugin struct {
 }
 
 type Version struct {
-	Version        string     `json:"version"`
-	ManifestURL    string     `json:"manifest_url"`
-	ManifestSHA256 string     `json:"manifest_sha256"`
-	Yanked         bool       `json:"yanked"`
-	Artifacts      []Artifact `json:"artifacts"`
+	Version        string `json:"version"`
+	ManifestURL    string `json:"manifest_url"`
+	ManifestSHA256 string `json:"manifest_sha256"`
+	// ManifestBundleURL is the cosign bundle of plugin.toml.
+	ManifestBundleURL string     `json:"manifest_bundle_url"`
+	Yanked            bool       `json:"yanked"`
+	Artifacts         []Artifact `json:"artifacts"`
 }
 
 // Artifact is one built binary; BundleURL is its cosign bundle.

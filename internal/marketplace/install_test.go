@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -81,12 +82,14 @@ func newMarket(t *testing.T, name string) *market {
 	u := m.srv.URL
 	m.files["/index.json.sigstore.json"] = []byte("{}")
 	m.files["/pdf.parses-1.0.0/plugin.toml"] = []byte(manifest)
+	m.files["/pdf.parses-1.0.0/plugin.toml.sigstore.json"] = []byte("{}")
 	m.files["/pdf.parses-1.0.0/pdf.parses-1.0.0-linux-amd64"] = binary
 	m.files["/pdf.parses-1.0.0/pdf.parses-1.0.0-linux-amd64.sigstore.json"] = []byte("{}")
 	m.idx = index.Index{Schema: 1, Marketplace: name, Generated: time.Now().UTC(), Plugins: []index.Plugin{{
 		Name: "pdf.parses",
 		Versions: []index.Version{{
 			Version: "1.0.0", ManifestURL: u + "/pdf.parses-1.0.0/plugin.toml", ManifestSHA256: hexsum([]byte(manifest)),
+			ManifestBundleURL: u + "/pdf.parses-1.0.0/plugin.toml.sigstore.json",
 			Artifacts: []index.Artifact{{
 				OS: "linux", Arch: "amd64",
 				URL:       u + "/pdf.parses-1.0.0/pdf.parses-1.0.0-linux-amd64",
@@ -99,11 +102,13 @@ func newMarket(t *testing.T, name string) *market {
 }
 
 func (m *market) marketplace(name string, official bool) Marketplace {
-	root := verify.TrustRoot{PublicKeyPath: "/keys/" + name + ".pub"}
 	if official {
-		root = verify.Official
+		mp := Official()
+		mp.Name = name
+		mp.IndexURL = m.srv.URL + "/index.json"
+		return mp
 	}
-	return Marketplace{Name: name, IndexURL: m.srv.URL + "/index.json", Root: root, Official: official}
+	return Marketplace{Name: name, IndexURL: m.srv.URL + "/index.json", Root: verify.TrustRoot{PublicKeyPath: "/keys/" + name + ".pub"}}
 }
 
 func (m *market) installer(t *testing.T) (Installer, plugin.Store) {
@@ -121,12 +126,15 @@ func TestInstallHappyPath(t *testing.T) {
 	if e.Name != "pdf.parses" || !e.Official || e.Marketplace != "official" || e.BinarySHA256 != hexsum(binary) {
 		t.Fatalf("entry %+v", e)
 	}
-	if got := strings.Join(m.verifier.calls, ","); got != "index.json,artifact" {
+	if got := strings.Join(m.verifier.calls, ","); got != "index.json,plugin.toml,artifact" {
 		t.Fatalf("verified %s", got)
 	}
-	for _, r := range m.verifier.roots {
-		if r != verify.Official {
-			t.Fatalf("root %+v", r)
+	// The index may come from any release run; the manifest and the binary
+	// must come from the run of this exact tag.
+	release := verify.OfficialRelease("pdf.parses", "1.0.0")
+	for i, want := range []verify.TrustRoot{verify.Official, release, release} {
+		if m.verifier.roots[i] != want {
+			t.Fatalf("root %d = %+v, want %+v", i, m.verifier.roots[i], want)
 		}
 	}
 	f, inst, err := s.Open("pdf.parses")
@@ -164,6 +172,34 @@ func TestArtifactSignatureFails(t *testing.T) {
 	m := newMarket(t, "official")
 	m.verifier.fail["artifact"] = true
 	wantFail(t, m, m.marketplace("official", true), "1.0.0", nil)
+}
+
+func TestManifestSignatureFails(t *testing.T) {
+	m := newMarket(t, "official")
+	m.verifier.fail["plugin.toml"] = true
+	wantFail(t, m, m.marketplace("official", true), "1.0.0", nil)
+}
+
+func TestManifestWithoutBundle(t *testing.T) {
+	m := newMarket(t, "official")
+	m.idx.Plugins[0].Versions[0].ManifestBundleURL = ""
+	wantFail(t, m, m.marketplace("official", true), "1.0.0", nil)
+}
+
+func TestOfficialReleaseIdentityIsExact(t *testing.T) {
+	re := regexp.MustCompile(verify.OfficialRelease("pdf.parses", "1.0.0").IdentityRegexp)
+	base := "https://github.com/DavidGodefroid/lockfile-marketplace/.github/workflows/release.yml@refs/tags/"
+	if !re.MatchString(base + "pdf.parses/v1.0.0") {
+		t.Fatal("exact tag refused")
+	}
+	for _, other := range []string{"pdf.parses/v1.0.01", "pdf.parses/v1.0.0x", "pdfXparses/v1.0.0", "pdf.encrypted/v1.0.0", "x/pdf.parses/v1.0.0"} {
+		if re.MatchString(base + other) {
+			t.Errorf("identity of tag %s accepted", other)
+		}
+	}
+	if !regexp.MustCompile(verify.Official.IdentityRegexp).MatchString(base + "pdf.encrypted/v2.0.0") {
+		t.Fatal("index identity must accept any tag")
+	}
 }
 
 func TestArtifactHashMismatch(t *testing.T) {
