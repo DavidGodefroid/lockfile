@@ -54,6 +54,14 @@ func TestUnknownProfile(t *testing.T) {
 }
 
 func TestDiffLoosens(t *testing.T) {
+	setPrefix := func(s string) func(p *Policy) { return func(p *Policy) { p.P.Prefix = s } }
+	// approvedFirst sets the approved policy of a case before the diff.
+	approvedFirst := map[string]func(p *Policy){
+		"prefix inv to invoices/":      setPrefix("inv"),
+		"prefix invoices to invoices2": setPrefix("invoices"),
+		"prefix any to invoices/":      setPrefix(""),
+		"prefix trailing slash only":   setPrefix("invoices"),
+	}
 	for _, tc := range []struct {
 		name    string
 		change  func(p *Policy)
@@ -62,6 +70,12 @@ func TestDiffLoosens(t *testing.T) {
 	}{
 		{"prefix widened", func(p *Policy) { p.P.Prefix = "" }, "prefix", true},
 		{"prefix narrowed", func(p *Policy) { p.P.Prefix = "invoices/2026/" }, "prefix", false},
+		// The prefix is a directory: "inv" means "inv/", so "invoices/" is a
+		// sibling key space, not a narrower one.
+		{"prefix inv to invoices/", setPrefix("invoices/"), "prefix", true},
+		{"prefix invoices to invoices2", setPrefix("invoices2"), "prefix", true},
+		{"prefix any to invoices/", setPrefix("invoices/"), "prefix", false},
+		{"prefix trailing slash only", setPrefix("invoices/"), "prefix", false},
 		{"bucket", func(p *Policy) { p.P.S3.Bucket = "other" }, "bucket", true},
 		{"plugin added", func(p *Policy) {
 			p.Plugins = append(p.Plugins, PluginPin{Name: "pdf.truncated", Version: "1.0.0", Marketplace: "official", Official: true})
@@ -80,6 +94,10 @@ func TestDiffLoosens(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			approved := basePolicy(t)
 			cur := basePolicy(t)
+			if f := approvedFirst[tc.name]; f != nil {
+				f(approved)
+				f(cur)
+			}
 			tc.change(cur)
 			changes := cur.Diff(approved)
 			found := false

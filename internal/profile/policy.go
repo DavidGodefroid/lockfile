@@ -114,7 +114,9 @@ func (p *Policy) Diff(approved config.Policy) []config.Change {
 	same("path", o.LocalPath, n.LocalPath)
 	if o.Prefix != n.Prefix {
 		// A prefix under the old one narrows the keys; anything else widens.
-		out = append(out, config.Change{Field: "prefix", Old: o.Prefix, New: n.Prefix, Loosens: !strings.HasPrefix(n.Prefix, o.Prefix)})
+		// The prefix is a directory (source.CheckKey), so compare on path
+		// boundaries: "inv" -> "invoices/" is a sibling, not a narrowing.
+		out = append(out, config.Change{Field: "prefix", Old: o.Prefix, New: n.Prefix, Loosens: !prefixWithin(n.Prefix, o.Prefix)})
 	}
 	limit := func(field string, ov, nv int64) {
 		if ov != nv {
@@ -172,6 +174,19 @@ func (p *Policy) Diff(approved config.Policy) []config.Change {
 		}
 	}
 	return out
+}
+
+// prefixWithin reports whether the key space of prefix n lies inside the
+// one of prefix o. "" is any key; any other prefix is the directory p + "/".
+func prefixWithin(n, o string) bool {
+	if o == "" {
+		return true
+	}
+	if n == "" {
+		return false
+	}
+	norm := func(p string) string { return strings.TrimSuffix(p, "/") + "/" }
+	return strings.HasPrefix(norm(n), norm(o))
 }
 
 func short(s string) string {
