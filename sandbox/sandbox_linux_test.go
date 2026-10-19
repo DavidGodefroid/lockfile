@@ -1,12 +1,12 @@
 package sandbox
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -214,8 +214,70 @@ func TestStderrDiscarded(t *testing.T) {
 	if r.StderrBytes != 10240 {
 		t.Fatalf("StderrBytes = %d", r.StderrBytes)
 	}
-	if bytes.Contains([]byte(r.Signal), []byte("S")) {
-		t.Fatalf("stderr content leaked into report %+v", r)
+	if r.ExitCode != 0 || r.Signal != "" || o.Cause != pluginspec.CauseNone {
+		t.Fatalf("unexpected outcome %+v report %+v", o, r)
+	}
+	// The plugin writes only 'S' to stderr: no returned value, whatever its
+	// field, may hold that byte (or bytes) as text.
+	for _, v := range []any{o, r} {
+		for _, s := range textOf(reflect.ValueOf(v)) {
+			if strings.Contains(s, "S") {
+				t.Fatalf("stderr content leaked: %q in %+v", s, v)
+			}
+		}
+	}
+}
+
+// textOf returns every string and byte slice reachable from v.
+func textOf(v reflect.Value) []string {
+	switch v.Kind() {
+	case reflect.String:
+		return []string{v.String()}
+	case reflect.Pointer, reflect.Interface:
+		if v.IsNil() {
+			return nil
+		}
+		return textOf(v.Elem())
+	case reflect.Struct:
+		var out []string
+		for i := 0; i < v.NumField(); i++ {
+			out = append(out, textOf(v.Field(i))...)
+		}
+		return out
+	case reflect.Slice, reflect.Array:
+		if v.Type().Elem().Kind() == reflect.Uint8 {
+			b := make([]byte, v.Len())
+			reflect.Copy(reflect.ValueOf(b), v)
+			return []string{string(b)}
+		}
+		var out []string
+		for i := 0; i < v.Len(); i++ {
+			out = append(out, textOf(v.Index(i))...)
+		}
+		return out
+	case reflect.Map:
+		var out []string
+		for _, k := range v.MapKeys() {
+			out = append(out, textOf(k)...)
+			out = append(out, textOf(v.MapIndex(k))...)
+		}
+		return out
+	}
+	return nil
+}
+
+func TestTextOfSeesEveryField(t *testing.T) {
+	type inner struct{ B []byte }
+	v := struct {
+		A string
+		P *inner
+		M map[string]string
+	}{"a", &inner{[]byte("b")}, map[string]string{"c": "d"}}
+	got := strings.Join(textOf(reflect.ValueOf(v)), ",")
+	for _, want := range []string{"a", "b", "c", "d"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("textOf = %q, missing %q", got, want)
+		}
 	}
 }
 
