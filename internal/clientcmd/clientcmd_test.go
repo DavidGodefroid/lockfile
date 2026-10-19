@@ -1,0 +1,257 @@
+package clientcmd
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"errors"
+	"net"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/DavidGodefroid/lockkit/client"
+	"github.com/DavidGodefroid/lockkit/console"
+	"github.com/DavidGodefroid/lockkit/ipc"
+	"github.com/DavidGodefroid/lockkit/refusal"
+
+	"github.com/DavidGodefroid/lockfile/internal/answers"
+	"github.com/DavidGodefroid/lockfile/internal/product"
+	"github.com/DavidGodefroid/lockfile/internal/rpc"
+)
+
+// runtimeDir points the private runtime dir at a fresh short directory.
+func runtimeDir(t *testing.T) string {
+	t.Helper()
+	d, err := os.MkdirTemp("/tmp", "lfcli")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(d) })
+	t.Setenv(product.P.RuntimeDirEnv(), d)
+	dir, err := product.P.RuntimeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// fakeConsole serves hello for profile and answers every other method
+// with handle; a nil handle never answers.
+func fakeConsole(t *testing.T, path, profile string, handle func(ipc.Request) ipc.Response) {
+	t.Helper()
+	ln, err := net.Listen("unix", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer c.Close()
+				r := bufio.NewReader(c)
+				for {
+					var req ipc.Request
+					if ipc.ReadMsg(r, &req) != nil {
+						return
+					}
+					var resp ipc.Response
+					switch {
+					case req.Method == ipc.MethodHello:
+						resp = console.OKResp(req.ID, ipc.HelloResult{ProtocolMajor: ipc.ProtocolMajor, Profile: profile})
+					case handle == nil:
+						time.Sleep(time.Hour)
+					default:
+						resp = handle(req)
+					}
+					if ipc.WriteMsg(c, resp) != nil {
+						return
+					}
+				}
+			}()
+		}
+	}()
+}
+
+func statusOf(profile string, production bool) func(ipc.Request) ipc.Response {
+	return func(req ipc.Request) ipc.Response {
+		return console.OKResp(req.ID, console.StatusResult{Profile: profile, Production: production, Product: rpc.Status{Protocol: 1, Sandbox: "ok"}})
+	}
+}
+
+func TestSourcesListsRunningConsoles(t *testing.T) {
+	dir := runtimeDir(t)
+	probeTimeout = 500 * time.Millisecond
+	t.Cleanup(func() { probeTimeout = 2 * time.Second })
+	fakeConsole(t, filepath.Join(dir, "user-b.sock"), "b", statusOf("b", true))
+	fakeConsole(t, filepath.Join(dir, "user-a.sock"), "a", statusOf("a", false))
+	fakeConsole(t, filepath.Join(dir, "user-busy.sock"), "busy", nil)
+	// A project console is not lockfile's: left out.
+	fakeConsole(t, filepath.Join(dir, "abcd1234-p.sock"), "p", statusOf("p", false))
+	// A socket that names another profile than it serves: left out.
+	fakeConsole(t, filepath.Join(dir, "user-liar.sock"), "other", statusOf("other", false))
+	// A socket left by a dead console.
+	dead, err := net.Listen("unix", filepath.Join(dir, "user-dead.sock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dead.(*net.UnixListener).SetUnlinkOnClose(false)
+	dead.Close()
+	if err := os.WriteFile(filepath.Join(dir, "user-file.sock"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := Sources(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []rpc.Source{{Profile: "a"}, {Profile: "b", Production: true}, {Profile: "busy", Busy: true}}
+	if len(got) != len(want) {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got %+v, want %+v", got, want)
+		}
+	}
+}
+
+func TestSourcesHashedName(t *testing.T) {
+	// A runtime dir long enough that a 64-character profile is hashed.
+	base, err := os.MkdirTemp("/tmp", "lfcli")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(base) })
+	d := filepath.Join(base, strings.Repeat("d", 30))
+	t.Setenv(product.P.RuntimeDirEnv(), d)
+	dir, _ := product.P.RuntimeDir()
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	long := strings.Repeat("l", 64)
+	p, err := client.SocketPath(product.P, "/", long)
+	if err != nil || !strings.Contains(p, "~") {
+		t.Fatalf("socket path %s %v: not hashed", p, err)
+	}
+	fakeConsole(t, p, long, statusOf(long, true))
+	got, err := Sources(context.Background())
+	if err != nil || len(got) != 1 || got[0] != (rpc.Source{Profile: long, Production: true}) {
+		t.Fatalf("got %+v %v", got, err)
+	}
+}
+
+func TestSourcesNoDir(t *testing.T) {
+	d, err := os.MkdirTemp("/tmp", "lfcli")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(d) })
+	t.Setenv(product.P.RuntimeDirEnv(), d)
+	got, err := Sources(context.Background())
+	if err != nil || got == nil || len(got) != 0 {
+		t.Fatalf("got %#v %v", got, err)
+	}
+}
+
+func TestUnknownConsoleErrorScrubbed(t *testing.T) {
+	dir := runtimeDir(t)
+	reply := func(r ipc.Response) {
+		fakeConsole(t, filepath.Join(dir, "user-x.sock"), "x", func(req ipc.Request) ipc.Response {
+			r.ID = req.ID
+			return r
+		})
+	}
+	leaky := "/srv/x/john.pdf: 4821 bytes"
+	refused := console.ErrResp(0, ipc.CodeRefused, leaky)
+	refused.Error.Data = &refusal.Info{Code: product.Code(answers.CodeFetchFailed), Retry: refusal.RetryStop, Hint: leaky}
+	badData := console.ErrResp(0, ipc.CodeRefused, string(answers.CodeFetchFailed))
+	badData.Error.Data = &refusal.Info{Code: product.Code(answers.CodeKeyOutsidePrefix), Hint: leaky}
+	goodHintLeak := console.ErrResp(0, ipc.CodeRefused, string(answers.CodeFetchFailed))
+	goodHintLeak.Error.Data = &refusal.Info{Code: product.Code(answers.CodeFetchFailed), Retry: refusal.RetryRewrite, Hint: leaky}
+	cases := []struct {
+		name string
+		resp ipc.Response
+		kind Kind
+		msg  string
+	}{
+		{"internal", console.ErrResp(0, ipc.CodeInternal, leaky), KindOther, rpc.MsgInternal},
+		{"refused with free text", refused, KindOther, rpc.MsgInternal},
+		{"refused with other data", badData, KindOther, rpc.MsgInternal},
+		{"refused, hint replaced", goodHintLeak, KindRefused, string(answers.CodeFetchFailed)},
+		{"denied with reason", console.ErrResp(0, ipc.CodeDenied, "denied by the human: "+leaky), KindDenied, string(answers.CodeApprovalDenied)},
+		{"timeout", console.ErrResp(0, ipc.CodeTimeout, leaky), KindDenied, string(answers.CodeApprovalTimeout)},
+		{"no such plan", console.ErrResp(0, ipc.CodeNoSuchPlan, leaky), KindRefused, rpc.MsgNoSuchPlan},
+		{"conn lost", console.ErrResp(0, ipc.CodeConnLost, leaky), KindOther, rpc.MsgConnLost},
+		{"params", console.ErrResp(0, ipc.CodeInvalidParams, leaky), KindOther, rpc.MsgParams},
+		{"unknown code", console.ErrResp(0, -1, leaky), KindOther, rpc.MsgInternal},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_ = os.Remove(filepath.Join(dir, "user-x.sock"))
+			reply(c.resp)
+			_, err := Plugins(context.Background(), "x")
+			var ce *Error
+			if !errors.As(err, &ce) || ce.Kind != c.kind || ce.Msg != c.msg {
+				t.Fatalf("err = %#v", err)
+			}
+			b, _ := json.Marshal(ce.Tool())
+			if strings.Contains(string(b), "john") || strings.Contains(string(b), "4821") {
+				t.Fatalf("leak: %s", b)
+			}
+			if ce.Refusal != nil {
+				rc := ce.Refusal.Code
+				if ce.Refusal.Hint != rc.Hint() || ce.Refusal.Retry != rc.Retry() {
+					t.Fatalf("refusal not the registered one: %+v", ce.Refusal)
+				}
+			}
+		})
+	}
+}
+
+func TestResultKeepsClosedValues(t *testing.T) {
+	two, one := 2, 1
+	in := answers.Result{Handle: "f_x", Answers: []answers.Answer{
+		{Plugin: "a", Version: "1.0.0", Official: true, Result: &one},
+		{Plugin: "b", Version: "1.0.0", Official: true, Result: &two},
+		{Plugin: "c", Version: "1.0.0", Official: false, Error: "segfault at /srv"},
+	}}
+	out := result(in)
+	if *out.Answers[0].Result != 1 || out.Answers[0].Error != "" {
+		t.Fatalf("a: %+v", out.Answers[0])
+	}
+	if out.Answers[1].Result != nil || out.Answers[1].Error != "plugin_error" {
+		t.Fatalf("b: %+v", out.Answers[1])
+	}
+	if out.Answers[2].Error != "plugin_error" || out.Answers[2].Warning != answers.WarningUnofficial {
+		t.Fatalf("c: %+v", out.Answers[2])
+	}
+}
+
+func TestNoConsoleIsUnknownProfile(t *testing.T) {
+	runtimeDir(t)
+	_, err := Plugins(context.Background(), "nope")
+	var ce *Error
+	if !errors.As(err, &ce) || ce.Kind != KindNoConsole || ce.Msg != "unknown_profile" ||
+		ce.Refusal == nil || ce.Refusal.Code != "E_UNKNOWN_PROFILE" || !strings.Contains(ce.Refusal.Hint, "lockfile console --profile nope") {
+		t.Fatalf("err = %#v", err)
+	}
+	if _, err := Resolve("", "nope"); !errors.As(err, &ce) || ce.Msg != "unknown_profile" {
+		t.Fatalf("resolve: %v", err)
+	}
+	if _, err := Resolve("", ""); !errors.As(err, &ce) || ce.Kind != KindNoConsole {
+		t.Fatalf("resolve none: %v", err)
+	}
+	if p, err := Resolve("pinned", ""); err != nil || p != "pinned" {
+		t.Fatalf("pinned: %q %v", p, err)
+	}
+}

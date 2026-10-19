@@ -1,0 +1,5 @@
+---
+description: Yes/no questions about a stored file through lockfile. Apply when the user asks whether a file (S3/MinIO object, SFTP or local file) is empty, a PDF, parses, has a blank page or is truncated, or when tempted to download or open such a file directly.
+globs:
+alwaysApply: false
+---

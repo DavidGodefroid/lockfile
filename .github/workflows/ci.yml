@@ -11,17 +11,22 @@ permissions:
 jobs:
   test:
     name: test
-    # The sandbox tests need Landlock and seccomp from the kernel.
+    # The sandbox and end-to-end tests need Landlock and seccomp from the kernel.
     runs-on: ubuntu-24.04
     env:
       CGO_ENABLED: "0"
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.26.x"
           check-latest: true
       - name: go vet
+        run: go vet ./...
+      - name: go vet (darwin)
+        env:
+          GOOS: darwin
+          GOARCH: arm64
         run: go vet ./...
       - name: go test
         shell: bash
@@ -35,13 +40,13 @@ jobs:
         run: go test -count=1 -tags integration ./test/integration/...
 
   lint:
-    name: lint (staticcheck, govulncheck)
+    name: lint (staticcheck, govulncheck, actionlint)
     runs-on: ubuntu-latest
     env:
       CGO_ENABLED: "0"
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.26.x"
           check-latest: true
@@ -49,3 +54,5 @@ jobs:
         run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 -tags integration ./...
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 -tags integration ./...
+      - name: actionlint
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
