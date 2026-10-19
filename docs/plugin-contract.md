@@ -35,7 +35,7 @@ limits = { cpu_s = 20, memory = "512MiB", timeout_s = 30 }
 | Environment | empty except `LOCKFILE_PLUGIN_PROTOCOL=1`; cwd `/` |
 | Filesystem | Landlock: execute and read its own binary only |
 | Network | none (seccomp denies sockets; Landlock denies TCP with ABI ≥ 4) |
-| Other syscalls denied | `ptrace`, `process_vm_*`, `mount`, `bpf`, `keyctl`, `perf_event_open`, a second `execve`; System V IPC (`shm*`, `msg*`, `sem*`) and POSIX message queues (`mq_*`) |
+| Other syscalls denied | `ptrace`, `process_vm_*`, `mount`, `bpf`, `keyctl`, `perf_event_open`, a second `execve`; System V IPC (`shm*`, `msg*`, `sem*`) and POSIX message queues (`mq_*`); signals or limits aimed at any process but itself (`kill`, `tgkill`, `prlimit64`, …, and a descriptor owner set with `fcntl` `F_SETOWN`/`F_SETOWN_EX`/`F_SETSIG` or `ioctl` `FIOSETOWN`/`SIOCSPGRP`); child processes (threads only) |
 | Limits | CPU seconds, address space, no core, file size 0, few processes, wall-clock timeout then SIGKILL of the group |
 | stderr | drained and discarded; only its byte count is audited |
 
