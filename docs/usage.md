@@ -136,6 +136,9 @@ because it is serving another one: a plan waiting for the human, or a run until 
 `answer_quantum`. A console whose profile name is too long for a plain socket name cannot be
 listed while it is busy; passing its profile with `--profile` still reaches it.
 
+Output is capped in text and in JSON alike: a value (a text line) is cut at 512 characters, and
+output above 64 KiB is not printed (`output too large`, exit 1).
+
 There is no listing or stat: the agent asks the user for the exact key.
 
 ## Wiring an agent

@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"unicode/utf8"
 
 	"github.com/DavidGodefroid/lockkit/refusal"
 	"github.com/DavidGodefroid/lockkit/render"
@@ -80,10 +81,28 @@ func emit(e env, asJSON bool, v any, text func() []string) int {
 		}
 		return product.ExitOK
 	}
+	// Text gets the caps of JSON: a line is cut at the cell cap, and output
+	// over the total cap is not printed at all.
+	var b strings.Builder
 	for _, l := range text() {
-		fmt.Fprintln(e.stdout, sanitize.Terminal(l, false))
+		b.WriteString(cutChars(sanitize.Terminal(l, false), outCaps.MaxCellChars))
+		b.WriteByte('\n')
 	}
+	if b.Len() > outCaps.MaxOutputBytes {
+		fmt.Fprintln(e.stderr, "lockfile: output too large")
+		return product.ExitError
+	}
+	_, _ = io.WriteString(e.stdout, b.String())
 	return product.ExitOK
+}
+
+// cutChars cuts s to at most n characters, the last being "…" when cut.
+func cutChars(s string, n int) string {
+	if utf8.RuneCountInString(s) <= n {
+		return s
+	}
+	r := []rune(s)
+	return string(r[:n-1]) + "…"
 }
 
 // fail prints err and returns its exit code. Its text is a closed code or

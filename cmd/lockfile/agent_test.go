@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/DavidGodefroid/lockfile/internal/answers"
 	"github.com/DavidGodefroid/lockfile/internal/product"
@@ -107,5 +108,27 @@ func TestCLIExitCodes(t *testing.T) {
 	}
 	if !strings.Contains(all.String(), "approval_denied") {
 		t.Fatalf("denial not reported:\n%s", all.String())
+	}
+}
+
+func TestTextOutputCapped(t *testing.T) {
+	var out, errOut strings.Builder
+	e := env{stdout: &out, stderr: &errOut}
+	long := strings.Repeat("é", 5000)
+	if code := emit(e, false, nil, func() []string { return []string{"  ? " + long, "short"} }); code != product.ExitOK {
+		t.Fatalf("exit %d", code)
+	}
+	lines := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")
+	if len(lines) != 2 || utf8.RuneCountInString(lines[0]) != outCaps.MaxCellChars || !strings.HasSuffix(lines[0], "…") || lines[1] != "short" {
+		t.Fatalf("cell cap not applied: %d lines, first %d chars", len(lines), utf8.RuneCountInString(lines[0]))
+	}
+	out.Reset()
+	many := make([]string, 1000)
+	for i := range many {
+		many[i] = strings.Repeat("x", 100)
+	}
+	if code := emit(e, false, nil, func() []string { return many }); code != product.ExitError || out.Len() != 0 ||
+		!strings.Contains(errOut.String(), "output too large") {
+		t.Fatalf("total cap not applied: exit %d, %d bytes printed", code, out.Len())
 	}
 }
