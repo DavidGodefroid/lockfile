@@ -57,13 +57,16 @@ func FromFile(f *File, name string, store plugin.Store) (*Policy, error) {
 	if err != nil {
 		return nil, err
 	}
+	// A tampered plugin is left out: it can never be approved, and Open
+	// refuses it anyway.
+	installed = slices.DeleteFunc(installed, func(in plugin.Installed) bool { return in.Tampered })
 	pol := &Policy{P: p, Plugins: []PluginPin{}, Marketplaces: f.Marketplaces}
 	if pol.Marketplaces == nil {
 		pol.Marketplaces = []Trust{}
 	}
 	for _, in := range installed {
 		pol.Plugins = append(pol.Plugins, PluginPin{
-			Name: plugin.Qualify(in.Marketplace, in.Name, in.Official), Version: in.Version, Marketplace: in.Marketplace,
+			Name: in.Name, Version: in.Version, Marketplace: in.Marketplace, // lock names are already qualified
 			ManifestSHA256: in.ManifestSHA256, BinarySHA256: in.BinarySHA256, Official: in.Official,
 		})
 	}

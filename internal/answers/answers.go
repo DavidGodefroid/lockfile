@@ -76,6 +76,13 @@ func (r *Runner) reserve(h workspace.Handle, n int) error {
 	return nil
 }
 
+// Used is how many answers handle h has already spent of its budget.
+func (r *Runner) Used(h workspace.Handle) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.used[h]
+}
+
 // Answer runs plugins, in order, each on a fresh read-only open of h's
 // file, and returns all answers once every plugin has finished. Every
 // requested plugin counts against the handle's budget, answered or not.
