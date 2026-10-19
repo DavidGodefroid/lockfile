@@ -1,0 +1,49 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test
+    # The sandbox tests need Landlock and seccomp from the kernel.
+    runs-on: ubuntu-24.04
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26.x"
+          check-latest: true
+      - name: go vet
+        run: go vet ./...
+      - name: go test
+        shell: bash
+        run: |
+          set -o pipefail
+          go test ./... 2>&1 | tee test.log || {
+            grep -E -- '--- FAIL|_test\.go:[0-9]+:|^FAIL|panic:' test.log | head -40 | sed 's/^/::error::/'
+            exit 1
+          }
+
+  lint:
+    name: lint (staticcheck, govulncheck)
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26.x"
+          check-latest: true
+      - name: staticcheck
+        run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
