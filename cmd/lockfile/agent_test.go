@@ -94,10 +94,13 @@ func TestCLIExitCodes(t *testing.T) {
 		t.Fatalf("refusal JSON %s", out)
 	}
 	check("no such plugin", product.ExitRefused, "plan", "--key", "invoices/a.pdf", "--plugin", "test.nope")
-	out = check("no console", product.ExitError, "plugins", "--profile", "other")
-	if !strings.Contains(out, "lockfile console --profile other") {
+	// unknown_profile is a refusal (2) whether the client or the console
+	// detects it.
+	out = check("no console for the profile", product.ExitRefused, "plugins", "--profile", "other")
+	if !strings.Contains(out, "lockfile console --profile other") || !strings.Contains(out, "E_UNKNOWN_PROFILE") {
 		t.Fatalf("no hint: %s", out)
 	}
+	check("no console for the profile, plan", product.ExitRefused, "plan", "--profile", "other", "--key", "invoices/a.pdf", "--plugin", "test.answer0")
 	check("usage", product.ExitUsage, "plan", "--key", "k")
 	if m := forbidden.FindString(all.String()); m != "" {
 		t.Fatalf("CLI output holds %q:\n%s", m, all.String())

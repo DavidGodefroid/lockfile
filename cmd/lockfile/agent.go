@@ -107,10 +107,12 @@ func fail(e env, asJSON bool, err error) int {
 			fmt.Fprintf(e.stderr, "  refusal %s, retry: %s\n  %s\n", r.Code, r.Retry, sanitize.Terminal(r.Hint, false))
 		}
 	}
-	switch ce.Kind {
-	case clientcmd.KindRefused:
+	// A refusal exits 2 whoever detected it: unknown_profile is the same
+	// code when the client finds no console and when a console refuses.
+	switch {
+	case ce.Kind == clientcmd.KindRefused || ce.Refusal != nil:
 		return product.ExitRefused
-	case clientcmd.KindDenied:
+	case ce.Kind == clientcmd.KindDenied:
 		return product.ExitDenied
 	}
 	return product.ExitError

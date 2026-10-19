@@ -82,5 +82,5 @@ lockfile answers HANDLE [--profile P] --json
 lockfile release HANDLE [--profile P]
 ```
 
-Exit codes: 0 answered (whatever the answers), 1 no console or error, 2 refused, 3 denied or no
-answer in time, 64 usage.
+Exit codes: 0 answered (whatever the answers), 1 no console running or error, 2 refused
+(`unknown_profile` included), 3 denied or no answer in time, 64 usage.

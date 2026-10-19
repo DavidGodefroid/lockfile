@@ -20,11 +20,11 @@ var P = kit.Product{
 }
 
 // Exit codes of the commands. They depend on the outcome only, never on an
-// answer (design §7b).
+// answer (docs/security-model.md).
 const (
 	ExitOK      = 0  // answered, or done
-	ExitError   = 1  // no console, or any other error
-	ExitRefused = 2  // refused by the console
+	ExitError   = 1  // no console running, or any other error
+	ExitRefused = 2  // a refusal (E_* code, unknown_profile included)
 	ExitDenied  = 3  // denied by the human, or no answer in time
 	ExitUsage   = 64 // bad command line
 )

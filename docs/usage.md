@@ -126,8 +126,10 @@ lockfile audit [--since 24h] [--json]           # console account only
 | `lockfile release HANDLE` | `lockfile_release` | delete the fetched file now (answers at the next `answer_quantum`) |
 
 Every command takes `--json` and `--profile P` (optional when one console runs). Exit codes
-depend on the outcome only, never on an answer: 0 answered, 1 no console or error, 2 refused, 3
-denied or no answer in time, 64 usage.
+depend on the outcome only, never on an answer: 0 answered, 1 no console running or another
+error, 2 refused (an `E_*` refusal; `unknown_profile` is 2 whether the client or the console finds
+it), 3 denied or no answer in time, 64 usage. `status` exits 1 when a profile it reports on has
+no console.
 
 A console serves one request at a time. `busy` means it did not answer the probe within 2 s
 because it is serving another one: a plan waiting for the human, or a run until its
