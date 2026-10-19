@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>lockfile plugins — one signed question, one bit</title>
+  <meta name="description" content="The official lockfile plugin marketplace, the 13 questions it answers about files and PDFs, unofficial marketplaces, and how to write a plugin.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
+  <link rel="canonical" href="https://davidgodefroid.github.io/lockfile/plugins/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="lockfile">
+  <meta property="og:title" content="lockfile plugins — one signed question, one bit">
+  <meta property="og:description" content="The official lockfile plugin marketplace, the 13 questions it answers about files and PDFs, unofficial marketplaces, and how to write a plugin.">
+  <meta property="og:url" content="https://davidgodefroid.github.io/lockfile/plugins/">
+  <meta property="og:image" content="https://davidgodefroid.github.io/lockfile/assets/og.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="lockfile — Your AI asks about the file. It never reads it.">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="lockfile plugins — one signed question, one bit">
+  <meta name="twitter:description" content="The official lockfile plugin marketplace, the 13 questions it answers about files and PDFs, unofficial marketplaces, and how to write a plugin.">
+  <meta name="twitter:image" content="https://davidgodefroid.github.io/lockfile/assets/og.png">
+  <meta name="twitter:image:alt" content="lockfile — Your AI asks about the file. It never reads it.">
+  <link rel="icon" href="../assets/logo.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/anchors.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="32" height="32"><span class="wordmark">lock<span>file</span></span></a>
+      <nav class="site-nav" aria-label="Main">
+        <ul>
+          <li><a href="../">Home</a></li>
+          <li><a href="../install/">Install</a></li>
+          <li><a href="../how-it-works/">How it works</a></li>
+          <li><a href="../plugins/" aria-current="page">Plugins</a></li>
+          <li><a href="../security/">Security</a></li>
+          <li><a href="../faq/">FAQ</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+  <main id="main" tabindex="-1">
+    <div class="wrap">
+
+<h1>Plugins</h1>
+<div class="prose">
+  <p class="lead">A plugin answers one yes/no question about one file, fixed in its signed manifest. The only thing that leaves it is <code>1</code> or <code>0</code>.</p>
+  <p>Questions are about format, structure, integrity or rendering, <strong>never about what the content means or says</strong>. Plugins take no parameters: with one bit of output, a parameter is the way to aim that bit at the content (“does page 2 contain X?”). A variant is another plugin, with its own question and its own review.</p>
+</div>
+
+<section aria-labelledby="official">
+  <h2 id="official">The official marketplace</h2>
+  <p class="prose">The <a href="https://github.com/DavidGodefroid/lockfile-marketplace">lockfile-marketplace</a> repository holds the official plugins, one Go module each, with the SDK and the conformance harness they are tested with. Its signer is pinned in the lockfile binary. Its source holds these 13 plugins, all at version <code>1.0.0</code>:</p>
+  <div class="table-wrap" role="region" aria-label="Official plugins" tabindex="0">
+  <table>
+  <caption>Official plugins</caption>
+  <thead><tr><th scope="col">Plugin</th><th scope="col">Question</th><th scope="col"><code>1</code> means</th></tr></thead>
+  <tbody>
+  <tr><td><code>file.non-empty</code></td><td>Does the file contain at least one byte?</td><td>size &gt; 0</td></tr>
+  <tr><td><code>format.is-pdf</code></td><td>Does the file start like a PDF?</td><td><code>%PDF-</code> appears within the first 1024 bytes</td></tr>
+  <tr><td><code>pdf.parses</code></td><td>Does the file parse as a PDF without errors?</td><td>pdfcpu reads and validates it (relaxed mode)</td></tr>
+  <tr><td><code>pdf.truncated</code></td><td>Does the PDF look truncated?</td><td>no <code>%%EOF</code> in the last 1024 bytes, or the xref table needs repair</td></tr>
+  <tr><td><code>pdf.encrypted</code></td><td>Is the PDF encrypted?</td><td>an <code>/Encrypt</code> dictionary is present</td></tr>
+  <tr><td><code>pdf.has-blank-page</code></td><td>Does the PDF have at least one page that paints nothing visible?</td><td>at least one page has no painting operator, or only full-page white fills</td></tr>
+  <tr><td><code>pdf.all-pages-blank</code></td><td>Does every page of the PDF paint nothing visible?</td><td>no page has a painting operator other than full-page white fills</td></tr>
+  <tr><td><code>pdf.fonts-not-embedded</code></td><td>Does the PDF use at least one font that is not embedded?</td><td>a used font has no <code>FontFile</code>, <code>FontFile2</code> or <code>FontFile3</code></td></tr>
+  <tr><td><code>pdf.has-javascript</code></td><td>Does the PDF contain JavaScript?</td><td>a JavaScript action, a <code>/JS</code> entry or a JavaScript name tree</td></tr>
+  <tr><td><code>pdf.has-incremental-update</code></td><td>Was the PDF modified by at least one incremental update after its first save?</td><td>the cross-reference chain has more than one section</td></tr>
+  <tr><td><code>pdf.has-non-a4-page</code></td><td>Does the PDF have at least one page whose visible size is not A4?</td><td>a page’s crop box differs from 210 × 297 mm by more than 1 mm on a side</td></tr>
+  <tr><td><code>pdf.has-rotated-page</code></td><td>Does the PDF have at least one page with a <code>/Rotate</code> other than 0?</td><td>a page’s effective <code>/Rotate</code> is 90, 180 or 270</td></tr>
+  <tr><td><code>pdf.claims-pdfa</code></td><td>Does the PDF declare PDF/A conformance in its XMP metadata?</td><td>the catalog’s XMP has a <code>pdfaid:part</code> property; conformance itself is not checked</td></tr>
+  </tbody>
+  </table>
+  </div>
+  <p class="prose">The exact wording of each question and of both answers is in the plugin’s <code>plugin.toml</code>, and <code>lockfile plugins</code> shows it to the agent. A plugin becomes installable once its tag is released and listed in the marketplace’s signed index.</p>
+</section>
+
+<section aria-labelledby="manage">
+  <h2 id="manage">Installing and updating (console account)</h2>
+  <pre tabindex="0" class="term"><code>lockfile plugin install pdf.parses@1.0.0        <span class="cmt"># exact versions only; signatures checked with cosign</span>
+lockfile plugin update pdf.parses@1.1.0         <span class="cmt"># shows the manifest diff; a changed question needs the name typed</span>
+lockfile plugin list
+lockfile plugin verify [NAME]
+lockfile plugin remove NAME</code></pre>
+  <p class="prose">An install checks the signed index, then the signed manifest and binary and their hashes. A running console treats a newly installed plugin as a policy loosening and applies it only after <code>:review</code>.</p>
+</section>
+
+<section aria-labelledby="unofficial">
+  <h2 id="unofficial">Unofficial marketplaces</h2>
+  <pre tabindex="0" class="term"><code>lockfile marketplace add acme --index https://plugins.acme.example/index.json \
+  --identity-regexp '^https://github\.com/acme/lockfile-plugins/\.github/workflows/release\.yml@refs/tags/'
+lockfile marketplace list
+lockfile marketplace remove acme</code></pre>
+  <p class="prose">An unofficial marketplace publishes the same index format, signed keyless by its own CI identity. It needs its name typed when added, is flagged in red on every approval screen and in every agent result (<code>warning: unofficial_marketplace</code>), and never runs in auto mode. Keyless signers only in v0.2: <code>--public-key</code> is refused.</p>
+</section>
+
+<section aria-labelledby="write">
+  <h2 id="write">Write a plugin</h2>
+  <p class="prose">The <a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/plugin-contract.md">plugin contract</a> is the reference. In short:</p>
+
+  <h3 id="manifest">The manifest</h3>
+  <pre tabindex="0"><code>name = "pdf.has-blank-page"
+version = "1.0.0"
+protocol = 1
+question = "Does the PDF have at least one page that paints nothing visible?"
+one  = "at least one page has no painting operator, or only full-page white fills"
+zero = "every page paints something"
+accepts = ["application/pdf"]
+limits = { cpu_s = 20, memory = "512MiB", timeout_s = 30 }</code></pre>
+  <ul class="prose">
+    <li><code>accepts</code> documents the inputs; the console does not sniff the type, so the plugin checks its own input.</li>
+    <li>Changing <code>question</code>, <code>one</code> or <code>zero</code> needs a new major version, and users type the plugin name to accept it.</li>
+  </ul>
+
+  <h3 id="runtime">The runtime</h3>
+  <div class="table-wrap" role="region" aria-label="Plugin runtime" tabindex="0">
+  <table>
+  <caption>Plugin runtime</caption>
+  <thead><tr><th scope="col">What</th><th scope="col">Value</th></tr></thead>
+  <tbody>
+  <tr><td>Input</td><td>the file as an inherited <strong>read-only fd 3</strong>; no path</td></tr>
+  <tr><td>stdin</td><td><code>/dev/null</code></td></tr>
+  <tr><td>Environment</td><td>empty except <code>LOCKFILE_PLUGIN_PROTOCOL=1</code>; cwd <code>/</code></td></tr>
+  <tr><td>Filesystem</td><td>Landlock: execute and read its own binary only</td></tr>
+  <tr><td>Network</td><td>none (seccomp denies sockets; Landlock denies TCP with ABI ≥ 4)</td></tr>
+  <tr><td>Limits</td><td>CPU seconds, address space, no core, file size 0, few processes, wall-clock timeout then SIGKILL of the group</td></tr>
+  <tr><td>stderr</td><td>drained and discarded; only its byte count is audited</td></tr>
+  </tbody>
+  </table>
+  </div>
+
+  <h3 id="answer">The answer</h3>
+  <div class="prose">
+    <p>Write exactly <code>1</code> or <code>0</code> on stdout (one trailing newline tolerated) <strong>and</strong> exit with status 0. Anything else is a failure: other or more bytes, nothing, a non-zero exit, a signal, the timeout, an rlimit. Every failure reaches the agent as <code>plugin_error</code> with <code>result: null</code>, which is <strong>not</strong> a 0; the precise cause goes to the audit only. Exit-code-only answers are not accepted: a panic must never read as an answer.</p>
+    <p>The marketplace’s <code>sdk/</code> module gives the fd-3 reader, the answer helpers and a test harness that runs a plugin under the same sandbox on synthetic fixtures.</p>
+  </div>
+
+  <h3 id="publish">Publishing</h3>
+  <p class="prose">Official plugins go through the marketplace pipeline: a pull request with synthetic fixtures for both answers (no real document is ever committed), CI (vet, staticcheck, govulncheck, contract tests under the sandbox, fuzzing, an import check), a maintainer’s review against <code>REVIEW.md</code>, then a tag <code>&lt;name&gt;/vX.Y.Z</code> whose release workflow builds, hashes and signs the binaries and the manifest with cosign keyless, and a signed <code>index.json</code>.</p>
+</section>
+
+    </div>
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <ul>
+        <li><a href="https://github.com/DavidGodefroid/lockfile">Source on GitHub</a></li>
+        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/README.md">README</a></li>
+        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/usage.md">Usage guide</a></li>
+        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/security-model.md">Security model (full)</a></li>
+        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/plugin-contract.md">Plugin contract</a></li>
+      </ul>
+      <p>Pre-release (<code>v0.2.x</code>). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
+      <p class="family-line">Part of the lock family: <a href="https://github.com/DavidGodefroid/locksql">locksql</a> · <a href="https://github.com/DavidGodefroid/lockmq">lockmq</a> · <a href="https://github.com/DavidGodefroid/lockfile">lockfile</a> · <a href="https://github.com/DavidGodefroid/lockkit">lockkit</a></p>
+    </div>
+  </footer>
+</body>
+</html>

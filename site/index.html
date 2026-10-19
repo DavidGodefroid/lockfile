@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>lockfile — Your AI asks about the file. It never reads it.</title>
+  <meta name="description" content="lockfile lets an AI agent ask yes/no questions about a file it must never read. A human-held console runs signed, sandboxed plugins on it; the agent only ever sees 1s and 0s.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
+  <link rel="canonical" href="https://davidgodefroid.github.io/lockfile/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="lockfile">
+  <meta property="og:title" content="lockfile — Your AI asks about the file. It never reads it.">
+  <meta property="og:description" content="lockfile lets an AI agent ask yes/no questions about a file it must never read. A human-held console runs signed, sandboxed plugins on it; the agent only ever sees 1s and 0s.">
+  <meta property="og:url" content="https://davidgodefroid.github.io/lockfile/">
+  <meta property="og:image" content="https://davidgodefroid.github.io/lockfile/assets/og.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="lockfile — Your AI asks about the file. It never reads it.">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="lockfile — Your AI asks about the file. It never reads it.">
+  <meta name="twitter:description" content="lockfile lets an AI agent ask yes/no questions about a file it must never read. A human-held console runs signed, sandboxed plugins on it; the agent only ever sees 1s and 0s.">
+  <meta name="twitter:image" content="https://davidgodefroid.github.io/lockfile/assets/og.png">
+  <meta name="twitter:image:alt" content="lockfile — Your AI asks about the file. It never reads it.">
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/style.css">
+  <script src="assets/anchors.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="./"><img src="assets/logo.svg" alt="" width="32" height="32"><span class="wordmark">lock<span>file</span></span></a>
+      <nav class="site-nav" aria-label="Main">
+        <ul>
+          <li><a href="./" aria-current="page">Home</a></li>
+          <li><a href="install/">Install</a></li>
+          <li><a href="how-it-works/">How it works</a></li>
+          <li><a href="plugins/">Plugins</a></li>
+          <li><a href="security/">Security</a></li>
+          <li><a href="faq/">FAQ</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+  <main id="main" tabindex="-1">
+    <div class="wrap">
+
+<section class="hero" aria-labelledby="hero-title">
+  <p class="eyebrow"><a href="install/"><span class="badge">v0.2</span> Pre-release · open source, Apache 2.0</a></p>
+  <h1 id="hero-title">Your AI asks about the file. <br><span class="key">It never reads it.</span></h1>
+  <p class="lead">Let Claude Code, Codex, Cursor or Gemini CLI check a file it must never see: the agent only ever gets 1s and 0s.</p>
+  <p class="intro">lockfile puts a <strong>human-held console</strong> between your AI agent and the files in S3, on an SFTP server or in a local directory. The agent asks fixed yes/no questions: is this file empty, does it start like a PDF, does it parse, does it have a blank page, does it look truncated? The console, running in a separate OS account, waits for <strong>your</strong> approval, fetches the file, runs signed, sandboxed plugins on it, and returns each plugin’s answer: <code>1</code>, <code>0</code>, or no answer. No byte of the file, its size, type or path ever reaches the agent.</p>
+  <div class="actions">
+    <a class="button primary" href="install/">Install</a>
+    <a class="button" href="how-it-works/">How it works</a>
+    <a class="button" href="https://github.com/DavidGodefroid/lockfile">View on GitHub</a>
+  </div>
+  <ul class="facts" aria-label="At a glance">
+    <li>Console on Linux (Landlock, seccomp)</li>
+    <li>Agent side on Linux and macOS</li>
+    <li>amd64 and arm64</li>
+    <li>S3, SFTP, local directory</li>
+    <li>Apache 2.0</li>
+  </ul>
+</section>
+
+<section aria-labelledby="answer">
+  <h2 id="answer">What the agent gets</h2>
+  <p class="prose">One plan, two questions about one file. The agent names the key it was given and the plugins it wants; this is the whole answer:</p>
+  <pre tabindex="0" class="term"><code>$ lockfile plan --key invoices/2026/10/abc123.pdf \
+    --plugin file.non-empty --plugin format.is-pdf --run --json
+{"handle":"f_8Kq2xR","answers":[
+ {"plugin":"file.non-empty","version":"1.0.0","official":true,"result":1},
+ {"plugin":"format.is-pdf","version":"1.0.0","official":true,"result":0}]}</code></pre>
+  <p class="prose">The file is not empty and does not start like a PDF. <code>"result": null</code> with <code>"error": "plugin_error"</code> means the plugin gave no answer: it is <strong>not</strong> a 0. The exit code depends on the outcome only, never on an answer.</p>
+</section>
+
+<section aria-labelledby="why">
+  <h2 id="why">Why lockfile?</h2>
+  <div class="prose">
+    <p>Some files must not reach a model: invoices, contracts, medical letters, anything with personal data. Yet an agent debugging a pipeline often needs to know one thing about one of them: did it arrive empty, is it a broken PDF, is a page blank? Giving the agent read access answers that and leaks everything else. lockfile answers the question and nothing else.</p>
+  </div>
+<div class="table-wrap" role="region" aria-label="Agent file access compared with lockfile" tabindex="0">
+<table>
+<caption>Agent file access compared with lockfile</caption>
+<thead><tr><th scope="col"><span class="visually-hidden">Property</span></th><th scope="col">Agent reads the file</th><th scope="col">lockfile</th></tr></thead>
+<tbody>
+<tr><th scope="row">Agent never sees a byte of the file</th><td class="no">No</td><td class="yes">Yes</td></tr>
+<tr><th scope="row">Agent never sees the name, size, type or a listing</th><td class="no">No</td><td class="yes">Yes</td></tr>
+<tr><th scope="row">Agent never holds the storage credentials</th><td class="no">No</td><td class="yes">Yes</td></tr>
+<tr><th scope="row">A human approves every plan, outside the agent</th><td class="no">No</td><td class="yes">Yes</td></tr>
+<tr><th scope="row">Every question is fixed and signed in advance</th><td class="no">No</td><td class="yes">Yes</td></tr>
+<tr><th scope="row">The code that reads the file has no network</th><td class="no">No</td><td class="yes">Yes</td></tr>
+<tr><th scope="row">Answers released on a fixed time quantum</th><td class="no">No</td><td class="yes">Yes</td></tr>
+<tr><th scope="row">Append-only audit of every fetch and outcome</th><td class="no">No</td><td class="yes">Yes</td></tr>
+</tbody>
+</table>
+</div>
+  <blockquote class="prose"><p>The agent only ever sees 1s and 0s about a file.</p></blockquote>
+</section>
+
+<section aria-labelledby="approve">
+  <h2 id="approve">See what you approve</h2>
+  <p class="prose">Before anything is fetched, the console shows you the plan and waits. The screen holds the agent’s own request and the plugins’ signed questions, never anything about the file: at this point no source has been touched.</p>
+  <figure>
+    <pre tabindex="0" class="term"><code>╭─ SAMPLES · file plan · 2 answers ─────
+│ requested by uid 1000 (alice) · pid 48211 · exe /usr/local/bin/lockfile
+│ agent: check the invoice reported as blank
+│
+│ key    invoices/2026/10/abc123.pdf
+│
+│ file.non-empty@1.0.0  (official)
+│   ? Does the file contain at least one byte?   1 = size &gt; 0   0 = the file is empty
+│ format.is-pdf@1.0.0  (official)
+│   ? Does the file start like a PDF?   1 = `%PDF-` appears within the first 1024 bytes   0 = no PDF header
+│
+│ this plan reveals at most 2 answers about the file
+╰─ Approve? [y/N]</code></pre>
+    <figcaption>On approval the console fetches the file into a private workspace, runs each plugin in its own sandbox, checks each answer and releases them together on the next answer quantum.</figcaption>
+  </figure>
+  <p class="prose">On a production profile you type the profile name, not <code>y</code>. <code>n &lt;reason&gt;</code> denies; the reason is never forwarded to the agent.</p>
+</section>
+
+<section aria-labelledby="highlights">
+  <h2 id="highlights">Highlights</h2>
+  <ul class="cards">
+    <li><span class="icon" aria-hidden="true">🔢</span><h3>Only 1s and 0s</h3><p>Everything the console sends the agent comes from a closed list, checked end to end over the socket. No size, type, hash, name, listing or error text.</p></li>
+    <li><span class="icon" aria-hidden="true">👤</span><h3>Human in the loop</h3><p>Every plan is approved in a console the agent cannot drive, in an OS account it cannot read. The screen says how many answers the plan reveals.</p></li>
+    <li><span class="icon" aria-hidden="true">✍️</span><h3>Signed questions</h3><p>Each plugin answers one question fixed in its signed manifest. No parameters: a parameter would let the agent aim the bit at the content.</p></li>
+    <li><span class="icon" aria-hidden="true">🧱</span><h3>Sandboxed plugins</h3><p>Landlock, seccomp and rlimits: the file as a read-only fd 3, no path, no network, an empty environment, stdout capped at 3 bytes.</p></li>
+    <li><span class="icon" aria-hidden="true">🔏</span><h3>cosign everywhere</h3><p>Plugins, the marketplace index and lockfile’s own releases are checked against keyless cosign signatures. There is no unsigned mode.</p></li>
+    <li><span class="icon" aria-hidden="true">⏱️</span><h3>Timing padded</h3><p>A run’s result leaves the console only at the next multiple of <code>answer_quantum</code> (5 s by default), so a fast or slow plugin tells nothing.</p></li>
+    <li><span class="icon" aria-hidden="true">🗄️</span><h3>S3, SFTP, local</h3><p>Keys outside the profile’s prefix are refused, objects above <code>max_object_bytes</code> are not fetched, and a fetched file is deleted on release or expiry.</p></li>
+    <li><span class="icon" aria-hidden="true">📜</span><h3>Audit for you only</h3><p>Key, size, sha256, fetch cause and each plugin’s precise outcome go to an audit log only the console account can read. Never file bytes.</p></li>
+  </ul>
+</section>
+
+<section aria-labelledby="quick-start">
+  <h2 id="quick-start">Quick start</h2>
+  <p class="prose">On Linux, with <a href="https://docs.sigstore.dev/cosign/system_config/installation/">cosign</a> installed:</p>
+  <pre tabindex="0" class="term"><code><span class="cmt"># 1. The binary (checks the release signature with cosign)</span>
+curl -fsSL https://raw.githubusercontent.com/DavidGodefroid/lockfile/main/scripts/install.sh -o install.sh
+sh install.sh
+
+<span class="cmt"># 2. The separated setup: console account lockfile, your account in lockfile-clients</span>
+sudo lockfile install
+lockfile doctor
+
+<span class="cmt"># 3. In the lockfile account's own session (switch user, Wayland)</span>
+lockfile profile add samples --source local --path /srv/samples --prefix invoices/
+lockfile plugin install file.non-empty@1.0.0
+lockfile plugin install format.is-pdf@1.0.0
+lockfile console --profile samples
+
+<span class="cmt"># 4. In your account: wire your agent</span>
+lockfile init claude</code></pre>
+  <p class="prose">Then ask your agent about a file by its exact key. Each plan waits for your <code>y</code> in the console.</p>
+  <p><a href="install/">Full install options, checksums and signatures</a></p>
+</section>
+
+<section aria-labelledby="family">
+  <h2 id="family">The lock family</h2>
+  <p class="prose">One idea, one console per kind of data: the agent proposes, a human-held console in a separate account holds the key and decides.</p>
+  <ul class="cards family">
+    <li><h3><a href="https://github.com/DavidGodefroid/locksql">locksql</a></h3><p>Databases. The agent writes the SQL; the console holds the credentials, weighs every statement, masks personal data and waits for your approval.</p></li>
+    <li><h3><a href="https://github.com/DavidGodefroid/lockmq">lockmq</a></h3><p>Message queues. The agent inspects your RabbitMQ brokers through a console that holds the credentials and waits for your approval.</p></li>
+    <li aria-current="true"><h3><a href="https://github.com/DavidGodefroid/lockfile">lockfile</a></h3><p>Files. The agent asks fixed yes/no questions about a file and only ever gets 1s and 0s.</p><span class="here">You are here</span></li>
+    <li><h3><a href="https://github.com/DavidGodefroid/lockkit">lockkit</a></h3><p>The shared framework: the separated account, the socket and its peer checks, the console, the approval screen, the audit and signed updates.</p></li>
+  </ul>
+</section>
+
+<section aria-labelledby="limits">
+  <h2 id="limits">Know the limits</h2>
+  <div class="prose">
+    <p>The console is the enforcement point. Plugins answer one bit each, but a plugin whose code does not match its question is mitigated by review and signing, not prevented. A missing answer (<code>plugin_error</code>) and a failed fetch (<code>fetch_failed</code>) each carry one symbol that depends on the file. The v0.2.0 plugin sandbox is not yet complete: v0.2.1 adds IPC denial and requires a hidden <code>/proc</code>.</p>
+    <p><a href="security/">Read the security model</a></p>
+  </div>
+</section>
+
+    </div>
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <ul>
+        <li><a href="https://github.com/DavidGodefroid/lockfile">Source on GitHub</a></li>
+        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/README.md">README</a></li>
+        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/usage.md">Usage guide</a></li>
+        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/security-model.md">Security model (full)</a></li>
+        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/plugin-contract.md">Plugin contract</a></li>
+      </ul>
+      <p>Pre-release (<code>v0.2.x</code>). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
+      <p class="family-line">Part of the lock family: <a href="https://github.com/DavidGodefroid/locksql">locksql</a> · <a href="https://github.com/DavidGodefroid/lockmq">lockmq</a> · <a href="https://github.com/DavidGodefroid/lockfile">lockfile</a> · <a href="https://github.com/DavidGodefroid/lockkit">lockkit</a></p>
+    </div>
+  </footer>
+</body>
+</html>
