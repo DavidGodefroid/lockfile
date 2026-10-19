@@ -52,8 +52,11 @@ func GetStatus(ctx context.Context, profile string) (Status, error) {
 type StatusEntry struct {
 	Profile string  `json:"profile"`
 	Console *Status `json:"console,omitempty"`
-	Error   string  `json:"error,omitempty"`
-	Hint    string  `json:"hint,omitempty"`
+	// Busy: the console is serving another request (waiting for the human
+	// on a plan, or a run until its quantum) and did not answer in time.
+	Busy  bool   `json:"busy,omitempty"`
+	Error string `json:"error,omitempty"`
+	Hint  string `json:"hint,omitempty"`
 }
 
 // Statuses reports on profile, or on every running console when it is "".
@@ -72,9 +75,16 @@ func Statuses(ctx context.Context, profile string) (out []StatusEntry, ok bool, 
 	}
 	out, ok = []StatusEntry{}, len(profiles) > 0
 	for _, p := range profiles {
-		st, err := GetStatus(ctx, p)
+		pctx, cancel := context.WithTimeout(ctx, probeTimeout)
+		st, err := GetStatus(pctx, p)
+		cancel()
 		if err == nil {
 			out = append(out, StatusEntry{Profile: p, Console: &st})
+			continue
+		}
+		if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+			// Alive, serving another request: it answers later.
+			out = append(out, StatusEntry{Profile: p, Busy: true})
 			continue
 		}
 		ok = false
@@ -98,6 +108,10 @@ func StatusLines(out []StatusEntry) []string {
 	}
 	var lines []string
 	for _, en := range out {
+		if en.Busy {
+			lines = append(lines, en.Profile+": console up, busy with another request (waiting for the human or a run)")
+			continue
+		}
 		if en.Console == nil {
 			lines = append(lines, fmt.Sprintf("%s: %s; %s", en.Profile, en.Error, en.Hint))
 			continue
@@ -119,9 +133,10 @@ func yesNo(b bool) string {
 // NoConsoleText says that no console runs and how to start one.
 var NoConsoleText = "no lockfile console is running: ask the user to start one in the lockfile account (" + StartCommand("NAME") + ")"
 
-// probeTimeout bounds the status call of each socket in Sources. A console
-// serves one request at a time: one waiting for the human answers later,
-// and is listed as busy.
+// probeTimeout bounds the status call of each console in Sources and
+// Statuses. A console serves one request at a time: one serving another
+// request (a plan waiting for the human, a run until its quantum) answers
+// later, and is reported busy.
 var probeTimeout = 2 * time.Second
 
 // socketDir is where the consoles' sockets are: the shared directory of a
@@ -266,6 +281,19 @@ func pinnedProfile(pinned, arg string) (string, error) {
 	return p, nil
 }
 
+// socketExists reports whether profile's console socket is there. A
+// console serving another request does not answer the probe, and one whose
+// socket name is hashed cannot be named without that answer, so Sources
+// may leave out a console that runs.
+func socketExists(profile string) bool {
+	p, err := client.SocketPath(product.P, "/", profile)
+	if err != nil {
+		return false
+	}
+	fi, err := os.Lstat(p)
+	return err == nil && fi.Mode()&os.ModeSocket != 0
+}
+
 // Resolve picks the profile of a call: pinned (MCP --profile), given, or
 // the only running console's, probing the consoles once. A given profile
 // no console serves is the unknown_profile refusal naming its start
@@ -279,7 +307,7 @@ func Resolve(pinned, arg string) (string, error) {
 		return "", err
 	}
 	if arg != "" {
-		if !slices.Contains(names, arg) {
+		if !slices.Contains(names, arg) && !socketExists(arg) {
 			return "", unknownProfile(arg)
 		}
 		return arg, nil

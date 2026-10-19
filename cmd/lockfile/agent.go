@@ -152,7 +152,7 @@ func runSources(e env, args []string) int {
 		for _, s := range src {
 			switch {
 			case s.Busy:
-				lines = append(lines, s.Profile+"  (busy: waiting for the human)")
+				lines = append(lines, s.Profile+"  (busy: serving another request)")
 			case s.Production:
 				lines = append(lines, s.Profile+"  PRODUCTION")
 			default:

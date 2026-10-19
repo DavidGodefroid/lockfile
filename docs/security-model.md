@@ -40,7 +40,7 @@ lists. `test/e2e` walks every response of every method against this list.
 | `fetch_failed` | the plan could not start; **residual**: says "this key could not be fetched" (missing, too big, denied, network are not distinguished) |
 | handle `f_…`, plan id `pl_…` | random, from `crypto/rand` |
 | plugin name, version, `official`, `warning: unofficial_marketplace`, question, meaning of 1/0 | plugin metadata from the signed manifest |
-| profile names and `production` flag (`sources`), `busy` | lockfile configuration; `busy` = the console is waiting for the human on another request |
+| profile names and `production` flag (`sources`), `busy` | lockfile configuration; `busy` = the console did not answer the probe in time because it serves another request (a plan waiting for the human, or a run until its quantum) |
 | approval outcome (`approval_denied`, `approval_timeout`) | a human decision; the reason the human types is never forwarded |
 | refusals `key_outside_prefix`, `too_many_plugins`, `unknown_profile`, `plugin_not_installed`, `plugin_tampered`, `plugin_yanked`, `sandbox_unavailable`, `proc_not_hidden`, `handle_expired` (as `E_*` codes with a static hint) | computed from the request and the local install, before or without reading the file |
 | `status` (console up, production, auto mode, security level, idle/session timers, plugin protocol, sandbox ok) | console state |

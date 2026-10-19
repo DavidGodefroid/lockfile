@@ -151,6 +151,72 @@ func TestSourcesHashedName(t *testing.T) {
 	}
 }
 
+func TestStatusOfBusyConsole(t *testing.T) {
+	dir := runtimeDir(t)
+	probeTimeout = 300 * time.Millisecond
+	t.Cleanup(func() { probeTimeout = 2 * time.Second })
+	fakeConsole(t, filepath.Join(dir, "user-busy.sock"), "busy", nil)
+	for _, arg := range []string{"busy", ""} {
+		start := time.Now()
+		out, ok, err := Statuses(context.Background(), arg)
+		if err != nil || !ok || len(out) != 1 || !out[0].Busy || out[0].Profile != "busy" || out[0].Console != nil {
+			t.Fatalf("status %q: %+v %v %v", arg, out, ok, err)
+		}
+		if d := time.Since(start); d > 5*time.Second {
+			t.Fatalf("status %q took %v", arg, d)
+		}
+		if l := StatusLines(out); len(l) != 1 || !strings.Contains(l[0], "busy") {
+			t.Fatalf("lines %q", l)
+		}
+	}
+}
+
+func TestResolveBusyHashedConsole(t *testing.T) {
+	base, err := os.MkdirTemp("/tmp", "lfcli")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(base) })
+	d := filepath.Join(base, strings.Repeat("d", 30))
+	t.Setenv(product.P.RuntimeDirEnv(), d)
+	dir, _ := product.P.RuntimeDir()
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	probeTimeout = 300 * time.Millisecond
+	t.Cleanup(func() { probeTimeout = 2 * time.Second })
+	long := strings.Repeat("l", 64)
+	p, err := client.SocketPath(product.P, "/", long)
+	if err != nil || !strings.Contains(p, "~") {
+		t.Fatalf("socket path %s %v: not hashed", p, err)
+	}
+	// Busy: it does not even answer hello until the human decides.
+	ln, err := net.Listen("unix", p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			t.Cleanup(func() { c.Close() })
+		}
+	}()
+	if got, err := Sources(context.Background()); err != nil || len(got) != 0 {
+		t.Fatalf("sources %+v %v", got, err)
+	}
+	if got, err := Resolve("", long); err != nil || got != long {
+		t.Fatalf("resolve %q %v", got, err)
+	}
+	var ce *Error
+	if _, err := Resolve("", "other"); !errors.As(err, &ce) || ce.Msg != "unknown_profile" {
+		t.Fatalf("resolve other: %v", err)
+	}
+}
+
 func TestSourcesNoDir(t *testing.T) {
 	d, err := os.MkdirTemp("/tmp", "lfcli")
 	if err != nil {

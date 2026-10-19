@@ -134,7 +134,7 @@ func New(pinned string) *mcp.Server {
 				l := x.Profile
 				switch {
 				case x.Busy:
-					l += " (busy: waiting for the user)"
+					l += " (busy: serving another request)"
 				case x.Production:
 					l += " (production)"
 				}

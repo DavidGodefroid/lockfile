@@ -82,7 +82,7 @@ type Status struct {
 type Source struct {
 	Profile    string `json:"profile"`
 	Production bool   `json:"production"`
-	// Busy: the console is waiting for the human on another request, so
-	// Production is not known yet.
+	// Busy: the console is serving another request (a plan waiting for the
+	// human, or a run until its quantum), so Production is not known yet.
 	Busy bool `json:"busy,omitempty"`
 }

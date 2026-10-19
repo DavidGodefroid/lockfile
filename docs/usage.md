@@ -116,8 +116,8 @@ lockfile audit [--since 24h] [--json]           # console account only
 
 | Command | MCP tool | What |
 |---|---|---|
-| `lockfile status [--profile P]` | `lockfile_status` | the running consoles' state |
-| `lockfile sources` | `lockfile_sources` | profiles of the running consoles (`busy`: waiting on the human) |
+| `lockfile status [--profile P]` | `lockfile_status` | the running consoles' state (`busy`: see below) |
+| `lockfile sources` | `lockfile_sources` | profiles of the running consoles (`busy`: see below) |
 | `lockfile plugins [--profile P]` | `lockfile_plugins` | questions, meaning of 1 and 0 |
 | `lockfile plan --key K --plugin X… [--intent T] [--run]` | `lockfile_plan` | ask the human to approve |
 | `lockfile run PLAN_ID` | `lockfile_run` | run an approved plan once |
@@ -128,6 +128,11 @@ lockfile audit [--since 24h] [--json]           # console account only
 Every command takes `--json` and `--profile P` (optional when one console runs). Exit codes
 depend on the outcome only, never on an answer: 0 answered, 1 no console or error, 2 refused, 3
 denied or no answer in time, 64 usage.
+
+A console serves one request at a time. `busy` means it did not answer the probe within 2 s
+because it is serving another one: a plan waiting for the human, or a run until its
+`answer_quantum`. A console whose profile name is too long for a plain socket name cannot be
+listed while it is busy; passing its profile with `--profile` still reaches it.
 
 There is no listing or stat: the agent asks the user for the exact key.
 
