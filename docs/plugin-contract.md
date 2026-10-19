@@ -35,7 +35,7 @@ limits = { cpu_s = 20, memory = "512MiB", timeout_s = 30 }
 | Environment | empty except `LOCKFILE_PLUGIN_PROTOCOL=1`; cwd `/` |
 | Filesystem | Landlock: execute and read its own binary only |
 | Network | none (seccomp denies sockets; Landlock denies TCP with ABI ≥ 4) |
-| Other syscalls denied | `ptrace`, `process_vm_*`, `mount`, `bpf`, `keyctl`, `perf_event_open`, a second `execve`; System V IPC (`shm*`, `msg*`, `sem*`) and POSIX message queues (`mq_*`); signals or limits aimed at any process but itself (`kill`, `tgkill`, `prlimit64`, …, and a descriptor owner set with `fcntl` `F_SETOWN`/`F_SETOWN_EX`/`F_SETSIG` or `ioctl` `FIOSETOWN`/`SIOCSPGRP`); child processes (threads only) |
+| Other syscalls denied | `ptrace`, `process_vm_*`, `mount`, `bpf`, `keyctl`, `perf_event_open`, a second `execve`; System V IPC (`shm*`, `msg*`, `sem*`) and POSIX message queues (`mq_*`); signals or limits aimed at any process but itself (`kill`, `tgkill`, `prlimit64`, …, and a descriptor owner set with `fcntl` `F_SETOWN`/`F_SETOWN_EX`/`F_SETSIG` or `ioctl` `FIOSETOWN`/`SIOCSPGRP`); child processes (threads only); file metadata of any kind (`chmod`, `chown`, xattrs, times, `truncate`, inode flags through `ioctl` `FS_IOC_SETFLAGS`/`FS_IOC_FSSETXATTR` or `file_setattr`); other processes' memory layout (`move_pages`, `migrate_pages`, `get_robust_list`). Denied calls fail with `EPERM` |
 | Limits | CPU seconds, address space, no core, file size 0, few processes, wall-clock timeout then SIGKILL of the group |
 | stderr | drained and discarded; only its byte count is audited |
 

@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/elastic/go-seccomp-bpf/arch"
+
 	"github.com/DavidGodefroid/lockfile/pluginspec"
 )
 
@@ -222,6 +224,47 @@ func TestNoMetadataChanges(t *testing.T) {
 	}
 	if after.Mode() != before.Mode() || after.Size() != before.Size() || !after.ModTime().Equal(before.ModTime()) {
 		t.Fatalf("metadata changed: %v %d %v -> %v %d %v", before.Mode(), before.Size(), before.ModTime(), after.Mode(), after.Size(), after.ModTime())
+	}
+}
+
+// Inode flags and fs xattrs on the input (ioctl, file_setattr) and the
+// memory layout of other processes (move_pages, migrate_pages,
+// get_robust_list) are refused.
+func TestNoInodeFlagsOrMemoryProbes(t *testing.T) {
+	o, r := run(t, plugin(t, "inodeflags"), defaultLimits)
+	wantAnswer(t, o, r, false)
+}
+
+// Every name the filter denies must exist on amd64: an unknown name (a
+// typo, a syscall newer than the library's table) would otherwise not be
+// denied anywhere.
+func TestDenyListKnownOnAMD64(t *testing.T) {
+	info, err := arch.GetInfo("amd64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := append([]string{}, denied...)
+	for _, d := range argDenied {
+		names = append(names, d.name)
+	}
+	if _, err := conditional(info, 1); err != nil {
+		t.Error(err)
+	}
+	for _, n := range names {
+		if _, ok := info.SyscallNames[n]; !ok {
+			t.Errorf("denied system call %q is unknown on amd64", n)
+		}
+	}
+	for n, nr := range deniedNumbers {
+		if got, ok := info.SyscallNumbers[int(nr)]; ok && got != n {
+			t.Errorf("raw number %d of %s is %s in the table", nr, n, got)
+		}
+		if _, ok := info.SyscallNames[n]; ok {
+			t.Errorf("%s is in the table now: deny it by name", n)
+		}
+	}
+	if _, err := available(info, append([]string{"no_such_syscall"}, denied...)); err == nil {
+		t.Errorf("available accepts an unknown name")
 	}
 }
 

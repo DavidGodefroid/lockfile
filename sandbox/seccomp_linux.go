@@ -52,16 +52,47 @@ var denied = []string{
 	"msgget", "msgsnd", "msgrcv", "msgctl",
 	"semget", "semop", "semtimedop", "semctl",
 	"mq_open", "mq_unlink", "mq_timedsend", "mq_timedreceive", "mq_notify", "mq_getsetattr",
+	// Other processes' memory layout (an ASLR probe of the console):
+	// pages of another pid, its robust futex list head.
+	"move_pages", "migrate_pages", "get_robust_list",
+}
+
+// deniedNumbers are denied system calls newer than the filter library's
+// table, by number. Numbers from 424 on are the same on every
+// architecture.
+var deniedNumbers = map[string]uint32{
+	// Linux 6.17: inode flags and fs xattrs of a file, by path or fd (the
+	// same class of change as chmod on the input).
+	"file_setattr": 469,
 }
 
 // available keeps the names this architecture has (arm64 has no chmod,
-// fork, utimes…).
-func available(info *arch.Info, names []string) []string {
+// fork, utimes…). A name that amd64 does not know either is a mistake (a
+// typo, or a call newer than the table that belongs in deniedNumbers):
+// it is refused rather than silently left allowed.
+func available(info *arch.Info, names []string) ([]string, error) {
 	var out []string
 	for _, n := range names {
 		if _, ok := info.SyscallNames[n]; ok {
 			out = append(out, n)
+			continue
 		}
+		if _, ok := arch.X86_64.SyscallNames[n]; !ok {
+			return nil, fmt.Errorf("unknown system call %q in the deny list", n)
+		}
+	}
+	return out, nil
+}
+
+// numberBlocks denies deniedNumbers.
+func numberBlocks() []bpf.Instruction {
+	var out []bpf.Instruction
+	for _, nr := range deniedNumbers {
+		out = append(out,
+			bpf.LoadAbsolute{Off: 0, Size: 4},
+			bpf.JumpIf{Cond: bpf.JumpNotEqual, Val: nr, SkipTrue: 1},
+			bpf.RetConstant{Val: errnoEPERM},
+		)
 	}
 	return out
 }
@@ -69,7 +100,7 @@ func available(info *arch.Info, names []string) []string {
 // conditional returns the rules that depend on arguments: signals and
 // limits may target only the plugin itself (pid self, the trampoline's pid
 // kept across exec), and clone may only make threads.
-func conditional(info *arch.Info, self int) []seccomp.NameWithConditions {
+func conditional(info *arch.Info, self int) ([]seccomp.NameWithConditions, error) {
 	notSelf := seccomp.Condition{Argument: 0, Operation: seccomp.NotEqual, Value: uint64(self)}
 	rules := []seccomp.NameWithConditions{
 		{Name: "kill", Conditions: seccomp.ArgumentConditions{notSelf}},
@@ -80,13 +111,12 @@ func conditional(info *arch.Info, self int) []seccomp.NameWithConditions {
 		{Name: "prlimit64", Conditions: seccomp.ArgumentConditions{notSelf, {Argument: 0, Operation: seccomp.NotEqual, Value: 0}}},
 		{Name: "clone", Conditions: seccomp.ArgumentConditions{{Argument: 0, Operation: seccomp.BitsNotSet, Value: unix.CLONE_THREAD}}},
 	}
-	var out []seccomp.NameWithConditions
 	for _, r := range rules {
-		if _, ok := info.SyscallNames[r.Name]; ok {
-			out = append(out, r)
+		if _, ok := info.SyscallNames[r.Name]; !ok {
+			return nil, fmt.Errorf("no system call %q on %s", r.Name, info.Name)
 		}
 	}
-	return out
+	return rules, nil
 }
 
 // argDenial refuses a system call when one 32-bit argument (a command
@@ -106,11 +136,18 @@ var argDenied = []argDenial{
 	// signal it on I/O (O_ASYNC), with any signal (F_SETSIG): a way around
 	// the kill rules below, and around Landlock signal scoping below ABI 6.
 	{"fcntl", 1, []uint32{unix.F_SETOWN, unix.F_SETOWN_EX, unix.F_SETSIG}},
-	{"ioctl", 1, []uint32{ioctlFIOSETOWN, unix.SIOCSPGRP}},
+	// Inode flags and fs xattrs of the input (fd 3 is its owner's file):
+	// Landlock does not cover metadata, see chmod above.
+	{"ioctl", 1, []uint32{ioctlFIOSETOWN, unix.SIOCSPGRP,
+		unix.FS_IOC_SETFLAGS, ioctlFSIOC32SetFlags, ioctlFSIOCFSSetXattr}},
 }
 
-// FIOSETOWN is not in x/sys/unix.
-const ioctlFIOSETOWN = 0x8901
+// Not in x/sys/unix.
+const (
+	ioctlFIOSETOWN       = 0x8901
+	ioctlFSIOC32SetFlags = 0x40046602 // _IOW('f', 2, int)
+	ioctlFSIOCFSSetXattr = 0x401c5820 // _IOW('X', 32, struct fsxattr)
+)
 
 // errnoEPERM is the action of every denial.
 const errnoEPERM = uint32(seccomp.ActionErrno) | uint32(unix.EPERM)
@@ -154,11 +191,19 @@ func buildFilter(self int) ([]bpf.RawInstruction, error) {
 	if err != nil {
 		return nil, err
 	}
+	names, err := available(info, denied)
+	if err != nil {
+		return nil, err
+	}
+	cond, err := conditional(info, self)
+	if err != nil {
+		return nil, err
+	}
 	p := seccomp.Policy{
 		DefaultAction: seccomp.ActionAllow,
 		Syscalls: []seccomp.SyscallGroup{{
-			Names:              available(info, denied),
-			NamesWithCondtions: conditional(info, self),
+			Names:              names,
+			NamesWithCondtions: cond,
 			Action:             seccomp.ActionErrno,
 		}},
 	}
@@ -179,6 +224,7 @@ func buildFilter(self int) ([]bpf.RawInstruction, error) {
 		return nil, err
 	}
 	prefix = append(prefix, args...)
+	prefix = append(prefix, numberBlocks()...)
 	return bpf.Assemble(append(prefix, insts...))
 }
 
