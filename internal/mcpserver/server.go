@@ -112,9 +112,9 @@ func New(pinned string) *mcp.Server {
 
 	mcp.AddTool(s, &mcp.Tool{Name: ToolStatus, Description: "State of the running lockfile consoles (or of one profile's): production, auto mode, security level, plugin protocol, sandbox."},
 		func(ctx context.Context, req *mcp.CallToolRequest, in ProfileIn) (*mcp.CallToolResult, StatusOut, error) {
-			p := in.Profile
-			if p == "" {
-				p = pinned
+			p, err := clientcmd.StatusProfile(pinned, in.Profile)
+			if err != nil {
+				return toolErr[StatusOut](err)
 			}
 			out, _, err := clientcmd.Statuses(ctx, p)
 			if err != nil {

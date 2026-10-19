@@ -281,6 +281,16 @@ func pinnedProfile(pinned, arg string) (string, error) {
 	return p, nil
 }
 
+// StatusProfile is the profile a status call reports on: a pinned
+// server's (the argument may only repeat it), else arg ("" for every
+// running console).
+func StatusProfile(pinned, arg string) (string, error) {
+	if pinned == "" {
+		return arg, nil
+	}
+	return pinnedProfile(pinned, arg)
+}
+
 // socketExists reports whether profile's console socket is there. A
 // console serving another request does not answer the probe, and one whose
 // socket name is hashed cannot be named without that answer, so Sources

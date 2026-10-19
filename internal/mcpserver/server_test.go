@@ -174,6 +174,20 @@ func TestRunProgressTextConstant(t *testing.T) {
 	}
 }
 
+func TestStatusHonoursPinnedProfile(t *testing.T) {
+	consoletest.Start(t, consoletest.Options{Answers: []string{"y"}, Plugins: []consoletest.Plugin{{Name: "test.answer1"}}})
+	s := connect(t, "samples")
+	res, text, st := s.call(t, ToolStatus, map[string]any{"profile": "other"}, nil)
+	if !res.IsError || strings.Contains(text, "other") || st != nil {
+		t.Fatalf("status of another profile on a pinned server: %v %q %v", res.IsError, text, st)
+	}
+	res, text, st = s.call(t, ToolStatus, nil, nil)
+	consoles, _ := st["consoles"].([]any)
+	if res.IsError || len(consoles) != 1 || !strings.HasPrefix(text, "samples: console up") {
+		t.Fatalf("pinned status: %v %q %v", res.IsError, text, st)
+	}
+}
+
 func TestRefusalStructured(t *testing.T) {
 	consoletest.Start(t, consoletest.Options{Answers: []string{"y"}, Plugins: []consoletest.Plugin{{Name: "test.answer1"}}})
 	s := connect(t, "")
