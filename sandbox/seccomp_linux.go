@@ -26,16 +26,73 @@ var denied = []string{
 	// to execute code that Landlock's path rules do not name.
 	"setsid", "setpgid", "memfd_create", "execveat",
 	"open_by_handle_at", "name_to_handle_at",
+	// Landlock does not cover file metadata: without these a plugin that
+	// learns its input's path (readlink of /proc/self/fd/3) could make it,
+	// its directory or the console's home readable to the agent account.
+	"chmod", "fchmod", "fchmodat", "fchmodat2",
+	"chown", "fchown", "lchown", "fchownat",
+	"setxattr", "lsetxattr", "fsetxattr", "setxattrat",
+	"removexattr", "lremovexattr", "fremovexattr", "removexattrat",
+	"utime", "utimes", "utimensat", "futimesat",
+	"truncate",
+	// Covered by Landlock's handled rights, refused here too.
+	"link", "linkat", "symlink", "symlinkat", "rename", "renameat", "renameat2",
+	"mknod", "mknodat", "mkdir", "mkdirat", "rmdir", "unlink", "unlinkat",
+	"inotify_init", "inotify_init1", "fanotify_init",
+	// Other processes of the same uid (signal scoping needs Landlock ABI 6).
+	"tkill", "pidfd_open", "pidfd_send_signal", "pidfd_getfd", "kcmp", "process_madvise",
+	"setpriority", "ioprio_set", "sched_setaffinity", "sched_setscheduler", "sched_setparam", "sched_setattr",
+	// Child processes: only threads (clone with CLONE_THREAD, below).
+	"fork", "vfork", "clone3",
 }
 
-func buildFilter() ([]bpf.RawInstruction, error) {
+// available keeps the names this architecture has (arm64 has no chmod,
+// fork, utimes…).
+func available(info *arch.Info, names []string) []string {
+	var out []string
+	for _, n := range names {
+		if _, ok := info.SyscallNames[n]; ok {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// conditional returns the rules that depend on arguments: signals and
+// limits may target only the plugin itself (pid self, the trampoline's pid
+// kept across exec), and clone may only make threads.
+func conditional(info *arch.Info, self int) []seccomp.NameWithConditions {
+	notSelf := seccomp.Condition{Argument: 0, Operation: seccomp.NotEqual, Value: uint64(self)}
+	rules := []seccomp.NameWithConditions{
+		{Name: "kill", Conditions: seccomp.ArgumentConditions{notSelf}},
+		{Name: "tgkill", Conditions: seccomp.ArgumentConditions{notSelf}},
+		{Name: "rt_sigqueueinfo", Conditions: seccomp.ArgumentConditions{notSelf}},
+		{Name: "rt_tgsigqueueinfo", Conditions: seccomp.ArgumentConditions{notSelf}},
+		// pid 0 is the caller itself.
+		{Name: "prlimit64", Conditions: seccomp.ArgumentConditions{notSelf, {Argument: 0, Operation: seccomp.NotEqual, Value: 0}}},
+		{Name: "clone", Conditions: seccomp.ArgumentConditions{{Argument: 0, Operation: seccomp.BitsNotSet, Value: unix.CLONE_THREAD}}},
+	}
+	var out []seccomp.NameWithConditions
+	for _, r := range rules {
+		if _, ok := info.SyscallNames[r.Name]; ok {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+func buildFilter(self int) ([]bpf.RawInstruction, error) {
 	info, err := arch.GetInfo("")
 	if err != nil {
 		return nil, err
 	}
 	p := seccomp.Policy{
 		DefaultAction: seccomp.ActionAllow,
-		Syscalls:      []seccomp.SyscallGroup{{Names: denied, Action: seccomp.ActionErrno}},
+		Syscalls: []seccomp.SyscallGroup{{
+			Names:              available(info, denied),
+			NamesWithCondtions: conditional(info, self),
+			Action:             seccomp.ActionErrno,
+		}},
 	}
 	insts, err := p.Assemble()
 	if err != nil {

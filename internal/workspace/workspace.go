@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sync"
 	"syscall"
 	"time"
@@ -97,6 +98,11 @@ func Open(c Config) (*Manager, error) {
 	return m, nil
 }
 
+// ownEntry matches the handle directories the workspace creates.
+var ownEntry = regexp.MustCompile(`^[0-9a-f]{32}$`)
+
+// sweep removes the handle directories in Dir, and nothing else: a work_dir
+// set by mistake to a directory with other content keeps that content.
 func (m *Manager) sweep() error {
 	des, err := os.ReadDir(m.c.Dir)
 	if err != nil {
@@ -104,7 +110,9 @@ func (m *Manager) sweep() error {
 	}
 	var errs []error
 	for _, d := range des {
-		errs = append(errs, os.RemoveAll(filepath.Join(m.c.Dir, d.Name())))
+		if d.IsDir() && ownEntry.MatchString(d.Name()) {
+			errs = append(errs, os.RemoveAll(filepath.Join(m.c.Dir, d.Name())))
+		}
 	}
 	return errors.Join(errs...)
 }

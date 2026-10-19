@@ -85,10 +85,22 @@ func (i Installer) Install(ctx context.Context, m Marketplace, name, version str
 		return plugin.LockEntry{}, fmt.Errorf("%w: %s@%s", ErrYanked, name, version)
 	}
 
-	// 2. The manifest, against the hash in the signed index.
-	man, err := i.fetch(ctx, v.ManifestURL, filepath.Join(tmp, "plugin.toml"), maxManifest)
+	// 2. The manifest: signed by this version's own release run, and
+	// matching the hash in the signed index.
+	release := m.releaseRoot(name, version)
+	manPath := filepath.Join(tmp, "plugin.toml")
+	man, err := i.fetch(ctx, v.ManifestURL, manPath, maxManifest)
 	if err != nil {
 		return plugin.LockEntry{}, err
+	}
+	if v.ManifestBundleURL == "" {
+		return plugin.LockEntry{}, fmt.Errorf("marketplace %s: %s@%s manifest has no signature", m.Name, name, version)
+	}
+	if _, err := i.fetch(ctx, v.ManifestBundleURL, manPath+".sigstore.json", maxBundle); err != nil {
+		return plugin.LockEntry{}, err
+	}
+	if err := i.Verifier.VerifyBlob(ctx, manPath, manPath+".sigstore.json", release); err != nil {
+		return plugin.LockEntry{}, fmt.Errorf("marketplace %s: %s@%s manifest signature: %w", m.Name, name, version, err)
 	}
 	if sum(man) != v.ManifestSHA256 {
 		return plugin.LockEntry{}, fmt.Errorf("marketplace %s: %s@%s manifest does not match the index", m.Name, name, version)
@@ -114,7 +126,7 @@ func (i Installer) Install(ctx context.Context, m Marketplace, name, version str
 	if _, err := i.fetch(ctx, a.BundleURL, artPath+".sigstore.json", maxBundle); err != nil {
 		return plugin.LockEntry{}, err
 	}
-	if err := i.Verifier.VerifyBlob(ctx, artPath, artPath+".sigstore.json", m.Root); err != nil {
+	if err := i.Verifier.VerifyBlob(ctx, artPath, artPath+".sigstore.json", release); err != nil {
 		return plugin.LockEntry{}, fmt.Errorf("marketplace %s: %s@%s signature: %w", m.Name, name, version, err)
 	}
 	if sum(bin) != a.SHA256 {

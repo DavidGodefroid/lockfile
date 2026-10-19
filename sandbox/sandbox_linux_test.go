@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -203,6 +204,55 @@ func TestStderrDiscarded(t *testing.T) {
 func TestEmptyEnv(t *testing.T) {
 	o, r := run(t, plugin(t, "env"), defaultLimits)
 	wantAnswer(t, o, r, true)
+}
+
+// Landlock does not cover file metadata: a plugin that learns its input's
+// path must still not make it, or its directory, readable to others.
+func TestNoMetadataChanges(t *testing.T) {
+	in, path := input(t, "synthetic input")
+	before, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o, r := runOn(t, plugin(t, "chmod", "-X main.inputPath="+path), in, defaultLimits)
+	wantAnswer(t, o, r, false)
+	after, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Mode() != before.Mode() || after.Size() != before.Size() || !after.ModTime().Equal(before.ModTime()) {
+		t.Fatalf("metadata changed: %v %d %v -> %v %d %v", before.Mode(), before.Size(), before.ModTime(), after.Mode(), after.Size(), after.ModTime())
+	}
+}
+
+func TestNoSignalsToOthers(t *testing.T) {
+	o, r := run(t, plugin(t, "killother"), defaultLimits)
+	wantAnswer(t, o, r, false)
+}
+
+func TestNoFork(t *testing.T) {
+	o, r := run(t, plugin(t, "fork"), defaultLimits)
+	wantAnswer(t, o, r, false)
+}
+
+func TestForeignArchKilled(t *testing.T) {
+	if runtime.GOARCH != "amd64" {
+		t.Skip("the i386 system call ABI exists on amd64 only")
+	}
+	o, r := run(t, plugin(t, "foreignarch"), defaultLimits)
+	wantFailure(t, o, r, pluginspec.CauseSandbox)
+}
+
+func TestNoLeakedDescriptors(t *testing.T) {
+	// A descriptor the console leaves inheritable by mistake (dup clears
+	// close-on-exec) must still not reach the plugin.
+	fd, err := syscall.Dup(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer syscall.Close(fd)
+	o, r := run(t, plugin(t, "fdleak"), defaultLimits)
+	wantAnswer(t, o, r, false)
 }
 
 func TestProbe(t *testing.T) {
