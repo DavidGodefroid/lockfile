@@ -12,6 +12,18 @@ const (
 	MethodRelease = "file.release"
 )
 
+// Fixed texts of the errors that are not refusals: none carries anything
+// the agent did not send. Clients print these, never the console's text.
+const (
+	MsgPlanParams = "invalid params: give exactly one of key and handle, 1 or more distinct plugins, an intent of at most 200 bytes"
+	MsgParams     = "invalid params"
+	MsgNoSuchPlan = "unknown, used or expired plan, or the policy changed since it was approved: plan again"
+	MsgConnLost   = "the console lost its connection to the source; the human must restart or reconnect it"
+	MsgPending    = "a policy change awaits the human in the console"
+	MsgClosed     = "the console closed the connection"
+	MsgInternal   = "console error"
+)
+
 // MaxIntent bounds the agent's one-line reason shown on the approval
 // screen, in bytes.
 const MaxIntent = 200
@@ -70,4 +82,7 @@ type Status struct {
 type Source struct {
 	Profile    string `json:"profile"`
 	Production bool   `json:"production"`
+	// Busy: the console is waiting for the human on another request, so
+	// Production is not known yet.
+	Busy bool `json:"busy,omitempty"`
 }

@@ -19,13 +19,11 @@ import (
 	"github.com/DavidGodefroid/lockfile/internal/workspace"
 )
 
-// Fixed texts of the non-refusal errors: none carries anything the agent
-// did not send.
 const (
-	msgPlanParams = "invalid params: give exactly one of key and handle, 1 or more distinct plugins, an intent of at most 200 bytes"
-	msgNoSuchPlan = "unknown, used or expired plan, or the policy changed since it was approved: plan again"
-	msgConnLost   = "the console lost its connection to the source; the human must restart or reconnect it"
-	msgInternal   = "console error"
+	msgPlanParams = rpc.MsgPlanParams
+	msgNoSuchPlan = rpc.MsgNoSuchPlan
+	msgConnLost   = rpc.MsgConnLost
+	msgInternal   = rpc.MsgInternal
 )
 
 func policyOf(env console.Env) *profile.Policy {
