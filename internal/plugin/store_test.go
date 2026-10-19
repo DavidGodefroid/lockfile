@@ -51,7 +51,7 @@ func mode(t *testing.T, p string) os.FileMode {
 }
 
 func TestInstallWritesModes(t *testing.T) {
-	s := Store{Dir: t.TempDir()}
+	s := tempStore(t)
 	install(t, s, "pdf.parses", "official", true, []byte("binary"))
 	inst, err := s.Installed()
 	if err != nil || len(inst) != 1 {
@@ -76,7 +76,7 @@ func TestInstallWritesModes(t *testing.T) {
 }
 
 func TestInstallRejectsHashMismatch(t *testing.T) {
-	s := Store{Dir: t.TempDir()}
+	s := tempStore(t)
 	man := manifestFor("pdf.parses", "1.0.0")
 	e := entry("pdf.parses", "official", true, []byte("binary"), man)
 	if err := s.Install(e, []byte("other"), man); err == nil {
@@ -96,7 +96,7 @@ func TestInstallRejectsHashMismatch(t *testing.T) {
 }
 
 func TestOpenReturnsVerifiedBinary(t *testing.T) {
-	s := Store{Dir: t.TempDir()}
+	s := tempStore(t)
 	install(t, s, "pdf.parses", "official", true, []byte("binary"))
 	f, inst, err := s.Open("pdf.parses")
 	if err != nil {
@@ -113,7 +113,7 @@ func TestOpenReturnsVerifiedBinary(t *testing.T) {
 }
 
 func TestTampered(t *testing.T) {
-	s := Store{Dir: t.TempDir()}
+	s := tempStore(t)
 	install(t, s, "pdf.parses", "official", true, []byte("binary"))
 	inst, _ := s.Installed()
 	bin := inst[0].Binary
@@ -143,7 +143,7 @@ func TestTampered(t *testing.T) {
 }
 
 func TestTamperedManifest(t *testing.T) {
-	s := Store{Dir: t.TempDir()}
+	s := tempStore(t)
 	install(t, s, "pdf.parses", "official", true, []byte("binary"))
 	inst, _ := s.Installed()
 	man := filepath.Join(filepath.Dir(inst[0].Binary), "plugin.toml")
@@ -160,7 +160,7 @@ func TestTamperedManifest(t *testing.T) {
 }
 
 func TestQualifiedNames(t *testing.T) {
-	s := Store{Dir: t.TempDir()}
+	s := tempStore(t)
 	install(t, s, "pdf.x", "official", true, []byte("official-bin"))
 	install(t, s, "acme/pdf.x", "acme", false, []byte("acme-bin"))
 	f, inst, err := s.Open("pdf.x")
@@ -198,7 +198,7 @@ func TestQualifiedNames(t *testing.T) {
 }
 
 func TestRejectsBadQualifiedName(t *testing.T) {
-	s := Store{Dir: t.TempDir()}
+	s := tempStore(t)
 	bin := []byte("b")
 	man := manifestFor("pdf.x", "1.0.0")
 	for _, e := range []LockEntry{

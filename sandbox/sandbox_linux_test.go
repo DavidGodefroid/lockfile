@@ -44,7 +44,7 @@ func plugin(t *testing.T, name string, ldflags ...string) string {
 		buildDir = d
 	}
 	out := filepath.Join(buildDir, name+"-"+string(rune('a'+len(built))))
-	args := []string{"build", "-trimpath", "-o", out}
+	args := []string{"build", "-trimpath", "-buildvcs=false", "-o", out}
 	if len(ldflags) > 0 {
 		args = append(args, "-ldflags", strings.Join(ldflags, " "))
 	}

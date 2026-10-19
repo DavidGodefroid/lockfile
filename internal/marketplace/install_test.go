@@ -107,7 +107,7 @@ func (m *market) marketplace(name string, official bool) Marketplace {
 }
 
 func (m *market) installer(t *testing.T) (Installer, plugin.Store) {
-	s := plugin.Store{Dir: t.TempDir()}
+	s := tempStore(t)
 	return Installer{HTTP: m.srv.Client(), Verifier: m.verifier, Store: s, OS: "linux", Arch: "amd64"}, s
 }
 

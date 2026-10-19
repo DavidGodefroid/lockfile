@@ -69,7 +69,7 @@ func newFixture(t *testing.T, plugins ...string) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &fixture{ws: ws, store: plugin.Store{Dir: t.TempDir()}, h: h}
+	f := &fixture{ws: ws, store: tempStore(t), h: h}
 	for _, p := range plugins {
 		installAs(t, f.store, p, "official", true, []byte("bin:"+p), 5)
 	}
@@ -267,7 +267,7 @@ func TestUnofficialWarning(t *testing.T) {
 func buildPlugin(t *testing.T, name string) []byte {
 	t.Helper()
 	out := filepath.Join(t.TempDir(), name)
-	cmd := exec.Command("go", "build", "-trimpath", "-o", out, "../../sandbox/testdata/plugins/"+name)
+	cmd := exec.Command("go", "build", "-trimpath", "-buildvcs=false", "-o", out, "../../sandbox/testdata/plugins/"+name)
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	if b, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("build %s: %v\n%s", name, err, b)
