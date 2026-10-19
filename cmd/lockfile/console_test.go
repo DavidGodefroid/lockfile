@@ -6,92 +6,25 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/DavidGodefroid/lockkit/client"
-	"github.com/DavidGodefroid/lockkit/console"
-	"github.com/DavidGodefroid/lockkit/fingerprint"
 	"github.com/DavidGodefroid/lockkit/ipc"
-	"github.com/DavidGodefroid/lockkit/sysconf"
 
 	"github.com/DavidGodefroid/lockfile/internal/answers"
 	"github.com/DavidGodefroid/lockfile/internal/backend"
 	"github.com/DavidGodefroid/lockfile/internal/product"
 	"github.com/DavidGodefroid/lockfile/internal/rpc"
 	"github.com/DavidGodefroid/lockfile/internal/testenv"
+	"github.com/DavidGodefroid/lockfile/internal/testenv/consoletest"
 )
 
-// scriptIO answers the console's prompts from a script and records its
-// output.
-type scriptIO struct {
-	mu      sync.Mutex
-	answers []string
-	out     []string
-}
-
-func (s *scriptIO) Println(l string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.out = append(s.out, l)
-}
-
-func (s *scriptIO) Ask(ctx context.Context, prompt string, _ time.Duration) (string, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.out = append(s.out, "PROMPT "+prompt)
-	if len(s.answers) == 0 {
-		return "", false
-	}
-	a := s.answers[0]
-	s.answers = s.answers[1:]
-	return a, true
-}
-
-func (s *scriptIO) AskSecret(context.Context, string) ([]byte, error) {
-	return nil, errors.New("no secret in this test")
-}
-
-func (s *scriptIO) output() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return strings.Join(s.out, "\n")
-}
-
-// sameUserIsolation lets a test console run in the test's own account
-// (lockkit's AllowSameUser, a test-only switch).
-func sameUserIsolation(t *testing.T) *console.IsolationEnv {
-	t.Helper()
-	d, err := os.MkdirTemp("/tmp", "lfrun")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(d) })
-	t.Setenv(product.P.RuntimeDirEnv(), d)
-	uid := os.Getuid()
-	return &console.IsolationEnv{
-		LoadSys:        func() (*sysconf.Config, error) { return nil, nil },
-		Display:        func() sysconf.Display { return sysconf.Display{Kind: sysconf.DisplayWayland} },
-		UID:            func() int { return uid },
-		UserName:       func() (string, error) { return "tester", nil },
-		LoginUID:       func() (int, bool) { return uid, true },
-		TerminalOwner:  func() (int, bool) { return uid, true },
-		ClientAllowed:  func(*sysconf.Config, int) bool { return true },
-		ClientGID:      func(*sysconf.Config) (int, error) { return os.Getgid(), nil },
-		AccountExists:  func(int) bool { return true },
-		Relay:          func() string { return "" },
-		MachinectlUIDs: func() ([]int, bool) { return nil, true },
-		DesktopEnv:     func() bool { return false },
-		DisplaySet:     func() bool { return false },
-		ParentChain:    func() ([]sysconf.Proc, error) { return nil, nil },
-		NewVerifier:    func(string) (fingerprint.Verifier, error) { return &fingerprint.Fake{}, nil },
-		AllowSameUser:  true,
-	}
-}
+// The harness of package consoletest, through the console command itself.
+var sameUserIsolation = consoletest.SameUserIsolation
 
 type consoleRun struct {
-	io     *scriptIO
+	io     *consoletest.ScriptIO
 	socket string
 	work   string
 	done   chan int
@@ -118,7 +51,7 @@ func startConsole(t *testing.T, answersScript []string, plugins ...string) *cons
 		testenv.Install(t, store, p, testenv.BuildPlugin(t, p[strings.LastIndex(p, ".")+1:]), "Is it "+p+"?", 2)
 	}
 	work := filepath.Join(t.TempDir(), "work")
-	r := &consoleRun{io: &scriptIO{answers: answersScript}, work: work, done: make(chan int, 1)}
+	r := &consoleRun{io: consoletest.NewScriptIO(answersScript...), work: work, done: make(chan int, 1)}
 	ready := make(chan string, 1)
 	testConsoleHooks = &consoleHooks{
 		io: r.io, isolation: sameUserIsolation(t), harden: func() error { return nil },
@@ -136,9 +69,9 @@ func startConsole(t *testing.T, answersScript []string, plugins ...string) *cons
 	select {
 	case r.socket = <-ready:
 	case code := <-r.done:
-		t.Fatalf("console exited %d before listening:\n%s", code, r.io.output())
+		t.Fatalf("console exited %d before listening:\n%s", code, r.io.Output())
 	case <-time.After(20 * time.Second):
-		t.Fatalf("no socket:\n%s", r.io.output())
+		t.Fatalf("no socket:\n%s", r.io.Output())
 	}
 	return r
 }
@@ -163,7 +96,7 @@ func TestConsoleRefusesWithoutSandbox(t *testing.T) {
 	if err := os.WriteFile(cfg, []byte("[profiles.samples]\nsource = \"local\"\npath = \"/tmp\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	io := &scriptIO{answers: []string{"y"}}
+	io := consoletest.NewScriptIO("y")
 	testConsoleHooks = &consoleHooks{
 		io: io, isolation: sameUserIsolation(t), harden: func() error { return nil }, stateDir: t.TempDir(), configPath: cfg,
 		backend: func(o *backend.Options) {
@@ -174,7 +107,7 @@ func TestConsoleRefusesWithoutSandbox(t *testing.T) {
 	t.Cleanup(func() { testConsoleHooks = nil })
 	code, _, errText := runArgs(t, "", "console", "--profile", "samples")
 	if code != product.ExitError || !strings.Contains(errText, "sandbox") {
-		t.Fatalf("exit %d: %s\n%s", code, errText, io.output())
+		t.Fatalf("exit %d: %s\n%s", code, errText, io.Output())
 	}
 }
 
@@ -195,11 +128,11 @@ func TestConsoleEndToEnd(t *testing.T) {
 	ctx := context.Background()
 	var plan rpc.PlanResult
 	if err := c.Call(ctx, rpc.MethodPlan, rpc.PlanParams{Key: "invoices/a.pdf", Plugins: []string{"test.answer1"}}, &plan); err != nil {
-		t.Fatalf("plan: %v\n%s", err, r.io.output())
+		t.Fatalf("plan: %v\n%s", err, r.io.Output())
 	}
 	var res answers.Result
 	if err := c.Call(ctx, rpc.MethodRun, rpc.RunParams{PlanID: plan.PlanID}, &res); err != nil {
-		t.Fatalf("run: %v\n%s", err, r.io.output())
+		t.Fatalf("run: %v\n%s", err, r.io.Output())
 	}
 	if len(res.Answers) != 1 || res.Answers[0].Result == nil || *res.Answers[0].Result != 1 {
 		t.Fatalf("result = %+v", res)
@@ -213,7 +146,7 @@ func TestConsoleEndToEnd(t *testing.T) {
 	if len(entries) != 0 {
 		t.Fatalf("work dir not emptied at exit: %v", entries)
 	}
-	if out := r.io.output(); strings.Contains(out, "synthetic") || strings.Contains(out, r.work) {
+	if out := r.io.Output(); strings.Contains(out, "synthetic") || strings.Contains(out, r.work) {
 		t.Fatalf("console output holds file data:\n%s", out)
 	}
 }

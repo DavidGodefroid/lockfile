@@ -44,6 +44,78 @@ func GetStatus(ctx context.Context, profile string) (Status, error) {
 	return out, nil
 }
 
+// StatusEntry is one profile's line of a status report: its console's
+// status, or why there is none.
+type StatusEntry struct {
+	Profile string  `json:"profile"`
+	Console *Status `json:"console,omitempty"`
+	Error   string  `json:"error,omitempty"`
+	Hint    string  `json:"hint,omitempty"`
+}
+
+// Statuses reports on profile, or on every running console when it is "".
+// ok is false when a profile has no console, or none runs.
+func Statuses(ctx context.Context, profile string) (out []StatusEntry, ok bool, err error) {
+	profiles := []string{profile}
+	if profile == "" {
+		src, err := Sources(ctx)
+		if err != nil {
+			return nil, false, err
+		}
+		profiles = profiles[:0]
+		for _, s := range src {
+			profiles = append(profiles, s.Profile)
+		}
+	}
+	out, ok = []StatusEntry{}, len(profiles) > 0
+	for _, p := range profiles {
+		st, err := GetStatus(ctx, p)
+		if err == nil {
+			out = append(out, StatusEntry{Profile: p, Console: &st})
+			continue
+		}
+		ok = false
+		en := StatusEntry{Profile: p, Error: rpc.MsgInternal}
+		var ce *Error
+		if errors.As(err, &ce) {
+			en.Error = ce.Msg
+			if ce.Refusal != nil {
+				en.Hint = ce.Refusal.Hint
+			}
+		}
+		out = append(out, en)
+	}
+	return out, ok, nil
+}
+
+// StatusLines is a status report as text.
+func StatusLines(out []StatusEntry) []string {
+	if len(out) == 0 {
+		return []string{NoConsoleText}
+	}
+	var lines []string
+	for _, en := range out {
+		if en.Console == nil {
+			lines = append(lines, fmt.Sprintf("%s: %s; %s", en.Profile, en.Error, en.Hint))
+			continue
+		}
+		s := en.Console
+		lines = append(lines, fmt.Sprintf("%s: console up, production %s, auto %s, security level %d, plugin protocol %d, sandbox %s",
+			s.Profile, yesNo(s.Production), yesNo(s.AutoApprove), s.Level, s.Product.Protocol, s.Product.Sandbox))
+	}
+	return lines
+}
+
+func yesNo(b bool) string {
+	if b {
+		return "yes"
+	}
+	return "no"
+}
+
+// NoConsoleText says that no console runs and how to start one.
+var NoConsoleText = "no lockfile console is running: ask the user to start one in the lockfile account (" + StartCommand("NAME") + ")"
+
 // probeTimeout bounds the status call of each socket in Sources. A console
 // serves one request at a time: one waiting for the human answers later,
 // and is listed as busy.
@@ -194,7 +266,7 @@ func Resolve(pinned, arg string) (string, error) {
 			return "", err
 		}
 		if len(names) == 0 {
-			return "", &Error{Kind: KindNoConsole, Msg: "no lockfile console is running: ask the user to start one in the lockfile account (" + StartCommand("NAME") + ")"}
+			return "", &Error{Kind: KindNoConsole, Msg: NoConsoleText}
 		}
 	}
 	p, err := mcpkit.Profiles{Product: product.P, Pinned: pinned, List: SourceNames}.Resolve(arg)

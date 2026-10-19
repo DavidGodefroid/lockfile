@@ -18,7 +18,7 @@ func TestCLIPlanRun(t *testing.T) {
 	code, out, errText := runArgs(t, "", "plan", "--profile", "samples", "--key", "invoices/a.pdf",
 		"--plugin", "test.answer1", "--plugin", "test.answer0", "--json")
 	if code != 0 {
-		t.Fatalf("plan exit %d: %s %s\n%s", code, out, errText, r.io.output())
+		t.Fatalf("plan exit %d: %s %s\n%s", code, out, errText, r.io.Output())
 	}
 	var plan rpc.PlanResult
 	if err := json.Unmarshal([]byte(out), &plan); err != nil || plan.Answers != 2 || !strings.HasPrefix(plan.PlanID, "pl_") {
@@ -76,7 +76,7 @@ func TestCLIExitCodes(t *testing.T) {
 		code, out, errText := runArgs(t, "", args...)
 		all.WriteString(out + errText)
 		if code != want {
-			t.Fatalf("%s: exit %d, want %d: %s %s\n%s", name, code, want, out, errText, r.io.output())
+			t.Fatalf("%s: exit %d, want %d: %s %s\n%s", name, code, want, out, errText, r.io.Output())
 		}
 		return out + errText
 	}

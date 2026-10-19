@@ -123,72 +123,14 @@ func runStatus(e env, args []string) int {
 	}
 	ctx, stop := agentContext()
 	defer stop()
-	var profiles []string
-	if *f.profile != "" {
-		profiles = []string{*f.profile}
-	} else {
-		src, err := clientcmd.Sources(ctx)
-		if err != nil {
-			return fail(e, *f.json, err)
-		}
-		for _, s := range src {
-			profiles = append(profiles, s.Profile)
-		}
+	out, ok, err := clientcmd.Statuses(ctx, *f.profile)
+	if err != nil {
+		return fail(e, *f.json, err)
 	}
-	type entry struct {
-		Profile string            `json:"profile"`
-		Console *clientcmd.Status `json:"console,omitempty"`
-		Error   string            `json:"error,omitempty"`
-		Hint    string            `json:"hint,omitempty"`
-	}
-	out := []entry{}
-	code := product.ExitOK
-	for _, p := range profiles {
-		st, err := clientcmd.GetStatus(ctx, p)
-		if err != nil {
-			var ce *clientcmd.Error
-			en := entry{Profile: p, Error: rpc.MsgInternal}
-			if errors.As(err, &ce) {
-				en.Error = ce.Msg
-				if ce.Refusal != nil {
-					en.Hint = ce.Refusal.Hint
-				}
-			}
-			out = append(out, en)
-			code = product.ExitError
-			continue
-		}
-		out = append(out, entry{Profile: p, Console: &st})
-	}
-	if c := emit(e, *f.json, out, func() []string {
-		if len(out) == 0 {
-			return []string{"no lockfile console is running: ask the user to start one in the lockfile account (" + clientcmd.StartCommand("NAME") + ")"}
-		}
-		var lines []string
-		for _, en := range out {
-			if en.Console == nil {
-				lines = append(lines, fmt.Sprintf("%s: %s; %s", en.Profile, en.Error, en.Hint))
-				continue
-			}
-			s := en.Console
-			lines = append(lines, fmt.Sprintf("%s: console up, production %s, auto %s, security level %d, plugin protocol %d, sandbox %s",
-				s.Profile, yesNo(s.Production), yesNo(s.AutoApprove), s.Level, s.Product.Protocol, s.Product.Sandbox))
-		}
-		return lines
-	}); c != product.ExitOK {
-		return c
-	}
-	if len(out) == 0 {
+	if c := emit(e, *f.json, out, func() []string { return clientcmd.StatusLines(out) }); c != product.ExitOK || !ok {
 		return product.ExitError
 	}
-	return code
-}
-
-func yesNo(b bool) string {
-	if b {
-		return "yes"
-	}
-	return "no"
+	return product.ExitOK
 }
 
 func runSources(e env, args []string) int {
