@@ -41,6 +41,9 @@ func GetStatus(ctx context.Context, profile string) (Status, error) {
 	if err := call(ctx, profile, ipc.MethodStatus, nil, &out); err != nil {
 		return Status{}, err
 	}
+	if out.Profile != profile || !validStatus(out.Product) {
+		return Status{}, errBadResult()
+	}
 	return out, nil
 }
 

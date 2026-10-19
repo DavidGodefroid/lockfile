@@ -218,6 +218,78 @@ func TestUnknownConsoleErrorScrubbed(t *testing.T) {
 	}
 }
 
+func TestSuccessfulResultsChecked(t *testing.T) {
+	dir := runtimeDir(t)
+	one := 1
+	goodInfo := rpc.PluginInfo{Plugin: "acme/pdf.parses", Version: "1.0.0", Marketplace: "acme", Warning: answers.WarningUnofficial,
+		Question: "Does it parse?", One: "it parses", Zero: "it does not"}
+	goodResult := answers.Result{Handle: "f_0123456789", Answers: []answers.Answer{{Plugin: "pdf.parses", Version: "1.0.0", Official: true, Result: &one}}}
+	serve := func(v any) {
+		_ = os.Remove(filepath.Join(dir, "user-x.sock"))
+		fakeConsole(t, filepath.Join(dir, "user-x.sock"), "x", func(req ipc.Request) ipc.Response { return console.OKResp(req.ID, v) })
+	}
+	ctx := context.Background()
+	plan := rpc.PlanParams{Key: "k", Plugins: []string{"pdf.parses"}}
+	calls := map[string]func() error{
+		"plugins": func() error { _, err := Plugins(ctx, "x"); return err },
+		"plan":    func() error { _, err := Plan(ctx, "x", plan); return err },
+		"run":     func() error { _, err := Run(ctx, "x", "pl_0123456789"); return err },
+		"answers": func() error { _, err := Answers(ctx, "x", "f_0123456789"); return err },
+		"status":  func() error { _, err := GetStatus(ctx, "x"); return err },
+	}
+	mod := func(f func(*rpc.PluginInfo)) []rpc.PluginInfo { p := goodInfo; f(&p); return []rpc.PluginInfo{p} }
+	res := func(f func(*answers.Result)) answers.Result {
+		r := goodResult
+		r.Answers = []answers.Answer{goodResult.Answers[0]}
+		f(&r)
+		return r
+	}
+	status := func(profile, sandbox string) console.StatusResult {
+		return console.StatusResult{Profile: profile, Product: rpc.Status{Protocol: 1, Sandbox: sandbox}}
+	}
+	cases := []struct {
+		name, call string
+		reply      any
+		ok         bool
+	}{
+		{"plugins ok", "plugins", []rpc.PluginInfo{goodInfo}, true},
+		{"plugin name", "plugins", mod(func(p *rpc.PluginInfo) { p.Plugin = "/srv/x/john.pdf" }), false},
+		{"plugin version", "plugins", mod(func(p *rpc.PluginInfo) { p.Version = "4821 bytes" }), false},
+		{"marketplace", "plugins", mod(func(p *rpc.PluginInfo) { p.Marketplace = "a b" }), false},
+		{"question control", "plugins", mod(func(p *rpc.PluginInfo) { p.Question = "q\x1b[2J" }), false},
+		{"empty one", "plugins", mod(func(p *rpc.PluginInfo) { p.One = "" }), false},
+		{"warning", "plugins", mod(func(p *rpc.PluginInfo) { p.Warning = "size 4821" }), false},
+		{"plan ok", "plan", rpc.PlanResult{PlanID: "pl_0123456789", Answers: 1}, true},
+		{"plan id", "plan", rpc.PlanResult{PlanID: "pl_/srv/john", Answers: 1}, false},
+		{"plan answers", "plan", rpc.PlanResult{PlanID: "pl_0123456789", Answers: 4821}, false},
+		{"run ok", "run", goodResult, true},
+		{"run handle", "run", res(func(r *answers.Result) { r.Handle = "/tmp/f_x" }), false},
+		{"run plugin", "run", res(func(r *answers.Result) { r.Answers[0].Plugin = "john.pdf 4821" }), false},
+		{"run version", "run", res(func(r *answers.Result) { r.Answers[0].Version = "sha256" }), false},
+		{"answers ok", "answers", goodResult, true},
+		{"answers other handle", "answers", res(func(r *answers.Result) { r.Handle = "f_9876543210" }), false},
+		{"status ok", "status", status("x", "ok"), true},
+		{"status sandbox", "status", status("x", "/srv/x 4821"), false},
+		{"status profile", "status", status("other", "ok"), false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			serve(c.reply)
+			err := calls[c.call]()
+			if c.ok {
+				if err != nil {
+					t.Fatalf("err = %v", err)
+				}
+				return
+			}
+			var ce *Error
+			if !errors.As(err, &ce) || ce.Kind != KindOther || ce.Msg != rpc.MsgInternal {
+				t.Fatalf("err = %#v", err)
+			}
+		})
+	}
+}
+
 func TestResultKeepsClosedValues(t *testing.T) {
 	two, one := 2, 1
 	in := answers.Result{Handle: "f_x", Answers: []answers.Answer{

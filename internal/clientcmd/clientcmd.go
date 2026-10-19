@@ -125,20 +125,39 @@ func call(ctx context.Context, profile, method string, params, result any) error
 	return closed(profile, c.Call(ctx, method, params, result))
 }
 
+// errBadResult is a successful result with a value outside its shape: it
+// is not forwarded.
+func errBadResult() error { return &Error{Kind: KindOther, Msg: rpc.MsgInternal} }
+
 // Plugins lists the plugins profile's console may run.
 func Plugins(ctx context.Context, profile string) ([]rpc.PluginInfo, error) {
 	var out []rpc.PluginInfo
 	if err := call(ctx, profile, rpc.MethodPlugins, nil, &out); err != nil {
 		return nil, err
 	}
+	for _, p := range out {
+		if !validPluginInfo(p) {
+			return nil, errBadResult()
+		}
+	}
 	return mcpkit.NonNil(out), nil
+}
+
+// planOK checks a plan result against the request it answers.
+func planOK(p rpc.PlanParams, out rpc.PlanResult) bool {
+	return validPlanID(out.PlanID) && out.Answers == len(p.Plugins)
 }
 
 // Plan asks the human to approve a plan.
 func Plan(ctx context.Context, profile string, p rpc.PlanParams) (rpc.PlanResult, error) {
 	var out rpc.PlanResult
-	err := call(ctx, profile, rpc.MethodPlan, p, &out)
-	return out, err
+	if err := call(ctx, profile, rpc.MethodPlan, p, &out); err != nil {
+		return rpc.PlanResult{}, err
+	}
+	if !planOK(p, out) {
+		return rpc.PlanResult{}, errBadResult()
+	}
+	return out, nil
 }
 
 // PlanAndRun plans, then runs the plan once approved, on one connection.
@@ -152,9 +171,15 @@ func PlanAndRun(ctx context.Context, profile string, p rpc.PlanParams) (answers.
 	if err := c.Call(ctx, rpc.MethodPlan, p, &plan); err != nil {
 		return answers.Result{}, closed(profile, err)
 	}
+	if !planOK(p, plan) {
+		return answers.Result{}, errBadResult()
+	}
 	var out answers.Result
 	if err := c.Call(ctx, rpc.MethodRun, rpc.RunParams{PlanID: plan.PlanID}, &out); err != nil {
 		return answers.Result{}, closed(profile, err)
+	}
+	if !validResult(out) || len(out.Answers) != len(p.Plugins) {
+		return answers.Result{}, errBadResult()
 	}
 	return result(out), nil
 }
@@ -165,6 +190,9 @@ func Run(ctx context.Context, profile, planID string) (answers.Result, error) {
 	if err := call(ctx, profile, rpc.MethodRun, rpc.RunParams{PlanID: planID}, &out); err != nil {
 		return answers.Result{}, err
 	}
+	if !validResult(out) {
+		return answers.Result{}, errBadResult()
+	}
 	return result(out), nil
 }
 
@@ -173,6 +201,9 @@ func Answers(ctx context.Context, profile, handle string) (answers.Result, error
 	var out answers.Result
 	if err := call(ctx, profile, rpc.MethodAnswers, rpc.HandleParams{Handle: handle}, &out); err != nil {
 		return answers.Result{}, err
+	}
+	if !validResult(out) || out.Handle != handle {
+		return answers.Result{}, errBadResult()
 	}
 	return result(out), nil
 }

@@ -48,7 +48,9 @@ lists. `test/e2e` walks every response of every method against this list.
 Never sent: size, media type, sha256, key listings, file or path names, page or byte counts,
 library or OS error text, per-plugin timing, progress during a run (the MCP server's run
 heartbeat is a constant text), stderr. The client also refuses to forward any console text it
-does not recognise: an unknown error becomes `console error`.
+does not recognise: an unknown error becomes `console error`, and so does a successful result
+with a value outside its shape (plan id, handle, plugin name, version, marketplace, manifest
+text with control characters, sandbox state, a status for another profile).
 
 ## Side channels
 
