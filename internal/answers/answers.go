@@ -45,6 +45,8 @@ type AuditEntry struct {
 	Cause        pluginspec.FailureCause
 	Report       sandbox.Report
 	ConsoleError string
+	// Fetch is set on the entry that records a plan's fetch.
+	Fetch *FetchAudit
 }
 
 type Runner struct {
