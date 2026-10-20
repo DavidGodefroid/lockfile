@@ -3,6 +3,18 @@
 **Rule: the agent only ever sees 1s and 0s about a file.** The human approves every plan in a
 console the agent cannot drive, in an account the agent cannot read.
 
+## Preconditions
+
+- **`/proc` mounted with `hidepid=invisible`** (`hidepid=2`). While a plugin runs, its `/proc`
+  entries (command line, thread names and count, memory counters) are written by the plugin
+  itself and are readable by every account otherwise: the agent could poll them and read file
+  content out of them. seccomp cannot stop a process from writing its own entries, and a pid
+  namespace would not hide the plugin from the parent namespace (nor can one be made without a
+  user namespace). `lockfile doctor` (from either account) fails, and the console refuses to
+  start and refuses plans with `proc_not_hidden`, until `/proc` is remounted:
+  `mount -o remount,hidepid=invisible,gid=<admin group> /proc`, kept in `/etc/fstab` as
+  `proc /proc proc defaults,hidepid=invisible,gid=<admin group> 0 0`.
+
 ## Boundaries
 
 | Boundary | Enforced by |
@@ -30,7 +42,7 @@ lists. `test/e2e` walks every response of every method against this list.
 | plugin name, version, `official`, `warning: unofficial_marketplace`, question, meaning of 1/0 | plugin metadata from the signed manifest |
 | profile names and `production` flag (`sources`), `busy` | lockfile configuration; `busy` = the console is waiting for the human on another request |
 | approval outcome (`approval_denied`, `approval_timeout`) | a human decision; the reason the human types is never forwarded |
-| refusals `key_outside_prefix`, `too_many_plugins`, `unknown_profile`, `plugin_not_installed`, `plugin_tampered`, `plugin_yanked`, `sandbox_unavailable`, `handle_expired` (as `E_*` codes with a static hint) | computed from the request and the local install, before or without reading the file |
+| refusals `key_outside_prefix`, `too_many_plugins`, `unknown_profile`, `plugin_not_installed`, `plugin_tampered`, `plugin_yanked`, `sandbox_unavailable`, `proc_not_hidden`, `handle_expired` (as `E_*` codes with a static hint) | computed from the request and the local install, before or without reading the file |
 | `status` (console up, production, auto mode, security level, idle/session timers, plugin protocol, sandbox ok) | console state |
 
 Never sent: size, media type, sha256, key listings, file or path names, page or byte counts,

@@ -26,6 +26,7 @@ func TestEveryCodeMapped(t *testing.T) {
 		answers.CodePluginTampered:     refusal.RetryStop,
 		answers.CodePluginYanked:       refusal.RetryAskUser,
 		answers.CodeSandboxUnavailable: refusal.RetryStop,
+		answers.CodeProcNotHidden:      refusal.RetryStop,
 		answers.CodeHandleExpired:      refusal.RetryRewrite,
 	}
 	for _, c := range answers.Codes {

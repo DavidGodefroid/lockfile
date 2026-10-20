@@ -105,6 +105,9 @@ func (b *Backend) plan(ctx context.Context, req ipc.Request, env console.Env) ip
 	if _, _, err := b.o.Probe(); err != nil {
 		return product.Refuse(req.ID, answers.CodeSandboxUnavailable)
 	}
+	if err := b.o.ProcHidden(); err != nil {
+		return product.Refuse(req.ID, answers.CodeProcNotHidden)
+	}
 	var shown []screenPlugin
 	for _, name := range p.Plugins {
 		bin, in, err := b.store.Open(name)

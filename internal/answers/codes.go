@@ -14,6 +14,7 @@ const (
 	CodePluginTampered     Code = "plugin_tampered"
 	CodePluginYanked       Code = "plugin_yanked"
 	CodeSandboxUnavailable Code = "sandbox_unavailable"
+	CodeProcNotHidden      Code = "proc_not_hidden"
 	CodeApprovalDenied     Code = "approval_denied"
 	CodeApprovalTimeout    Code = "approval_timeout"
 	CodeHandleExpired      Code = "handle_expired"
@@ -23,6 +24,7 @@ const (
 var Codes = []Code{
 	CodePluginError, CodeFetchFailed, CodeKeyOutsidePrefix, CodeUnknownProfile, CodeTooManyPlugins,
 	CodePluginNotInstalled, CodePluginTampered, CodePluginYanked, CodeSandboxUnavailable,
+	CodeProcNotHidden,
 	CodeApprovalDenied, CodeApprovalTimeout, CodeHandleExpired,
 }
 

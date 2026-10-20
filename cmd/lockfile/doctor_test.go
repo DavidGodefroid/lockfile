@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -43,6 +44,7 @@ func doctorEnv(t *testing.T, home string) *doctorHooks {
 		home:     func(string) (string, error) { return home, nil },
 		lookPath: func(string) (string, error) { return "/usr/bin/cosign", nil },
 		agents:   func() (agentwire.Env, error) { return agentwire.Env{}, errors.New("no agents in this test") },
+		mounts:   func() ([]byte, error) { return []byte(hiddenProc), nil },
 	}
 	testDoctorHooks = h
 	t.Cleanup(func() { testDoctorHooks = nil })
@@ -121,5 +123,31 @@ func TestDoctorOutputHasNoSecretOrPath(t *testing.T) {
 	}
 	if !strings.Contains(all, "work directory has mode 0755") || !strings.Contains(all, "UNOFFICIAL acme") {
 		t.Fatalf("missing findings:\n%s", all)
+	}
+}
+
+const (
+	hiddenProc = "22 1 0:21 / /proc rw,nosuid,nodev,noexec,relatime shared:12 - proc proc rw,hidepid=invisible,gid=27\n"
+	openProc   = "22 1 0:21 / /proc rw,nosuid,nodev,noexec,relatime shared:12 - proc proc rw\n"
+)
+
+func TestDoctorProcHidepid(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("/proc is Linux only")
+	}
+	h := doctorEnv(t, "/nonexistent")
+	h.mounts = func() ([]byte, error) { return []byte(openProc), nil }
+	code, out, _ := runArgs(t, "", "doctor")
+	if code != product.ExitError || !strings.Contains(out, "mount -o remount,hidepid=invisible,gid=<admin group> /proc") ||
+		!strings.Contains(out, "proc /proc proc defaults,hidepid=invisible,gid=<admin group> 0 0") {
+		t.Fatalf("open /proc: exit %d:\n%s", code, out)
+	}
+	h.mounts = func() ([]byte, error) { return nil, errors.New("unreadable") }
+	if code, out, _ := runArgs(t, "", "doctor"); code != product.ExitError || !strings.Contains(out, "cannot read the mount table") {
+		t.Fatalf("unreadable: exit %d:\n%s", code, out)
+	}
+	h.mounts = func() ([]byte, error) { return []byte(hiddenProc), nil }
+	if _, out, _ := runArgs(t, "", "doctor"); !strings.Contains(out, "hidepid=invisible: other accounts") {
+		t.Fatalf("hidden /proc:\n%s", out)
 	}
 }

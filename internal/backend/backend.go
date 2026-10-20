@@ -18,6 +18,7 @@ import (
 
 	"github.com/DavidGodefroid/lockfile/internal/answers"
 	"github.com/DavidGodefroid/lockfile/internal/plugin"
+	"github.com/DavidGodefroid/lockfile/internal/procmount"
 	"github.com/DavidGodefroid/lockfile/internal/product"
 	"github.com/DavidGodefroid/lockfile/internal/profile"
 	"github.com/DavidGodefroid/lockfile/internal/rpc"
@@ -40,7 +41,12 @@ type Options struct {
 	// Run replaces sandbox.Run, Probe sandbox.Probe (tests).
 	Run   func(context.Context, sandbox.Spec) (pluginspec.Outcome, sandbox.Report, error)
 	Probe func() (int, bool, error)
-	Now   func() time.Time
+	// ProcHidden replaces procmount.CheckSystem: nil when /proc hides the
+	// plugins' processes from other accounts. Set only by tests (CI
+	// runners do not mount /proc with hidepid); no flag or config reaches
+	// it.
+	ProcHidden func() error
+	Now        func() time.Time
 	// ExpireEvery is how often expired handles are removed (30 s).
 	ExpireEvery time.Duration
 }
@@ -79,6 +85,9 @@ func New(o Options) (*Backend, error) {
 	}
 	if o.Probe == nil {
 		o.Probe = sandbox.Probe
+	}
+	if o.ProcHidden == nil {
+		o.ProcHidden = procmount.CheckSystem
 	}
 	if o.Now == nil {
 		o.Now = time.Now
@@ -201,6 +210,9 @@ func (b *Backend) Checks(ctx context.Context, s console.Session) []console.Findi
 	var out []console.Finding
 	if _, _, err := b.o.Probe(); err != nil {
 		out = append(out, console.Finding{Refuse: true, Text: "the plugin sandbox is unavailable (Landlock and seccomp are required): run lockfile doctor"})
+	}
+	if err := b.o.ProcHidden(); err != nil {
+		out = append(out, console.Finding{Refuse: true, Text: "other accounts can read the plugins' processes in /proc (a covert channel to the agent): " + procmount.Fix})
 	}
 	if fi, err := os.Stat(b.o.WorkDir); err == nil && fi.Mode().Perm()&0o077 != 0 {
 		out = append(out, console.Finding{Refuse: true, Text: "the workspace directory (work_dir) is open to other accounts: it must be 0700"})

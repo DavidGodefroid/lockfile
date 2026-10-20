@@ -37,6 +37,8 @@ var refusals = map[answers.Code]refusalDef{
 		"a plugin version was withdrawn by its marketplace", "ask the user to update the plugin"},
 	answers.CodeSandboxUnavailable: {"E_SANDBOX_UNAVAILABLE", refusal.RetryStop,
 		"the plugin sandbox is unavailable", "tell the user to run lockfile doctor"},
+	answers.CodeProcNotHidden: {"E_PROC_NOT_HIDDEN", refusal.RetryStop,
+		"other accounts can watch the plugins' processes in /proc", "tell the user to run lockfile doctor"},
 	answers.CodeHandleExpired: {"E_HANDLE_EXPIRED", refusal.RetryRewrite,
 		"the handle expired or was released", "plan again with the key"},
 }

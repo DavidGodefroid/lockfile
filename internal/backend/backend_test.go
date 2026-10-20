@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/DavidGodefroid/lockfile/internal/answers"
 	"github.com/DavidGodefroid/lockfile/internal/plugin"
+	"github.com/DavidGodefroid/lockfile/internal/procmount"
 	"github.com/DavidGodefroid/lockfile/internal/product"
 	"github.com/DavidGodefroid/lockfile/internal/profile"
 	"github.com/DavidGodefroid/lockfile/internal/rpc"
@@ -140,7 +142,8 @@ func newHarness(t *testing.T, plugins ...string) *harness {
 		testenv.Install(t, store, p, bin, "Is it "+p+"?", 2)
 	}
 	b, err := New(Options{ConfigPath: cfg, Profile: "samples", StateDir: state, PluginDir: store.Dir,
-		WorkDir: filepath.Join(t.TempDir(), "work"), Probe: func() (int, bool, error) { return 4, true, nil }})
+		WorkDir: filepath.Join(t.TempDir(), "work"), Probe: func() (int, bool, error) { return 4, true, nil },
+		ProcHidden: func() error { return nil }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -531,5 +534,42 @@ func TestChecksRefuseWithoutSandbox(t *testing.T) {
 	}
 	if st := h.b.Status(nil).(rpc.Status); st.Sandbox != "unavailable" {
 		t.Fatalf("status = %+v", st)
+	}
+}
+
+// /proc without hidepid=invisible lets the agent watch a running plugin:
+// the console refuses to start, and a plan already in flight is refused
+// with its own code (the mount may change after start).
+func TestProcNotHiddenRefuses(t *testing.T) {
+	h := newHarness(t, "test.answer1")
+	h.b.o.ProcHidden = func() error { return procmount.ErrNotHidden }
+	f := h.b.Checks(context.Background(), nil)
+	if len(f) != 1 || !f[0].Refuse || !strings.Contains(f[0].Text, "hidepid=invisible") || !strings.Contains(f[0].Text, "/etc/fstab") {
+		t.Fatalf("findings = %+v", f)
+	}
+	_, resp := h.plan(t, rpc.PlanParams{Key: "invoices/a.pdf", Plugins: []string{"test.answer1"}})
+	if refusalCode(resp) != "proc_not_hidden" || resp.Error.Data == nil || resp.Error.Data.Code != "E_PROC_NOT_HIDDEN" {
+		t.Fatalf("plan: %+v", resp.Error)
+	}
+	if len(h.env.screens) != 0 {
+		t.Fatalf("a refused plan reached the human")
+	}
+	h.b.o.ProcHidden = func() error { return nil }
+	if f := h.b.Checks(context.Background(), nil); len(f) != 0 {
+		t.Fatalf("hidden /proc: findings = %+v", f)
+	}
+}
+
+// Production reads the real mount table: the default is not a stub.
+func TestProcHiddenDefault(t *testing.T) {
+	h := newHarness(t)
+	b, err := New(Options{ConfigPath: h.b.o.ConfigPath, Profile: "samples", StateDir: t.TempDir(), PluginDir: h.b.o.PluginDir,
+		WorkDir: filepath.Join(t.TempDir(), "work")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	if got, want := fmt.Sprint(b.o.ProcHidden()), fmt.Sprint(procmount.CheckSystem()); got != want {
+		t.Fatalf("default ProcHidden = %v, CheckSystem = %v", got, want)
 	}
 }

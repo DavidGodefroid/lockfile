@@ -56,7 +56,10 @@ func startConsole(t *testing.T, answersScript []string, plugins ...string) *cons
 	testConsoleHooks = &consoleHooks{
 		io: r.io, isolation: sameUserIsolation(t), harden: func() error { return nil },
 		stateDir: t.TempDir(), configPath: cfg, ready: func(s string) { ready <- s },
-		backend: func(o *backend.Options) { o.PluginDir, o.WorkDir = store.Dir, work },
+		backend: func(o *backend.Options) {
+			o.PluginDir, o.WorkDir = store.Dir, work
+			o.ProcHidden = func() error { return nil }
+		},
 	}
 	t.Cleanup(func() { testConsoleHooks = nil })
 	go func() {

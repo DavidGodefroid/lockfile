@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/DavidGodefroid/lockkit/render"
 	"github.com/DavidGodefroid/lockkit/sysconf"
 
+	"github.com/DavidGodefroid/lockfile/internal/procmount"
 	"github.com/DavidGodefroid/lockfile/internal/product"
 	"github.com/DavidGodefroid/lockfile/internal/profile"
 	"github.com/DavidGodefroid/lockfile/internal/wiring"
@@ -35,6 +37,8 @@ type doctorHooks struct {
 	home     func(account string) (string, error)
 	lookPath func(string) (string, error)
 	agents   func() (agentwire.Env, error)
+	// mounts reads this process's mount table (/proc/self/mountinfo).
+	mounts func() ([]byte, error)
 }
 
 var testDoctorHooks *doctorHooks
@@ -83,6 +87,9 @@ func runDoctor(e env, args []string) int {
 	if h.agents == nil {
 		h.agents = agentwire.SystemEnv
 	}
+	if h.mounts == nil {
+		h.mounts = procmount.ReadMountinfo
+	}
 	var out []finding
 	add := func(check, status, detail string) { out = append(out, finding{check, status, detail}) }
 
@@ -90,6 +97,10 @@ func runDoctor(e env, args []string) int {
 		add("sandbox", "fail", fmt.Sprintf("plugins cannot run here (Landlock ABI %d, seccomp %t): Linux ≥ 5.13 with Landlock and seccomp is required", abi, sec))
 	} else {
 		add("sandbox", "ok", fmt.Sprintf("Landlock ABI %d, seccomp", abi))
+	}
+
+	if runtime.GOOS == "linux" {
+		doctorProc(h, add)
 	}
 
 	sys, err := h.sys()
@@ -188,6 +199,20 @@ func doctorSeparation(h doctorHooks, sys *sysconf.Config, add func(string, strin
 		add("console home", "warn", "cannot check "+home)
 	}
 	return false
+}
+
+// doctorProc requires /proc to hide other accounts' processes: a running
+// plugin's /proc entries are a channel to the agent otherwise. Checked
+// from both accounts: each sees its own mount namespace.
+func doctorProc(h doctorHooks, add func(string, string, string)) {
+	switch err := procmount.Check(h.mounts); {
+	case err == nil:
+		add("proc", "ok", "hidepid=invisible: other accounts' processes are hidden")
+	case errors.Is(err, procmount.ErrNotHidden), errors.Is(err, procmount.ErrNoProc):
+		add("proc", "fail", "other accounts can read a running plugin's /proc entries (a covert channel to the agent); consoles refuse to run plugins: "+procmount.Fix)
+	default:
+		add("proc", "fail", "cannot read the mount table to check /proc hidepid: "+procmount.Fix)
+	}
 }
 
 func setgidBits(fi fs.FileInfo) fs.FileMode {

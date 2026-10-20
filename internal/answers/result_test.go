@@ -121,7 +121,7 @@ func TestResultIsClosed(t *testing.T) {
 
 func TestCodesClosed(t *testing.T) {
 	want := []string{"plugin_error", "fetch_failed", "key_outside_prefix", "unknown_profile", "too_many_plugins",
-		"plugin_not_installed", "plugin_tampered", "plugin_yanked", "sandbox_unavailable", "approval_denied",
+		"plugin_not_installed", "plugin_tampered", "plugin_yanked", "sandbox_unavailable", "proc_not_hidden", "approval_denied",
 		"approval_timeout", "handle_expired"}
 	if len(Codes) != len(want) {
 		t.Fatalf("Codes = %v", Codes)

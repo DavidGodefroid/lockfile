@@ -56,7 +56,7 @@ A refusal carries `refusal.code`, `refusal.retry` and `refusal.hint`:
   `E_UNKNOWN_PROFILE` (no console serves it: the hint names the command the user runs).
 - `retry: ask_user`: `E_PLUGIN_NOT_INSTALLED`, `E_PLUGIN_YANKED`. Tell the user.
 - `retry: stop`: `E_FETCH_FAILED` (the file could not be fetched; the cause is in the human's
-  audit), `E_PLUGIN_TAMPERED`, `E_SANDBOX_UNAVAILABLE`. Report and stop.
+  audit), `E_PLUGIN_TAMPERED`, `E_SANDBOX_UNAVAILABLE`, `E_PROC_NOT_HIDDEN`. Report and stop.
 - `approval_denied`, `approval_timeout`: the user's decision. Never ask again unless they ask.
 
 ## Hard rules

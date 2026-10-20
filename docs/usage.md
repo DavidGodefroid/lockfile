@@ -22,6 +22,17 @@ release into `/usr/local/bin` first, or pass `--trust-binary` to pin this one's 
 After it: give the console account a password, log out and in again (the new group), and
 open a separate session as `lockfile` (switch user; prefer Wayland) for the console.
 
+`/proc` must hide other accounts' processes, or consoles refuse to start and plans are
+refused with `proc_not_hidden` (`E_PROC_NOT_HIDDEN`); `lockfile install` does not change it:
+
+```sh
+sudo mount -o remount,hidepid=invisible,gid=<admin group> /proc
+# /etc/fstab, to keep it after a reboot:
+proc /proc proc defaults,hidepid=invisible,gid=<admin group> 0 0
+```
+
+Members of `gid=` still see every process (monitoring tools, admins).
+
 ## Profiles (console account)
 
 Profiles live in the lockfile account's `~/.config/lockfile/config.toml`; there is no per-project
