@@ -80,7 +80,9 @@ directory and paths; a few lockkit messages are not yet passed through lockfile'
 
 - Fetched files: `work/<random>/` (0700) in the console account, deleted on `release`, on handle
   expiry, on console exit, and swept at start. Deletion is an unlink, not a secure erase
-  (residual on SSDs and copy-on-write filesystems).
+  (residual on SSDs and copy-on-write filesystems). The directory (`work_dir`), the total cap
+  (`max_workspace_bytes`) and the TTL (`handle_ttl`, fixed per handle at fetch) are read from
+  the approved policy only, never from an unreviewed config edit.
 - The S3 SDK keeps the secret access key in the console's memory for the session; core dumps
   are disabled.
 - The audit log (`~lockfile/.local/state/lockfile/audit.log`, 0600) is the one place file

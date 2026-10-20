@@ -53,7 +53,8 @@ type entry struct {
 	file    string
 	info    Info
 	created time.Time
-	gone    bool // expired and removed; kept so the handle still says expired
+	ttl     time.Duration // fixed at fetch: a later policy does not extend it
+	gone    bool          // expired and removed; kept so the handle still says expired
 }
 
 type Manager struct {
@@ -201,9 +202,27 @@ func (m *Manager) Create(r io.Reader, max int64) (h Handle, info Info, err error
 			break
 		}
 	}
-	m.handles[h] = &entry{dir: dir, file: path, info: info, created: m.c.Now()}
+	m.handles[h] = &entry{dir: dir, file: path, info: info, created: m.c.Now(), ttl: m.c.TTL}
 	m.used += n
 	return h, info, nil
+}
+
+// Dir is the workspace root.
+func (m *Manager) Dir() string { return m.c.Dir }
+
+// SetLimits applies the approved policy's workspace budget and handle TTL
+// to the handles fetched from now on (zero keeps the default). A handle
+// keeps the TTL it was fetched with.
+func (m *Manager) SetLimits(maxBytes int64, ttl time.Duration) {
+	if maxBytes <= 0 {
+		maxBytes = DefaultMaxBytes
+	}
+	if ttl <= 0 {
+		ttl = DefaultTTL
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.c.MaxBytes, m.c.TTL = maxBytes, ttl
 }
 
 func (m *Manager) live(h Handle) (*entry, error) {
@@ -211,7 +230,7 @@ func (m *Manager) live(h Handle) (*entry, error) {
 	if !ok {
 		return nil, ErrUnknownHandle
 	}
-	if e.gone || !m.c.Now().Before(e.created.Add(m.c.TTL)) {
+	if e.gone || !m.c.Now().Before(e.created.Add(e.ttl)) {
 		return nil, ErrExpired
 	}
 	return e, nil
@@ -261,7 +280,7 @@ func (m *Manager) Expire() {
 	defer m.mu.Unlock()
 	now := m.c.Now()
 	for _, e := range m.handles {
-		if !now.Before(e.created.Add(m.c.TTL)) {
+		if !now.Before(e.created.Add(e.ttl)) {
 			_ = m.remove(e)
 		}
 	}

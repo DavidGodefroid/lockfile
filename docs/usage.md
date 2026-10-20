@@ -68,6 +68,12 @@ handle_ttl = "30m"            # a fetched file is deleted after this
 answer_quantum = "5s"         # results leave the console only on multiples of this
 ```
 
+Top-level `work_dir` (absolute, default under the state directory) and `max_workspace_bytes`
+(default `1GiB`, all fetched files together) are part of the approved policy: the console
+uses them, and `handle_ttl`, only once `:review` has accepted them. Moving `work_dir`, raising
+`max_workspace_bytes` or lengthening `handle_ttl` is a loosening; a fetched file keeps the TTL
+it was fetched with.
+
 Credentials: S3 takes the access key id as `user` and the secret access key as the secret;
 SFTP `auth = "password"` takes user + password; `auth = "key"` reads the private key (mode
 0600 or stricter, no symlink) in the lockfile account and takes its passphrase as the secret.

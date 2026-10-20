@@ -89,6 +89,10 @@ func TestDiffLoosens(t *testing.T) {
 		{"max plugins down", func(p *Policy) { p.P.MaxPluginsPerHandle = 8 }, "limits.max_plugins_per_handle", false},
 		{"quantum shorter", func(p *Policy) { p.P.AnswerQuantum = time.Second }, "limits.answer_quantum", true},
 		{"ttl longer", func(p *Policy) { p.P.HandleTTL = time.Hour }, "limits.handle_ttl", true},
+		{"ttl shorter", func(p *Policy) { p.P.HandleTTL = time.Minute }, "limits.handle_ttl", false},
+		{"work_dir moved", func(p *Policy) { p.Workspace.Dir = "/mnt/shared/work" }, "work_dir", true},
+		{"workspace cap up", func(p *Policy) { p.Workspace.MaxBytes = 4 << 30 }, "max_workspace_bytes", true},
+		{"workspace cap down", func(p *Policy) { p.Workspace.MaxBytes = 1 << 20 }, "max_workspace_bytes", false},
 		{"production off", func(p *Policy) { p.P.Production = false }, "production", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

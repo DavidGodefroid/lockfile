@@ -121,6 +121,18 @@ type Workspace struct {
 	MaxBytes int64  `json:"max_bytes"`
 }
 
+// DefaultMaxWorkspaceBytes bounds all fetched files together.
+const DefaultMaxWorkspaceBytes = 1 << 30
+
+// withDefaults fills a zero MaxBytes (a policy approved before the
+// workspace was part of it).
+func (w Workspace) withDefaults() Workspace {
+	if w.MaxBytes <= 0 {
+		w.MaxBytes = DefaultMaxWorkspaceBytes
+	}
+	return w
+}
+
 // File is a decoded, validated config file.
 type File struct {
 	Workspace    Workspace
@@ -148,7 +160,7 @@ func Parse(data []byte, name string) (*File, error) {
 	if raw.WorkDir != "" && !filepath.IsAbs(raw.WorkDir) {
 		return nil, fmt.Errorf("config: %s: work_dir must be absolute", name)
 	}
-	f.Workspace.MaxBytes = 1 << 30
+	f.Workspace.MaxBytes = DefaultMaxWorkspaceBytes
 	if raw.MaxWorkspaceBytes != "" {
 		n, err := pluginspec.ParseBytes(raw.MaxWorkspaceBytes)
 		if err != nil || n <= 0 {

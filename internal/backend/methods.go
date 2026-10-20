@@ -83,6 +83,10 @@ func (b *Backend) plan(ctx context.Context, req ipc.Request, env console.Env) ip
 		return console.ErrResp(req.ID, ipc.CodeInternal, msgInternal)
 	}
 	pr := pol.P
+	ws, runner, err := b.workspaceFor(pol)
+	if err != nil {
+		return console.ErrResp(req.ID, ipc.CodeInternal, msgInternal)
+	}
 	pl := &plan{peerUID: peerUID(ctx), plugins: p.Plugins, policyFP: config.Fingerprint(pol)}
 	if p.Key != "" {
 		k, err := source.CheckKey(pr.Prefix, p.Key)
@@ -92,14 +96,14 @@ func (b *Backend) plan(ctx context.Context, req ipc.Request, env console.Env) ip
 		pl.key = k
 	} else {
 		pl.handle = workspace.Handle(p.Handle)
-		f, _, err := b.ws.OpenFile(pl.handle)
+		f, _, err := ws.OpenFile(pl.handle)
 		if err != nil {
 			b.forget(pl.handle)
 			return product.Refuse(req.ID, answers.CodeHandleExpired)
 		}
 		f.Close()
 	}
-	if b.runner.Used(pl.handle)+len(p.Plugins) > pr.MaxPluginsPerHandle {
+	if runner.Used(pl.handle)+len(p.Plugins) > pr.MaxPluginsPerHandle {
 		return product.Refuse(req.ID, answers.CodeTooManyPlugins)
 	}
 	if _, _, err := b.o.Probe(); err != nil {
@@ -171,12 +175,15 @@ func (b *Backend) run(ctx context.Context, req ipc.Request, env console.Env) ipc
 		return console.ErrResp(req.ID, ipc.CodeConnLost, msgConnLost)
 	}
 	pr := pol.P
-	b.runner.MaxPerHandle = pr.MaxPluginsPerHandle
+	ws, runner, err := b.workspaceFor(pol)
+	if err != nil {
+		return console.ErrResp(req.ID, ipc.CodeInternal, msgInternal)
+	}
 	res, ref, entries := answers.ExecutePlan(ctx, answers.Plan{Profile: pr.Name, Key: pl.key, Handle: pl.handle, Plugins: pl.plugins},
 		answers.Deps{
 			Sources:        map[string]source.Source{pr.Name: sess.src},
 			MaxObjectBytes: func(string) int64 { return pr.MaxObjectBytes },
-			WS:             b.ws, Runner: b.runner, Quantum: pr.AnswerQuantum, Now: b.o.Now,
+			WS:             ws, Runner: runner, Quantum: pr.AnswerQuantum, Now: b.o.Now,
 		})
 	if ref != nil {
 		b.auditRun(ctx, env, pl, entries, string(ref.Code))
@@ -226,7 +233,11 @@ func (b *Backend) answers(ctx context.Context, req ipc.Request, env console.Env)
 		return *r
 	}
 	h := workspace.Handle(p.Handle)
-	f, _, err := b.ws.OpenFile(h)
+	ws, _ := b.current()
+	if ws == nil {
+		return product.Refuse(req.ID, answers.CodeHandleExpired)
+	}
+	f, _, err := ws.OpenFile(h)
 	if err != nil {
 		b.forget(h)
 		return product.Refuse(req.ID, answers.CodeHandleExpired)
@@ -257,7 +268,10 @@ func (b *Backend) release(ctx context.Context, req ipc.Request, env console.Env)
 	start := b.o.Now()
 	h := workspace.Handle(p.Handle)
 	b.forget(h)
-	err := b.ws.Release(h)
+	err := errors.New("no workspace")
+	if ws, _ := b.current(); ws != nil {
+		err = ws.Release(h)
+	}
 	if answers.Quantize(ctx, start, pol.P.AnswerQuantum, b.o.Now) != nil || err != nil {
 		return product.Refuse(req.ID, answers.CodeHandleExpired)
 	}

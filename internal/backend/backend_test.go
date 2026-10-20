@@ -591,3 +591,59 @@ func TestProcHiddenDefault(t *testing.T) {
 		t.Fatalf("default ProcHidden = %v, CheckSystem = %v", got, want)
 	}
 }
+
+// The workspace limits come from the approved policy only: an edit of the
+// config file the human has not reviewed (handle_ttl 24h,
+// max_workspace_bytes 1) changes nothing, and a handle keeps the TTL it was
+// fetched with.
+func TestWorkspaceFollowsApprovedPolicy(t *testing.T) {
+	h := newHarness(t, "test.answer1")
+	approvedPol := h.env.policy
+	cfg := h.b.o.ConfigPath
+	raw, err := os.ReadFile(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	edited := "max_workspace_bytes = \"1\"\n" + string(raw) + "handle_ttl = \"24h\"\n"
+	if err := os.WriteFile(cfg, []byte(edited), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	var offset time.Duration
+	now := func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		return time.Now().Add(offset)
+	}
+	o := h.b.o
+	o.Now, o.WorkDir = now, filepath.Join(t.TempDir(), "work")
+	h.b.Close()
+	b, err := New(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { b.Close() })
+	if _, err := b.Connect(context.Background(), console.Credentials{}); err != nil {
+		t.Fatal(err)
+	}
+	h.b, h.env.b = b, b
+
+	pr, _ := h.plan(t, rpc.PlanParams{Key: "invoices/a.pdf", Plugins: []string{"test.answer1"}})
+	res, resp := h.runPlan(t, pr.PlanID)
+	if resp.Error != nil {
+		t.Fatalf("fetch under the approved 1 GiB budget: %+v", resp.Error)
+	}
+	// A longer TTL approved after the fetch does not extend the handle.
+	longer := *approvedPol
+	longer.P.HandleTTL = 24 * time.Hour
+	h.env.policy = &longer
+	if _, resp := h.plan(t, rpc.PlanParams{Handle: res.Handle, Plugins: []string{"test.answer1"}}); resp.Error != nil {
+		t.Fatalf("follow-up before expiry: %+v", resp.Error)
+	}
+	mu.Lock()
+	offset = profile.DefaultHandleTTL + time.Minute
+	mu.Unlock()
+	if resp := h.call(peerCtx(1000), rpc.MethodAnswers, rpc.HandleParams{Handle: res.Handle}); refusalCode(resp) != "handle_expired" {
+		t.Fatalf("handle alive past the approved TTL: %+v", resp.Error)
+	}
+}
