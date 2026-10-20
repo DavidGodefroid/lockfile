@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -132,6 +133,18 @@ func TestUpdateRefusesDowngrade(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(target); string(b) != "new binary" {
 		t.Fatalf("binary %q", b)
+	}
+}
+
+func TestDownloadRefusesRedirectToHTTP(t *testing.T) {
+	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("plain")) }))
+	t.Cleanup(plain.Close)
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, plain.URL+"/latest", http.StatusFound)
+	}))
+	t.Cleanup(srv.Close)
+	if b, err := download(context.Background(), srv.Client(), srv.URL+"/latest"); err == nil {
+		t.Fatalf("followed a redirect to http: %q", b)
 	}
 }
 

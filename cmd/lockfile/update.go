@@ -22,6 +22,7 @@ import (
 
 	"github.com/DavidGodefroid/lockkit/update"
 
+	"github.com/DavidGodefroid/lockfile/internal/marketplace"
 	"github.com/DavidGodefroid/lockfile/internal/product"
 	"github.com/DavidGodefroid/lockfile/internal/separate"
 )
@@ -109,7 +110,7 @@ func download(ctx context.Context, c *http.Client, url string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	resp, err := c.Do(req)
+	resp, err := marketplace.SafeClient(c).Do(req)
 	if err != nil {
 		return nil, err
 	}

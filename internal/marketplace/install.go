@@ -208,11 +208,7 @@ func (i Installer) fetch(ctx context.Context, rawURL, path string, max int64) ([
 	if err != nil {
 		return nil, err
 	}
-	client := i.HTTP
-	if client == nil {
-		client = http.DefaultClient
-	}
-	resp, err := client.Do(req)
+	resp, err := SafeClient(i.HTTP).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("marketplace: get %s: %w", rawURL, err)
 	}
