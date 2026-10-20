@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" width="1200" height="640" role="img" aria-label="lockfile: an AI agent asks three yes/no questions about an invoice; you approve the plan in the lockfile console, signed plugins run sandboxed on the file, and only their answers, 1, 1 and 1, reach the agent.">
+<title>lockfile: your AI asks about the file, it never reads it</title>
+<style>@keyframes k1{0.00%{opacity:0} 2.14%{opacity:0} 3.57%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k1{animation:k1 14.0s linear infinite}
+@keyframes k2{0.00%{opacity:0} 3.57%{opacity:0} 5.00%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k2{animation:k2 14.0s linear infinite}
+@keyframes k3{0.00%{opacity:0} 5.00%{opacity:0} 6.43%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k3{animation:k3 14.0s linear infinite}
+@keyframes k4{0.00%{opacity:0} 6.43%{opacity:0} 7.86%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k4{animation:k4 14.0s linear infinite}
+@keyframes k5{0.00%{opacity:0} 7.86%{opacity:0} 9.29%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k5{animation:k5 14.0s linear infinite}
+@keyframes k6{0.00%{opacity:0} 9.29%{opacity:0} 10.71%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k6{animation:k6 14.0s linear infinite}
+@keyframes k7{0.00%{opacity:0} 10.71%{opacity:0} 12.14%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k7{animation:k7 14.0s linear infinite}
+@keyframes k8{0.00%{opacity:0} 60.71%{opacity:0} 62.14%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k8{animation:k8 14.0s linear infinite}
+@keyframes k9{0.00%{opacity:0} 62.14%{opacity:0} 63.57%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k9{animation:k9 14.0s linear infinite}
+@keyframes k10{0.00%{opacity:0} 63.57%{opacity:0} 65.00%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k10{animation:k10 14.0s linear infinite}
+@keyframes k11{0.00%{opacity:0} 65.00%{opacity:0} 66.43%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k11{animation:k11 14.0s linear infinite}
+@keyframes k12{0.00%{opacity:0} 70.00%{opacity:0} 71.43%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k12{animation:k12 14.0s linear infinite}
+@keyframes k13{0.00%{opacity:0} 70.00%{opacity:0} 71.43%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k13{animation:k13 14.0s linear infinite}
+@keyframes k14{0.00%{opacity:0} 75.71%{opacity:0} 77.14%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k14{animation:k14 14.0s linear infinite}
+@keyframes k15{0.00%{stroke:#3B82F6} 32.86%{stroke:#3B82F6} 33.93%{stroke:#5EEAD4} 36.43%{stroke:#5EEAD4} 40.71%{stroke:#3B82F6} 100.00%{stroke:#3B82F6}}
+.k15{animation:k15 14.0s linear infinite}
+@keyframes k16{0.00%{opacity:0} 17.86%{opacity:0} 19.29%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k16{animation:k16 14.0s linear infinite}
+@keyframes k17{0.00%{opacity:0} 18.36%{opacity:0} 19.79%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k17{animation:k17 14.0s linear infinite}
+@keyframes k18{0.00%{opacity:0} 18.86%{opacity:0} 20.29%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k18{animation:k18 14.0s linear infinite}
+@keyframes k19{0.00%{opacity:0} 19.36%{opacity:0} 20.79%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k19{animation:k19 14.0s linear infinite}
+@keyframes k20{0.00%{opacity:0} 19.86%{opacity:0} 21.29%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k20{animation:k20 14.0s linear infinite}
+@keyframes k21{0.00%{opacity:0} 20.36%{opacity:0} 21.79%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k21{animation:k21 14.0s linear infinite}
+@keyframes k22{0.00%{opacity:0} 20.86%{opacity:0} 22.29%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k22{animation:k22 14.0s linear infinite}
+@keyframes k23{0.00%{opacity:0} 21.36%{opacity:0} 22.79%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k23{animation:k23 14.0s linear infinite}
+@keyframes k24{0.00%{opacity:0} 21.86%{opacity:0} 23.29%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k24{animation:k24 14.0s linear infinite}
+@keyframes k25{0.00%{opacity:0} 22.36%{opacity:0} 23.79%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k25{animation:k25 14.0s linear infinite}
+@keyframes k26{0.00%{opacity:0} 22.86%{opacity:0} 24.29%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k26{animation:k26 14.0s linear infinite}
+@keyframes k27{0.00%{opacity:0} 24.29%{opacity:0} 25.71%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k27{animation:k27 14.0s linear infinite}
+@keyframes k28{0.00%{opacity:0} 32.86%{opacity:0} 34.29%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k28{animation:k28 14.0s linear infinite}
+@keyframes k29{0.00%{opacity:0} 33.57%{opacity:0} 35.00%{opacity:1} 44.29%{opacity:1} 45.71%{opacity:0} 100.00%{opacity:0}}
+.k29{animation:k29 14.0s linear infinite}
+@keyframes k30{0.00%{stroke:#334155} 35.71%{stroke:#334155} 36.79%{stroke:#5EEAD4} 47.14%{stroke:#5EEAD4} 51.43%{stroke:#334155} 100.00%{stroke:#334155}}
+.k30{animation:k30 14.0s linear infinite}
+@keyframes k31{0.00%{opacity:0} 39.29%{opacity:0} 40.00%{opacity:1} 42.14%{opacity:1} 42.86%{opacity:0} 100.00%{opacity:0}}
+.k31{animation:k31 14.0s linear infinite}
+@keyframes k32{0.00%{opacity:0} 42.14%{opacity:0} 43.57%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k32{animation:k32 14.0s linear infinite}
+@keyframes k33{0.00%{opacity:0} 43.57%{opacity:0} 44.29%{opacity:1} 46.43%{opacity:1} 47.14%{opacity:0} 100.00%{opacity:0}}
+.k33{animation:k33 14.0s linear infinite}
+@keyframes k34{0.00%{opacity:0} 46.43%{opacity:0} 47.86%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k34{animation:k34 14.0s linear infinite}
+@keyframes k35{0.00%{opacity:0} 47.86%{opacity:0} 48.57%{opacity:1} 50.71%{opacity:1} 51.43%{opacity:0} 100.00%{opacity:0}}
+.k35{animation:k35 14.0s linear infinite}
+@keyframes k36{0.00%{opacity:0} 50.71%{opacity:0} 52.14%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k36{animation:k36 14.0s linear infinite}
+@keyframes k37{0.00%{transform:translate(470px,246px);opacity:0} 12.86%{transform:translate(470px,246px);opacity:0} 13.21%{transform:translate(470px,246px);opacity:1} 17.14%{transform:translate(550px,188px);opacity:1} 18.21%{transform:translate(550px,188px);opacity:0} 100.00%{transform:translate(550px,188px);opacity:0}}
+.k37{animation:k37 14.0s linear infinite}
+@keyframes k38{0.00%{transform:translate(686px,472px);opacity:0} 35.71%{transform:translate(686px,472px);opacity:0} 36.07%{transform:translate(686px,472px);opacity:1} 40.00%{transform:translate(786px,472px);opacity:1} 41.07%{transform:translate(786px,472px);opacity:0} 100.00%{transform:translate(786px,472px);opacity:0}}
+.k38{animation:k38 14.0s linear infinite}
+@keyframes k39{0.00%{transform:translate(766px,431px);opacity:0} 55.00%{transform:translate(766px,431px);opacity:0} 55.36%{transform:translate(766px,431px);opacity:1} 60.00%{transform:translate(460px,351px);opacity:1} 61.07%{transform:translate(460px,351px);opacity:0} 100.00%{transform:translate(460px,351px);opacity:0}}
+.k39{animation:k39 14.0s linear infinite}
+@keyframes k40{0.00%{transform:translate(766px,459px);opacity:0} 56.07%{transform:translate(766px,459px);opacity:0} 56.43%{transform:translate(766px,459px);opacity:1} 61.07%{transform:translate(460px,373px);opacity:1} 62.14%{transform:translate(460px,373px);opacity:0} 100.00%{transform:translate(460px,373px);opacity:0}}
+.k40{animation:k40 14.0s linear infinite}
+@keyframes k41{0.00%{transform:translate(766px,487px);opacity:0} 57.14%{transform:translate(766px,487px);opacity:0} 57.50%{transform:translate(766px,487px);opacity:1} 62.14%{transform:translate(460px,395px);opacity:1} 63.21%{transform:translate(460px,395px);opacity:0} 100.00%{transform:translate(460px,395px);opacity:0}}
+.k41{animation:k41 14.0s linear infinite}
+@keyframes k42{0.00%{opacity:0} 0.36%{opacity:0} 1.79%{opacity:1} 15.71%{opacity:1} 17.14%{opacity:0} 100.00%{opacity:0}}
+.k42{animation:k42 14.0s linear infinite}
+@keyframes k43{0.00%{opacity:0} 17.50%{opacity:0} 18.93%{opacity:1} 34.29%{opacity:1} 35.71%{opacity:0} 100.00%{opacity:0}}
+.k43{animation:k43 14.0s linear infinite}
+@keyframes k44{0.00%{opacity:0} 36.07%{opacity:0} 37.50%{opacity:1} 52.86%{opacity:1} 54.29%{opacity:0} 100.00%{opacity:0}}
+.k44{animation:k44 14.0s linear infinite}
+@keyframes k45{0.00%{opacity:0} 54.64%{opacity:0} 56.07%{opacity:1} 95.71%{opacity:1} 97.14%{opacity:0} 100.00%{opacity:0}}
+.k45{animation:k45 14.0s linear infinite}
+@media (prefers-reduced-motion: reduce){*{animation-delay:-10s!important;animation-play-state:paused!important}}</style>
+<rect width="1200" height="640" rx="24" fill="#0B1120"/>
+<text x="30" y="70" class="" font-family="Inter,'Segoe UI',system-ui,-apple-system,Helvetica,Arial,sans-serif" font-size="13" fill="#64748B" font-weight="700" text-anchor="start" xml:space="preserve">YOUR AGENT · its own account</text>
+<rect x="30" y="96" width="450" height="444" rx="14" fill="#0F172A" stroke="#334155" stroke-width="1.5"/>
+<text x="48" y="126" class="" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13" fill="#FBBF24" font-weight="400" text-anchor="start" xml:space="preserve">✻ Claude Code</text>
+<text x="48" y="162" class="k1" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13" xml:space="preserve"><tspan fill="#94A3B8">&gt; </tspan><tspan fill="#E2E8F0">lockfile plan \</tspan></text>
+<text x="48" y="184" class="k2" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13" xml:space="preserve"><tspan fill="#E2E8F0">    --key </tspan><tspan fill="#5EEAD4">invoices/2026/10/abc123.pdf \</tspan></text>
+<text x="48" y="206" class="k3" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13" xml:space="preserve"><tspan fill="#E2E8F0">    --plugin </tspan><tspan fill="#60A5FA">file.non-empty \</tspan></text>
+<text x="48" y="228" class="k4" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13" xml:space="preserve"><tspan fill="#E2E8F0">    --plugin </tspan><tspan fill="#60A5FA">pdf.parses \</tspan></text>
+<text x="48" y="250" class="k5" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13" xml:space="preserve"><tspan fill="#E2E8F0">    --plugin </tspan><tspan fill="#60A5FA">pdf.has-blank-page \</tspan></text>
+<text x="48" y="272" class="k6" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13" xml:space="preserve"><tspan fill="#E2E8F0">    --intent </tspan><tspan fill="#94A3B8">"invoice reported as blank" \</tspan></text>
+<text x="48" y="294" class="k7" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13" xml:space="preserve"><tspan fill="#E2E8F0">    --run</tspan></text>
+<text x="48" y="334" class="k8" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13" xml:space="preserve"><tspan fill="#94A3B8">handle </tspan><tspan fill="#E2E8F0">f_8Kq2xR</tspan></text>
+<text x="48" y="356" class="k9" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13" xml:space="preserve"><tspan fill="#E2E8F0">file.non-empty@1.0.0: </tspan><tspan fill="#4ADE80">1</tspan></text>
+<text x="48" y="378" class="k10" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13" xml:space="preserve"><tspan fill="#E2E8F0">pdf.parses@1.0.0: </tspan><tspan fill="#4ADE80">1</tspan></text>
+<text x="48" y="400" class="k11" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13" xml:space="preserve"><tspan fill="#E2E8F0">pdf.has-blank-page@1.0.0: </tspan><tspan fill="#4ADE80">1</tspan></text>
+<text x="48" y="438" class="k12" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13" fill="#FBBF24" font-weight="400" text-anchor="start" xml:space="preserve">✻ It parses and has a blank page:</text>
+<text x="48" y="460" class="k13" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13" fill="#FBBF24" font-weight="400" text-anchor="start" xml:space="preserve">  the bug is in rendering, not the upload.</text>
+<g class="k14"><text x="48" y="494" class="" font-family="Inter,'Segoe UI',system-ui,-apple-system,Helvetica,Arial,sans-serif" font-size="12" fill="#64748B" font-weight="400" text-anchor="start" xml:space="preserve">never sent to the agent:</text><rect x="48" y="506" width="50" height="22" rx="11" fill="none" stroke="#F87171" stroke-width="1.2"/><text x="73.0" y="521" class="" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="12" fill="#F87171" font-weight="400" text-anchor="middle" xml:space="preserve">bytes</text><line x1="52" y1="517" x2="94" y2="517" stroke="#F87171" stroke-width="1.4"/><rect x="106" y="506" width="42" height="22" rx="11" fill="none" stroke="#F87171" stroke-width="1.2"/><text x="127.0" y="521" class="" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="12" fill="#F87171" font-weight="400" text-anchor="middle" xml:space="preserve">name</text><line x1="110" y1="517" x2="144" y2="517" stroke="#F87171" stroke-width="1.4"/><rect x="156" y="506" width="42" height="22" rx="11" fill="none" stroke="#F87171" stroke-width="1.2"/><text x="177.0" y="521" class="" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="12" fill="#F87171" font-weight="400" text-anchor="middle" xml:space="preserve">size</text><line x1="160" y1="517" x2="194" y2="517" stroke="#F87171" stroke-width="1.4"/><rect x="206" y="506" width="42" height="22" rx="11" fill="none" stroke="#F87171" stroke-width="1.2"/><text x="227.0" y="521" class="" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="12" fill="#F87171" font-weight="400" text-anchor="middle" xml:space="preserve">type</text><line x1="210" y1="517" x2="244" y2="517" stroke="#F87171" stroke-width="1.4"/><rect x="256" y="506" width="42" height="22" rx="11" fill="none" stroke="#F87171" stroke-width="1.2"/><text x="277.0" y="521" class="" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="12" fill="#F87171" font-weight="400" text-anchor="middle" xml:space="preserve">path</text><line x1="260" y1="517" x2="294" y2="517" stroke="#F87171" stroke-width="1.4"/></g>
+<line x1="510" y1="116" x2="510" y2="520" stroke="#334155" stroke-width="2" stroke-dasharray="4 6"/>
+<text x="510" y="102" class="" font-family="Inter,'Segoe UI',system-ui,-apple-system,Helvetica,Arial,sans-serif" font-size="12" fill="#64748B" font-weight="700" text-anchor="middle" xml:space="preserve">socket</text>
+<rect x="540" y="96" width="630" height="444" rx="20" fill="#0F172A" stroke="#3B82F6" stroke-width="3" class="k15"/>
+<rect x="564" y="82" width="290" height="28" rx="14" fill="#3B82F6"/>
+<text x="709" y="101" class="" font-family="Inter,'Segoe UI',system-ui,-apple-system,Helvetica,Arial,sans-serif" font-size="13" fill="#0B1120" font-weight="700" text-anchor="middle" xml:space="preserve">lockfile account · your console</text>
+<rect x="560" y="128" width="590" height="240" rx="10" fill="#0B1120" stroke="#334155" stroke-width="1.5"/>
+<text x="574" y="154" class="k16" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="11.5" xml:space="preserve"><tspan fill="#334155">╭─ </tspan><tspan fill="#E2E8F0">SAMPLES · file plan · 3 answers</tspan><tspan fill="#334155"> ─────</tspan></text>
+<text x="574" y="172" class="k17" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="11.5" xml:space="preserve"><tspan fill="#334155">│ </tspan><tspan fill="#64748B">requested by uid 1000 (alice) · pid 48211 · exe /usr/local/bin/lockfile</tspan></text>
+<text x="574" y="190" class="k18" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="11.5" xml:space="preserve"><tspan fill="#334155">│ </tspan><tspan fill="#94A3B8">agent: invoice reported as blank</tspan></text>
+<text x="574" y="208" class="k19" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="11.5" xml:space="preserve"><tspan fill="#334155">│ </tspan><tspan fill="#94A3B8">key    </tspan><tspan fill="#5EEAD4">invoices/2026/10/abc123.pdf</tspan></text>
+<text x="574" y="226" class="k20" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="11.5" xml:space="preserve"><tspan fill="#334155">│ </tspan><tspan fill="#60A5FA">file.non-empty@1.0.0  (official)</tspan></text>
+<text x="574" y="244" class="k21" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="11.5" xml:space="preserve"><tspan fill="#334155">│ </tspan><tspan fill="#E2E8F0">  ? Does the file contain at least one byte?   1 = size &gt; 0   0 = the…</tspan></text>
+<text x="574" y="262" class="k22" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="11.5" xml:space="preserve"><tspan fill="#334155">│ </tspan><tspan fill="#60A5FA">pdf.parses@1.0.0  (official)</tspan></text>
+<text x="574" y="280" class="k23" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="11.5" xml:space="preserve"><tspan fill="#334155">│ </tspan><tspan fill="#E2E8F0">  ? Does the file parse as a PDF without errors?   1 = pdfcpu reads…</tspan></text>
+<text x="574" y="298" class="k24" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="11.5" xml:space="preserve"><tspan fill="#334155">│ </tspan><tspan fill="#60A5FA">pdf.has-blank-page@1.0.0  (official)</tspan></text>
+<text x="574" y="316" class="k25" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="11.5" xml:space="preserve"><tspan fill="#334155">│ </tspan><tspan fill="#E2E8F0">  ? Does the PDF have at least one page that paints nothing visible?…</tspan></text>
+<text x="574" y="334" class="k26" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="11.5" xml:space="preserve"><tspan fill="#334155">│ </tspan><tspan fill="#FBBF24">this plan reveals at most 3 answers about the file</tspan></text>
+<text x="574" y="356" class="k27" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="11.5" xml:space="preserve"><tspan fill="#334155">╰─ </tspan><tspan fill="#E2E8F0">Approve? [y/N] </tspan></text>
+<text x="698.2" y="356" class="k28" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="11.5" fill="#4ADE80" font-weight="700" text-anchor="start" xml:space="preserve">y</text>
+<g class="k29"><rect x="1020" y="340" width="110" height="22" rx="12" fill="#4ADE80"/><text x="1075" y="355" class="" font-family="Inter,'Segoe UI',system-ui,-apple-system,Helvetica,Arial,sans-serif" font-size="12" fill="#0B1120" font-weight="700" text-anchor="middle" xml:space="preserve">approved</text></g>
+<rect x="560" y="380" width="170" height="140" rx="12" fill="#131C2E" stroke="#334155" stroke-width="1.5" class="k30"/>
+<text x="576" y="406" class="" font-family="Inter,'Segoe UI',system-ui,-apple-system,Helvetica,Arial,sans-serif" font-size="13" fill="#64748B" font-weight="700" text-anchor="start" xml:space="preserve">SOURCE</text>
+<text x="576" y="432" class="" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13" fill="#E2E8F0" font-weight="400" text-anchor="start" xml:space="preserve">local</text>
+<text x="576" y="452" class="" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="12" fill="#94A3B8" font-weight="400" text-anchor="start" xml:space="preserve">/srv/samples</text>
+<text x="576" y="472" class="" font-family="Inter,'Segoe UI',system-ui,-apple-system,Helvetica,Arial,sans-serif" font-size="11" fill="#64748B" font-weight="400" text-anchor="start" xml:space="preserve">s3 · sftp · local</text>
+<g transform="translate(686 472)"><path d="M0 0 H18 L26 8 V32 H0 Z" fill="#3B82F6"/><path d="M18 0 V8 H26 Z" fill="#60A5FA" opacity=".6"/></g>
+<rect x="756" y="380" width="394" height="140" rx="12" fill="#131C2E" stroke="#5EEAD4" stroke-width="1.5" stroke-dasharray="6 5"/>
+<text x="772" y="406" class="" font-family="Inter,'Segoe UI',system-ui,-apple-system,Helvetica,Arial,sans-serif" font-size="13" fill="#5EEAD4" font-weight="700" text-anchor="start" xml:space="preserve">SANDBOX</text>
+<text x="1134" y="406" class="" font-family="Inter,'Segoe UI',system-ui,-apple-system,Helvetica,Arial,sans-serif" font-size="11" fill="#94A3B8" font-weight="400" text-anchor="end" xml:space="preserve">fd 3 read-only · no network · 3-byte stdout</text>
+<text x="772" y="436" class="" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13" fill="#60A5FA" font-weight="400" text-anchor="start" xml:space="preserve">file.non-empty</text>
+<g class="k31"><text x="1120" y="436" class="" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13" fill="#64748B" font-weight="400" text-anchor="middle" xml:space="preserve">…</text></g>
+<g class="k32"><rect x="1106" y="421" width="28" height="20" rx="6" fill="#4ADE80"/><text x="1120" y="436" class="" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13" fill="#0B1120" font-weight="700" text-anchor="middle" xml:space="preserve">1</text></g>
+<text x="772" y="464" class="" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13" fill="#60A5FA" font-weight="400" text-anchor="start" xml:space="preserve">pdf.parses</text>
+<g class="k33"><text x="1120" y="464" class="" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13" fill="#64748B" font-weight="400" text-anchor="middle" xml:space="preserve">…</text></g>
+<g class="k34"><rect x="1106" y="449" width="28" height="20" rx="6" fill="#4ADE80"/><text x="1120" y="464" class="" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13" fill="#0B1120" font-weight="700" text-anchor="middle" xml:space="preserve">1</text></g>
+<text x="772" y="492" class="" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13" fill="#60A5FA" font-weight="400" text-anchor="start" xml:space="preserve">pdf.has-blank-page</text>
+<g class="k35"><text x="1120" y="492" class="" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13" fill="#64748B" font-weight="400" text-anchor="middle" xml:space="preserve">…</text></g>
+<g class="k36"><rect x="1106" y="477" width="28" height="20" rx="6" fill="#4ADE80"/><text x="1120" y="492" class="" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13" fill="#0B1120" font-weight="700" text-anchor="middle" xml:space="preserve">1</text></g>
+<circle r="7" fill="#60A5FA" class="k37"/>
+<g class="k38"><g transform="translate(-13 -16)"><path d="M0 0 H18 L26 8 V32 H0 Z" fill="#3B82F6"/><path d="M18 0 V8 H26 Z" fill="#60A5FA" opacity=".6"/></g></g>
+<g class="k39"><rect x="-11" y="-11" width="22" height="22" rx="6" fill="#4ADE80"/><text x="0" y="5" class="" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13" fill="#0B1120" font-weight="700" text-anchor="middle" xml:space="preserve">1</text></g>
+<g class="k40"><rect x="-11" y="-11" width="22" height="22" rx="6" fill="#4ADE80"/><text x="0" y="5" class="" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13" fill="#0B1120" font-weight="700" text-anchor="middle" xml:space="preserve">1</text></g>
+<g class="k41"><rect x="-11" y="-11" width="22" height="22" rx="6" fill="#4ADE80"/><text x="0" y="5" class="" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="13" fill="#0B1120" font-weight="700" text-anchor="middle" xml:space="preserve">1</text></g>
+<text x="600.0" y="598" class="k42" font-family="Inter,'Segoe UI',system-ui,-apple-system,Helvetica,Arial,sans-serif" font-size="26" fill="#E2E8F0" font-weight="650" text-anchor="middle" xml:space="preserve">Your agent asks yes/no questions about a file.</text>
+<text x="600.0" y="598" class="k43" font-family="Inter,'Segoe UI',system-ui,-apple-system,Helvetica,Arial,sans-serif" font-size="26" fill="#E2E8F0" font-weight="650" text-anchor="middle" xml:space="preserve">You approve every plan, in a console it cannot drive.</text>
+<text x="600.0" y="598" class="k44" font-family="Inter,'Segoe UI',system-ui,-apple-system,Helvetica,Arial,sans-serif" font-size="26" fill="#E2E8F0" font-weight="650" text-anchor="middle" xml:space="preserve">Signed plugins run sandboxed on the file.</text>
+<text x="600.0" y="598" class="k45" font-family="Inter,'Segoe UI',system-ui,-apple-system,Helvetica,Arial,sans-serif" font-size="26" fill="#E2E8F0" font-weight="650" text-anchor="middle" xml:space="preserve">The agent only ever sees 1s and 0s.</text>
+</svg>

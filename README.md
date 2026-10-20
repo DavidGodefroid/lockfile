@@ -29,6 +29,8 @@
   <a href="https://davidgodefroid.github.io/lockfile/">Website</a>
 </p>
 
+<p align="center"><img src="site/assets/demo.svg" alt="An AI agent asks three yes/no questions about an invoice. You approve the plan in the lockfile console, signed plugins run sandboxed on the file, and only their answers, 1, 1 and 1, reach the agent." width="900"></p>
+
 ---
 
 lockfile lets an AI agent ask **yes/no questions about a file it must never
