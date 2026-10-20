@@ -46,6 +46,9 @@ type fakeEnv struct {
 	records  []audit.Record
 	lines    []string
 	sessions int
+	// onSession runs inside Session, after run's pin check and before the
+	// plugins are opened.
+	onSession func()
 }
 
 func (e *fakeEnv) Approve(ctx context.Context, id int64, s console.Screen) console.Approval {
@@ -62,6 +65,9 @@ func (e *fakeEnv) ShowResults() bool   { return false }
 func (e *fakeEnv) UnmaskAllowed() bool { return false }
 func (e *fakeEnv) Session(ctx context.Context) (console.Session, error) {
 	e.sessions++
+	if e.onSession != nil {
+		e.onSession()
+	}
 	return e.b.source(), nil
 }
 func (e *fakeEnv) Lost()                  {}
@@ -449,6 +455,23 @@ func TestRunAfterPolicyChange(t *testing.T) {
 	h.env.policy = &changed
 	if _, resp := h.runPlan(t, pr.PlanID); resp.Error == nil || resp.Error.Code != ipc.CodeNoSuchPlan {
 		t.Fatalf("after policy change: %+v", resp.Error)
+	}
+}
+
+// A plugin update between run's pin check and the open of the plugin: the
+// runner checks the opened lock entry against the approved pin, so the new
+// code never answers.
+func TestRunPluginUpdatedAfterCheck(t *testing.T) {
+	h := newHarness(t, "test.answer1")
+	pr, _ := h.plan(t, rpc.PlanParams{Key: "invoices/a.pdf", Plugins: []string{"test.answer1"}})
+	other := testenv.BuildPlugin(t, "answer0")
+	h.env.onSession = func() { testenv.Install(t, h.store, "test.answer1", other, "Is it test.answer1?", 2) }
+	res, resp := h.runPlan(t, pr.PlanID)
+	if resp.Error != nil {
+		t.Fatal(resp.Error)
+	}
+	if len(res.Answers) != 1 || res.Answers[0].Result != nil || res.Answers[0].Error != "plugin_tampered" {
+		t.Fatalf("answers after an update = %+v", res.Answers)
 	}
 }
 

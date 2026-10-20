@@ -89,6 +89,29 @@ func (r *Runner) Used(h workspace.Handle) int {
 // The error is ErrTooManyPlugins, a workspace error (expired or unknown
 // handle) or ctx's; nothing is returned with it.
 func (r *Runner) Answer(ctx context.Context, h workspace.Handle, plugins []string) ([]Answer, []AuditEntry, error) {
+	return r.AnswerPinned(ctx, h, plugins, nil)
+}
+
+// Pin is what the human approved of a plugin: the lock entry the runner
+// opens must still be this one.
+type Pin struct {
+	Version        string
+	ManifestSHA256 string
+	BinarySHA256   string
+	Official       bool
+}
+
+// Matches reports whether the lock entry e is the pinned one.
+func (p Pin) Matches(e plugin.LockEntry) bool {
+	return p.Version == e.Version && p.ManifestSHA256 == e.ManifestSHA256 && p.BinarySHA256 == e.BinarySHA256 && p.Official == e.Official
+}
+
+// AnswerPinned is Answer with pins: when pins is not nil, a plugin runs only
+// if the entry its binary was opened (and hashed) from matches its pin; a
+// plugin without a pin, or with another version or hash, answers
+// plugin_tampered without running. The check is made on the opened file,
+// so a plugin update between the approval and the run cannot slip in.
+func (r *Runner) AnswerPinned(ctx context.Context, h workspace.Handle, plugins []string, pins map[string]Pin) ([]Answer, []AuditEntry, error) {
 	probe, _, err := r.WS.OpenFile(h)
 	if err != nil {
 		return nil, nil, err
@@ -100,7 +123,7 @@ func (r *Runner) Answer(ctx context.Context, h workspace.Handle, plugins []strin
 	answers := make([]Answer, 0, len(plugins))
 	audit := make([]AuditEntry, 0, len(plugins))
 	for _, name := range plugins {
-		a, e, err := r.one(ctx, h, name)
+		a, e, err := r.one(ctx, h, name, pins)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -113,7 +136,7 @@ func (r *Runner) Answer(ctx context.Context, h workspace.Handle, plugins []strin
 	return answers, audit, nil
 }
 
-func (r *Runner) one(ctx context.Context, h workspace.Handle, name string) (Answer, AuditEntry, error) {
+func (r *Runner) one(ctx context.Context, h workspace.Handle, name string, pins map[string]Pin) (Answer, AuditEntry, error) {
 	a := Answer{Plugin: name, Official: !strings.Contains(name, "/")}
 	e := AuditEntry{Plugin: name}
 	bin, inst, err := r.Store.Open(name)
@@ -130,6 +153,14 @@ func (r *Runner) one(ctx context.Context, h workspace.Handle, name string) (Answ
 	defer bin.Close()
 	a.Version, a.Official = inst.Version, inst.Official
 	e.Version, e.BinarySHA256 = inst.Version, inst.BinarySHA256
+	if pins != nil {
+		if pin, ok := pins[name]; !ok || !pin.Matches(inst.LockEntry) {
+			// Installed code the human did not approve for this plan.
+			e.ConsoleError = "installed plugin differs from the approved pin"
+			a.Error = plugin.ErrTampered.Error()
+			return a, e, nil
+		}
+	}
 
 	in, _, err := r.WS.OpenFile(h)
 	if err != nil {

@@ -48,6 +48,10 @@ type Plan struct {
 	Key     string
 	Handle  workspace.Handle
 	Plugins []string
+	// Pins, when set, are the approved versions and hashes per plugin: a
+	// plugin whose opened lock entry differs (updated or reinstalled since
+	// the plan was approved) does not run and answers plugin_tampered.
+	Pins map[string]Pin
 }
 
 type Deps struct {
@@ -144,7 +148,7 @@ func ExecutePlan(ctx context.Context, p Plan, d Deps) (res Result, ref *Refusal,
 		fa.Size, fa.SHA256 = info.Size, info.SHA256
 	}
 
-	answers, entries, err := d.Runner.Answer(ctx, h, p.Plugins)
+	answers, entries, err := d.Runner.AnswerPinned(ctx, h, p.Plugins, p.Pins)
 	audit = append(audit, entries...)
 	switch {
 	case errors.Is(err, ErrTooManyPlugins):

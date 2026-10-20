@@ -179,7 +179,7 @@ func (b *Backend) run(ctx context.Context, req ipc.Request, env console.Env) ipc
 	if err != nil {
 		return console.ErrResp(req.ID, ipc.CodeInternal, msgInternal)
 	}
-	res, ref, entries := answers.ExecutePlan(ctx, answers.Plan{Profile: pr.Name, Key: pl.key, Handle: pl.handle, Plugins: pl.plugins},
+	res, ref, entries := answers.ExecutePlan(ctx, answers.Plan{Profile: pr.Name, Key: pl.key, Handle: pl.handle, Plugins: pl.plugins, Pins: runPins(pl.pins)},
 		answers.Deps{
 			Sources:        map[string]source.Source{pr.Name: sess.src},
 			MaxObjectBytes: func(string) int64 { return pr.MaxObjectBytes },
@@ -200,6 +200,17 @@ func (b *Backend) run(ctx context.Context, req ipc.Request, env console.Env) ipc
 	b.mu.Unlock()
 	env.Println("plan " + pl.id + ": answered")
 	return console.OKResp(req.ID, res)
+}
+
+// runPins hands the approved pins of a plan to the runner, which checks them
+// against the lock entry it opens: pinsInstalled alone leaves a window
+// between the check and the open.
+func runPins(pins []profile.PluginPin) map[string]answers.Pin {
+	out := make(map[string]answers.Pin, len(pins))
+	for _, p := range pins {
+		out[p.Name] = answers.Pin{Version: p.Version, ManifestSHA256: p.ManifestSHA256, BinarySHA256: p.BinarySHA256, Official: p.Official}
+	}
+	return out
 }
 
 // pinsInstalled reports whether every pinned plugin is still installed as
