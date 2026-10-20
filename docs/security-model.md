@@ -31,7 +31,9 @@ console the agent cannot drive, in an account the agent cannot read.
 ## What the agent can see: the exhaustive list
 
 Everything the console sends to the client (socket, CLI, MCP) is one of these, from closed
-lists. `test/e2e` walks every response of every method against this list.
+lists. `test/e2e` walks every response of every method against this list, and the CLI and MCP
+tests check their text, JSON, structured content and progress output against the same
+whitelist (`internal/testenv`): any key, value or word outside it fails.
 
 | Output | Why it is not file information |
 |---|---|

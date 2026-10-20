@@ -20,6 +20,7 @@ import (
 	"github.com/DavidGodefroid/lockfile/internal/clientcmd"
 	"github.com/DavidGodefroid/lockfile/internal/mcpserver"
 	"github.com/DavidGodefroid/lockfile/internal/rpc"
+	"github.com/DavidGodefroid/lockfile/internal/testenv"
 	"github.com/DavidGodefroid/lockfile/internal/testenv/consoletest"
 )
 
@@ -137,13 +138,13 @@ func scenarios(t *testing.T) (*consoletest.Console, *wire, []string) {
 // and framing, holds only §7b's closed values and what the agent sent.
 func TestWireIsClosed(t *testing.T) {
 	_, w, agent := scenarios(t)
-	v := closedVocab(agent...)
+	v := testenv.ClosedVocab(agent...)
 	for _, q := range scenarioPlugins {
-		v.strings[q.Name] = true
-		v.strings["Is it "+q.Name+"?"] = true
+		v.Strings[q.Name] = true
+		v.Strings["Is it "+q.Name+"?"] = true
 	}
 	for _, line := range w.Lines {
-		v.check(t, line)
+		v.CheckJSON(t, line)
 	}
 	all := string(slicesJoin(w.Lines))
 	for _, s := range []string{"john", "2048", "/srv", "synthetic", "/tmp", "goroutine", "no such file"} {

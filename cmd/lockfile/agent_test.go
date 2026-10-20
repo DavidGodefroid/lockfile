@@ -2,19 +2,21 @@ package main
 
 import (
 	"encoding/json"
-	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"unicode/utf8"
 
 	"github.com/DavidGodefroid/lockfile/internal/answers"
+	"github.com/DavidGodefroid/lockfile/internal/clientcmd"
 	"github.com/DavidGodefroid/lockfile/internal/product"
 	"github.com/DavidGodefroid/lockfile/internal/rpc"
+	"github.com/DavidGodefroid/lockfile/internal/testenv"
 )
 
 func TestCLIPlanRun(t *testing.T) {
 	// Policy, then the plan.
-	r := startConsole(t, []string{"y", "y"}, "test.answer1", "test.answer0")
+	r := startConsole(t, []string{"y", "y", "y"}, "test.answer1", "test.answer0")
 	defer r.stop(t)
 	code, out, errText := runArgs(t, "", "plan", "--profile", "samples", "--key", "invoices/a.pdf",
 		"--plugin", "test.answer1", "--plugin", "test.answer0", "--json")
@@ -57,27 +59,55 @@ func TestCLIPlanRun(t *testing.T) {
 	if code != 0 || !strings.Contains(out, "? Is it test.answer1?") {
 		t.Fatalf("plugins exit %d: %q", code, out)
 	}
+	text := out
 	code, out, _ = runArgs(t, "", "status")
 	if code != 0 || !strings.Contains(out, "samples: console up, production no") || !strings.Contains(out, "sandbox ok") {
 		t.Fatalf("status exit %d: %q", code, out)
 	}
+	_, answersText, _ := runArgs(t, "", "plan", "--key", "invoices/a.pdf", "--plugin", "test.answer1", "--run")
+	if !strings.Contains(answersText, "test.answer1@1.0.0: 1") {
+		t.Fatalf("plan --run text %q", answersText)
+	}
+	v := cliVocab("invoices/a.pdf", "test.answer1", "test.answer0", "Is it test.answer1?", "Is it test.answer0?", "official", "1 = yes", "0 = no")
+	for _, s := range []string{text, out, answersText} {
+		v.CheckText(t, s)
+	}
 }
 
-// forbidden matches what the CLI must never print: file content, paths,
-// sizes, hashes, library or runtime error text.
-var forbidden = regexp.MustCompile(`(?i)synthetic|/tmp|/srv|bytes|sha|\bsize|\.go\b|panic|goroutine`)
+// cliVocab is the closed vocabulary of the agent commands' output: the
+// closed list, the agent's inputs of the test, the test plugins' manifest
+// texts and the commands' fixed texts.
+func cliVocab(inputs ...string) testenv.Vocab {
+	extra := append([]string{
+		"lockfile:", "refusal", "retry:", "usage: lockfile",
+		"plan [--profile P] (--key KEY | --handle HANDLE) --plugin NAME... [--intent TEXT] [--run] [--json]",
+		"use a profile listed by lockfile sources, or ask the user to run, in the lockfile account: " + clientcmd.StartCommand("other"),
+		"handle", "no answer", "(unofficial marketplace)", "released", "UNOFFICIAL MARKETPLACE",
+		"plan approved: it reveals at most answers", "run it once: lockfile run --profile",
+		"console up, production no, auto no, security level, plugin protocol, sandbox ok",
+	}, inputs...)
+	return testenv.ClosedVocab(extra...).WithKeys(testenv.ClientKeys...)
+}
 
 func TestCLIExitCodes(t *testing.T) {
 	// Policy, plan 1 approved, plan 2 denied with a reason.
 	r := startConsole(t, []string{"y", "y", "n it is 18 bytes, /srv/x"}, "test.answer0", "test.printthenhang")
 	defer r.stop(t)
 	var all strings.Builder
+	v := cliVocab("invoices/a.pdf", "../etc/passwd", "k", "other", "test.answer0", "test.printthenhang", "test.nope")
 	check := func(name string, want int, args ...string) string {
 		t.Helper()
 		code, out, errText := runArgs(t, "", args...)
 		all.WriteString(out + errText)
 		if code != want {
 			t.Fatalf("%s: exit %d, want %d: %s %s\n%s", name, code, want, out, errText, r.io.Output())
+		}
+		// Whitelist: JSON on stdout walked value by value, text word by word.
+		if slices.Contains(args, "--json") {
+			v.CheckJSON(t, []byte(out))
+			v.CheckText(t, errText)
+		} else {
+			v.CheckText(t, out+errText)
 		}
 		return out + errText
 	}
@@ -103,9 +133,6 @@ func TestCLIExitCodes(t *testing.T) {
 	}
 	check("no console for the profile, plan", product.ExitRefused, "plan", "--profile", "other", "--key", "invoices/a.pdf", "--plugin", "test.answer0")
 	check("usage", product.ExitUsage, "plan", "--key", "k")
-	if m := forbidden.FindString(all.String()); m != "" {
-		t.Fatalf("CLI output holds %q:\n%s", m, all.String())
-	}
 	if !strings.Contains(all.String(), "approval_denied") {
 		t.Fatalf("denial not reported:\n%s", all.String())
 	}
