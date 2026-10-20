@@ -7,9 +7,10 @@
 # Environment:
 #   LOCKFILE_VERSION      tag to install (default: the latest release), e.g. v0.2.0
 #   LOCKFILE_INSTALL_DIR  target directory (default: /usr/local/bin, via sudo if needed)
+#   LOCKFILE_ALLOW_DOWNGRADE=1  replace an installed lockfile with an older release
 #
 # cosign is required: the keyless signature of checksums.txt is checked
-# against lockfile's release workflow, then the archive against
+# against lockfile's release workflow run on that exact tag, then the archive against
 # checksums.txt. Without cosign nothing is installed. This script only
 # places the binary: `sudo lockfile install` sets up the separated console
 # afterwards (Linux).
@@ -17,7 +18,6 @@ set -eu
 
 repo="DavidGodefroid/lockfile"
 dir="${LOCKFILE_INSTALL_DIR:-/usr/local/bin}"
-identity='^https://github\.com/DavidGodefroid/lockfile/\.github/workflows/release\.yml@refs/tags/v[0-9]'
 
 say() { printf 'lockfile: %s\n' "$*" >&2; }
 die() {
@@ -60,6 +60,30 @@ if [ -z "$tag" ]; then
 fi
 case "$tag" in v*) ;; *) tag="v$tag" ;; esac
 version="${tag#v}"
+# An exact vX.Y.Z: the tag goes into the signer identity below.
+case "$version" in
+'' | *[!0-9.]* | .* | *. | *..*) die "invalid release tag $tag" ;;
+esac
+[ "$(printf '%s' "$version" | tr -cd . | wc -c | tr -d ' ')" = 2 ] || die "invalid release tag $tag"
+
+# The signature must come from the release workflow run on this very tag:
+# a validly signed older release cannot be passed off as this one.
+identity="^https://github\\.com/DavidGodefroid/lockfile/\\.github/workflows/release\\.yml@refs/tags/$(printf '%s' "$tag" | sed 's/\./\\./g')\$"
+
+# Refuse to replace an installed lockfile with an older release.
+older() { # older A B: A < B (X.Y.Z)
+	[ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -t. -k1,1n -k2,2n -k3,3n | head -n 1)" = "$1" ]
+}
+if [ -x "$dir/lockfile" ] && [ "${LOCKFILE_ALLOW_DOWNGRADE:-}" != 1 ]; then
+	current="$("$dir/lockfile" version 2>/dev/null | awk '{ print $2 }')"
+	current="${current#v}"
+	case "$current" in
+	*[!0-9.]* | '') ;;
+	*) if older "$version" "$current"; then
+		die "$dir/lockfile is v$current, newer than $tag; set LOCKFILE_ALLOW_DOWNGRADE=1 to downgrade"
+	fi ;;
+	esac
+fi
 
 archive="lockfile_${version}_${os}_${arch}.tar.gz"
 base="https://github.com/$repo/releases/download/$tag"

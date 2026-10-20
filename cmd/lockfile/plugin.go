@@ -84,7 +84,7 @@ func staged(ctx context.Context, e env, store plugin.Store, m marketplace.Market
 	stage := plugin.Store{Dir: dir}
 	defer stage.RemoveAll()
 	inst := installer(stage)
-	inst.OnIndex = yankRefresher(e, store)
+	inst.OnIndex, inst.StateDir = yankRefresher(e, store), store.Dir
 	ent, err := inst.Install(ctx, m, name, version)
 	if err != nil {
 		return plugin.LockEntry{}, nil, nil, pluginspec.Manifest{}, err

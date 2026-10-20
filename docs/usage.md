@@ -170,9 +170,15 @@ prompt; plans and runs always go through Claude Code's permission prompt and the
 ## Updates
 
 ```sh
-lockfile update [--check] [--yes]
+lockfile update [--check] [--yes] [--allow-downgrade]
 ```
 
-checks `checksums.txt` against the signature of lockfile's release workflow (cosign), then
-the archive against it, then replaces the binary (with sudo from a pinned copy when root
-owns it).
+checks `checksums.txt` against the signature of lockfile's release workflow run on the
+release's own tag (cosign), then the archive against it, then replaces the binary (with sudo
+from a pinned copy when root owns it). A release older than the running one is refused
+unless `--allow-downgrade`; `scripts/install.sh` likewise refuses to replace a newer
+installed binary unless `LOCKFILE_ALLOW_DOWNGRADE=1`.
+
+A marketplace index older than the last one verified for that marketplace is refused (a
+replayed index could lift a yank); the last `generated` time of each marketplace is kept next
+to `plugins.lock`.

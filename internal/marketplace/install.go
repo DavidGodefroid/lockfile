@@ -40,6 +40,10 @@ type Installer struct {
 	// (to refresh the yanked status of installed plugins); its error
 	// aborts the operation.
 	OnIndex func(Marketplace, index.Index) error
+	// StateDir, when set, keeps the generated time of the last verified
+	// index of each marketplace: an older one (a replayed index, which could
+	// un-yank a version) is refused.
+	StateDir string
 }
 
 // Install downloads, verifies and installs one exact version of a plugin.
@@ -167,6 +171,11 @@ func (i Installer) index(ctx context.Context, m Marketplace, tmp string) (index.
 	}
 	if idx.Marketplace != m.Name {
 		return index.Index{}, fmt.Errorf("marketplace %s: index is for marketplace %q", m.Name, idx.Marketplace)
+	}
+	if i.StateDir != "" {
+		if err := checkFresh(i.StateDir, m.Name, idx.Generated); err != nil {
+			return index.Index{}, err
+		}
 	}
 	if i.OnIndex != nil {
 		if err := i.OnIndex(m, idx); err != nil {

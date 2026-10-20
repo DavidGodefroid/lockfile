@@ -109,7 +109,7 @@ func verifier() verify.Verifier {
 }
 
 func installer(store plugin.Store) marketplace.Installer {
-	return marketplace.Installer{HTTP: hooks().http, Verifier: verifier(), Store: store, OS: runtime.GOOS, Arch: runtime.GOARCH}
+	return marketplace.Installer{HTTP: hooks().http, Verifier: verifier(), Store: store, OS: runtime.GOOS, Arch: runtime.GOARCH, StateDir: store.Dir}
 }
 
 func officialMarketplace() marketplace.Marketplace {
