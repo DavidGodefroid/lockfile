@@ -274,7 +274,7 @@ func Start(t testing.TB, o Options) *Console {
 	go func() {
 		defer b.Close()
 		c.done <- console.Run(ctx, product.P, b, console.Options{
-			Profile: "samples", IO: c.IO, StateDir: state, Quantum: -1, Sanitizer: backend.Sanitizer(),
+			Profile: "samples", IO: c.IO, StateDir: state, Quantum: -1, Sanitizer: b.Sanitizer(),
 			Isolation: iso, Harden: func() error { return nil }, Ready: func(s string) { ready <- s },
 		})
 	}()

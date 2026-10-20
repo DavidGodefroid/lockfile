@@ -1,9 +1,14 @@
 package backend
 
 import (
+	"net/url"
 	"regexp"
+	"strings"
+	"sync"
 
 	"github.com/DavidGodefroid/lockkit/sanitize"
+
+	"github.com/DavidGodefroid/lockfile/internal/profile"
 )
 
 // sanitizePatterns scrub source-library and OS error text before it is
@@ -31,3 +36,43 @@ var sanitizePatterns = []*regexp.Regexp{
 // Sanitizer returns lockfile's sanitizer: lockkit's, with the patterns of
 // the S3 and SFTP clients and the OS.
 func Sanitizer() *sanitize.Sanitizer { return sanitize.New(sanitizePatterns...) }
+
+// minProfileValue is the shortest profile value registered as a pattern:
+// shorter ones would scrub ordinary words.
+const minProfileValue = 3
+
+// profileSanitizer is Sanitizer plus the location values of the profile
+// the console serves (bucket, endpoint, host, user, base_dir, paths), each
+// registered once as a literal pattern: the generic patterns miss values
+// such as single-label hosts ("minio:9000") or relative directories.
+type profileSanitizer struct {
+	*sanitize.Sanitizer
+	mu   sync.Mutex
+	seen map[string]bool
+}
+
+// Sanitizer is the backend's sanitizer, for console.Options: the profile
+// values join it as policies are loaded and sources connected.
+func (b *Backend) Sanitizer() *sanitize.Sanitizer { return b.sanitizer().Sanitizer }
+
+func (b *Backend) sanitizer() *profileSanitizer {
+	b.sanOnce.Do(func() { b.san = &profileSanitizer{Sanitizer: Sanitizer(), seen: map[string]bool{}} })
+	return b.san
+}
+
+func (s *profileSanitizer) addProfile(p profile.Profile) {
+	vals := []string{p.S3.Bucket, p.S3.Endpoint, p.SFTP.Host, p.SFTP.User, p.SFTP.BaseDir, p.SFTP.KnownHosts, p.SFTPKey, p.LocalPath}
+	if u, err := url.Parse(p.S3.Endpoint); err == nil && u.Host != "" {
+		vals = append(vals, u.Host, u.Hostname())
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, v := range vals {
+		v = strings.TrimSuffix(v, "/")
+		if len(v) < minProfileValue || s.seen[v] {
+			continue
+		}
+		s.seen[v] = true
+		s.Register(regexp.MustCompile(regexp.QuoteMeta(v)))
+	}
+}

@@ -66,6 +66,9 @@ type Backend struct {
 
 	stop chan struct{}
 	done chan struct{}
+
+	sanOnce sync.Once
+	san     *profileSanitizer
 }
 
 var _ console.Backend = (*Backend)(nil)
@@ -186,6 +189,7 @@ func (b *Backend) Connect(ctx context.Context, c console.Credentials) (console.S
 	if err != nil {
 		return nil, err
 	}
+	b.sanitizer().addProfile(pol.P)
 	s, err := connect(pol.P, c)
 	if err != nil {
 		return nil, err
@@ -226,6 +230,7 @@ func (b *Backend) LoadPolicy() (console.Policy, error) {
 	if err != nil {
 		return nil, err
 	}
+	b.sanitizer().addProfile(p.P)
 	return p, nil
 }
 
