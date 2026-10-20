@@ -21,7 +21,7 @@ var denied = []string{
 	"bpf", "perf_event_open", "userfaultfd",
 	"keyctl", "add_key", "request_key",
 	"io_uring_setup", "io_uring_enter", "io_uring_register",
-	// Not in the design's list: a process leaving the plugin's process
+	// Beyond the original deny list: a process leaving the plugin's process
 	// group would survive the group kill; memfd and execveat are a way
 	// to execute code that Landlock's path rules do not name.
 	"setsid", "setpgid", "memfd_create", "execveat",

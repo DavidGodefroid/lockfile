@@ -90,7 +90,7 @@ func (p *Policy) Pin(name string) (PluginPin, bool) {
 	return PluginPin{}, false
 }
 
-// Diff implements config.Policy: the loosening rules of design §4, §8, §9.
+// Diff implements config.Policy: the loosening rules listed in docs/security-model.md.
 func (p *Policy) Diff(approved config.Policy) []config.Change {
 	a, ok := approved.(*Policy)
 	if !ok {

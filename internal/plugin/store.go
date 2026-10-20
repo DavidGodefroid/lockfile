@@ -22,7 +22,7 @@ import (
 var (
 	ErrTampered     = errors.New("plugin_tampered")
 	ErrNotInstalled = errors.New("plugin_not_installed")
-	// ErrYanked refuses a version its marketplace withdrew (design §8).
+	// ErrYanked refuses a version its marketplace withdrew (docs/security-model.md).
 	ErrYanked = errors.New("plugin_yanked")
 )
 
