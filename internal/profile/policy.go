@@ -93,7 +93,8 @@ func (p *Policy) Diff(approved config.Policy) []config.Change {
 	if !ok {
 		return []config.Change{{Field: "policy", Old: "?", New: "lockfile", Loosens: true}}
 	}
-	out := config.DiffBase(a.P.Base, p.P.Base)
+	// A policy approved before the timer defaults were explicit stores 0.
+	out := config.DiffBase(withTimerDefaults(a.P.Base), withTimerDefaults(p.P.Base))
 	same := func(field, o, n string) {
 		if o != n {
 			out = append(out, config.Change{Field: field, Old: o, New: n, Loosens: true})

@@ -116,6 +116,46 @@ func TestDiffLoosens(t *testing.T) {
 	}
 }
 
+// Removing idle_timeout or max_session falls back to lockkit's 20m / 4h:
+// a longer timer, so a loosening, never a tightening to 0.
+func TestUnsetTimeoutsLoosen(t *testing.T) {
+	policyOf := func(extra string) *Policy {
+		f, err := Parse([]byte(designExample+"\n[profiles.short]\nsource = \"local\"\npath = \"/srv/x\"\n"+extra), "c")
+		if err != nil {
+			t.Fatal(err)
+		}
+		p, err := FromFile(f, "short", plugin.Store{Dir: t.TempDir()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	unset := policyOf("")
+	if unset.P.IdleTimeout != DefaultIdleTimeout || unset.P.MaxSession != DefaultMaxSession {
+		t.Fatalf("unset timers = %s / %s, want %s / %s", unset.P.IdleTimeout, unset.P.MaxSession, DefaultIdleTimeout, DefaultMaxSession)
+	}
+	approved := policyOf("idle_timeout = \"1m\"\nmax_session = \"10m\"\n")
+	want := map[string]bool{"limits.idle_timeout": true, "limits.max_session": true}
+	for _, c := range unset.Diff(approved) {
+		if _, ok := want[c.Field]; ok {
+			if !c.Loosens {
+				t.Errorf("%s %s -> %s classified as a tightening", c.Field, c.Old, c.New)
+			}
+			delete(want, c.Field)
+		}
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing changes: %v", want)
+	}
+	// An approved policy stored before the defaults were explicit (0 = the
+	// lockkit default) is the same policy.
+	old := policyOf("")
+	old.P.IdleTimeout, old.P.MaxSession = 0, 0
+	for _, c := range unset.Diff(old) {
+		t.Errorf("legacy approved policy: unexpected change %+v", c)
+	}
+}
+
 func TestDescribeWarnsUnofficial(t *testing.T) {
 	p := basePolicy(t)
 	p.Marketplaces = []Trust{{Name: "acme", IndexURL: "https://x/i.json", IdentityRegexp: "^https://x/", OIDCIssuer: "https://x"}}
