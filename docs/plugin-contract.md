@@ -62,4 +62,8 @@ a tag `<name>/vX.Y.Z` whose release workflow builds, hashes and signs (cosign ke
 binaries and the manifest, and a signed `index.json`.
 
 An unofficial marketplace publishes the same index format, signed keyless by its own CI
-identity; its users add it with `lockfile marketplace add`.
+identity; its users add it with `lockfile marketplace add`. Give them an identity pattern
+that escapes every dot and pins the repository path, e.g.
+`^https://github\.com/acme/lockfile-plugins/\.github/workflows/release\.yml@refs/tags/`:
+`marketplace add` warns about an unescaped `.` or a path that other repositories also
+match (`^https://github\.com/acme` matches `acme-evil` too).

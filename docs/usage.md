@@ -101,7 +101,9 @@ status comes from the marketplace's signed index: `plugin install`, `plugin upda
 `plugin verify` read it and record it in `plugins.lock`; run `lockfile plugin verify`
 regularly, and `plugin update` to a version that is not yanked.
 
-The official marketplace's signer is pinned in the binary. An unofficial marketplace needs
+The official marketplace's signer is pinned in the binary. An unofficial marketplace's
+`--identity-regexp` must start with `^https://`; `marketplace add` warns when it has an
+unescaped `.` or does not pin `HOST/OWNER/REPO/` (other signers would match). It needs
 its name typed when added (in a terminal: a typed name is never read from a pipe, nor the
 plugin name `plugin update` asks for), is flagged on every approval screen and in every agent result,
 and never runs in auto mode. Keyless signers only in v0.2 (`--public-key` is refused).
