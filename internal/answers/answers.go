@@ -142,9 +142,12 @@ func (r *Runner) one(ctx context.Context, h workspace.Handle, name string, pins 
 	bin, inst, err := r.Store.Open(name)
 	if err != nil {
 		e.ConsoleError = err.Error()
-		if errors.Is(err, plugin.ErrNotInstalled) {
+		switch {
+		case errors.Is(err, plugin.ErrNotInstalled):
 			a.Error = plugin.ErrNotInstalled.Error()
-		} else {
+		case errors.Is(err, plugin.ErrYanked):
+			a.Error = plugin.ErrYanked.Error()
+		default:
 			// The installed plugin cannot be shown to be the verified one.
 			a.Error = plugin.ErrTampered.Error()
 		}

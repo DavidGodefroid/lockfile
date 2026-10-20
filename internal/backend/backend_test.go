@@ -475,6 +475,30 @@ func TestRunPluginUpdatedAfterCheck(t *testing.T) {
 	}
 }
 
+// A version its marketplace yanked after install refuses to run: at plan
+// time with E_PLUGIN_YANKED, and per answer if yanked after approval.
+func TestYankedPluginRefused(t *testing.T) {
+	h := newHarness(t, "test.answer1")
+	yank := func() {
+		if _, err := h.store.MarkYanked(plugin.OfficialMarketplace, func(string, string) (bool, bool) { return true, true }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pr, _ := h.plan(t, rpc.PlanParams{Key: "invoices/a.pdf", Plugins: []string{"test.answer1"}})
+	h.env.onSession = yank
+	res, resp := h.runPlan(t, pr.PlanID)
+	if resp.Error != nil || len(res.Answers) != 1 || res.Answers[0].Result != nil || res.Answers[0].Error != "plugin_yanked" {
+		t.Fatalf("run after yank: %+v %+v", resp.Error, res.Answers)
+	}
+	_, resp = h.plan(t, rpc.PlanParams{Key: "invoices/a.pdf", Plugins: []string{"test.answer1"}})
+	if refusalCode(resp) != "plugin_yanked" {
+		t.Fatalf("plan of a yanked plugin: %+v", resp.Error)
+	}
+	if data, _ := json.Marshal(resp.Error.Data); !strings.Contains(string(data), "E_PLUGIN_YANKED") {
+		t.Fatalf("refusal data = %s", data)
+	}
+}
+
 func TestFetchFailureIsCode(t *testing.T) {
 	h := newHarness(t, "test.answer1")
 	h.src.err = errors.New("/srv/x/john.pdf: 4821 bytes denied at sftp.example.org:22")

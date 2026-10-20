@@ -96,6 +96,11 @@ lockfile marketplace list | remove NAME
 In a separated setup every `plugin` and `marketplace` command, `list` and `verify` included,
 refuses to run outside the lockfile account (from another account the store looks empty).
 
+A version its marketplace withdraws (yanked) refuses to run (`plugin_yanked`). The yanked
+status comes from the marketplace's signed index: `plugin install`, `plugin update` and
+`plugin verify` read it and record it in `plugins.lock`; run `lockfile plugin verify`
+regularly, and `plugin update` to a version that is not yanked.
+
 The official marketplace's signer is pinned in the binary. An unofficial marketplace needs
 its name typed when added (in a terminal: a typed name is never read from a pipe, nor the
 plugin name `plugin update` asks for), is flagged on every approval screen and in every agent result,

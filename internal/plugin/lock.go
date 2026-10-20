@@ -20,6 +20,9 @@ type LockEntry struct {
 	BinarySHA256   string `toml:"binary_sha256"`
 	ManifestSHA256 string `toml:"manifest_sha256"`
 	Official       bool   `toml:"official"`
+	// Yanked is set from a refreshed, signature-verified marketplace index
+	// that withdrew this version: Open refuses it.
+	Yanked bool `toml:"yanked,omitempty"`
 }
 
 type lockFile struct {

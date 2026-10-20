@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"syscall"
 
 	"github.com/DavidGodefroid/lockfile/pluginspec"
@@ -21,6 +22,8 @@ import (
 var (
 	ErrTampered     = errors.New("plugin_tampered")
 	ErrNotInstalled = errors.New("plugin_not_installed")
+	// ErrYanked refuses a version its marketplace withdrew (design §8).
+	ErrYanked = errors.New("plugin_yanked")
 )
 
 // OfficialMarketplace is the marketplace name whose plugins have bare names.
@@ -210,6 +213,9 @@ func (s Store) Open(name string) (*os.File, Installed, error) {
 	if err != nil {
 		return nil, Installed{}, err
 	}
+	if e.Yanked {
+		return nil, Installed{}, fmt.Errorf("%w: %s@%s", ErrYanked, name, e.Version)
+	}
 	m, err := s.manifest(e)
 	if err != nil {
 		return nil, Installed{}, fmt.Errorf("%w: %s manifest", ErrTampered, name)
@@ -229,6 +235,41 @@ func (s Store) Open(name string) (*os.File, Installed, error) {
 		return nil, Installed{}, err
 	}
 	return f, Installed{LockEntry: e, Manifest: m, Binary: path}, nil
+}
+
+// Bare is the plugin name of e without its marketplace.
+func (e LockEntry) Bare() string {
+	if e.Official {
+		return e.Name
+	}
+	return strings.TrimPrefix(e.Name, e.Marketplace+"/")
+}
+
+// MarkYanked records, for every installed plugin of marketplace, the
+// yanked status a freshly verified index gives its version. status returns
+// known=false for a version the index does not list: its status is kept.
+// It returns the entries whose status changed.
+func (s Store) MarkYanked(marketplace string, status func(bare, version string) (yanked, known bool)) ([]LockEntry, error) {
+	entries, err := readLock(s.lockPath())
+	if err != nil {
+		return nil, err
+	}
+	var changed []LockEntry
+	for i, e := range entries {
+		if e.Marketplace != marketplace {
+			continue
+		}
+		y, known := status(e.Bare(), e.Version)
+		if !known || y == e.Yanked {
+			continue
+		}
+		entries[i].Yanked = y
+		changed = append(changed, entries[i])
+	}
+	if len(changed) == 0 {
+		return nil, nil
+	}
+	return changed, writeLock(s.lockPath(), entries)
 }
 
 // Remove uninstalls a plugin by its qualified name.

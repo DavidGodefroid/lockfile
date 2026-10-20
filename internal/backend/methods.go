@@ -51,7 +51,7 @@ func (b *Backend) plugins(ctx context.Context, req ipc.Request, env console.Env)
 	out := []rpc.PluginInfo{}
 	for _, in := range installed {
 		pin, ok := pol.Pin(in.Name)
-		if !ok || in.Tampered || !samePin(pin, in) {
+		if !ok || in.Tampered || in.Yanked || !samePin(pin, in) {
 			continue
 		}
 		info := rpc.PluginInfo{Plugin: in.Name, Version: in.Version, Marketplace: in.Marketplace, Official: in.Official,
@@ -118,6 +118,8 @@ func (b *Backend) plan(ctx context.Context, req ipc.Request, env console.Env) ip
 		switch {
 		case errors.Is(err, plugin.ErrNotInstalled):
 			return product.Refuse(req.ID, answers.CodePluginNotInstalled)
+		case errors.Is(err, plugin.ErrYanked):
+			return product.Refuse(req.ID, answers.CodePluginYanked)
 		case err != nil:
 			return product.Refuse(req.ID, answers.CodePluginTampered)
 		}

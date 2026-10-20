@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -39,12 +40,17 @@ func pluginManifest(version, question string) string {
 		"accepts = [\"application/pdf\"]\nlimits = { cpu_s = 5, memory = \"64MiB\", timeout_s = 5 }\n", version, question)
 }
 
+// fakeIndex is the index the last fakeMarket serves; tests may change it.
+var fakeIndex *index.Index
+
 // fakeMarket serves a signed-looking index of pdf.parses 1.0.0, 1.0.1 (same
 // question) and 1.1.0 (another question), for this platform.
 func fakeMarket(t *testing.T, name string) *httptest.Server {
 	t.Helper()
 	files := map[string][]byte{"/index.json.sigstore.json": []byte("{}")}
-	var idx index.Index
+	idx := &index.Index{}
+	fakeIndex = idx
+	t.Cleanup(func() { fakeIndex = nil })
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/index.json" {
 			b, _ := json.Marshal(idx)
@@ -76,7 +82,7 @@ func fakeMarket(t *testing.T, name string) *httptest.Server {
 			Artifacts:         []index.Artifact{{OS: runtime.GOOS, Arch: runtime.GOARCH, URL: srv.URL + d + "/bin", SHA256: sum(bin), BundleURL: srv.URL + d + "/bin.sigstore.json"}},
 		})
 	}
-	idx = index.Index{Schema: 1, Marketplace: name, Generated: time.Now().UTC(), Plugins: []index.Plugin{p}}
+	*idx = index.Index{Schema: 1, Marketplace: name, Generated: time.Now().UTC(), Plugins: []index.Plugin{p}}
 	return srv
 }
 
@@ -174,6 +180,37 @@ func TestPluginUpdateQuestionChangeNeedsTypedName(t *testing.T) {
 	if code, out, _ := runArgs(t, "pdf.parses\n", "plugin", "update", "pdf.parses@1.1.0"); code != 0 || installedVersion(t, h, "pdf.parses") != "1.1.0" {
 		t.Fatalf("update 1.1.0 typed: exit %d: %s", code, out)
 	}
+}
+
+// A version yanked after install: plugin verify reads the signed index,
+// records it in plugins.lock, and the store refuses to open it.
+func TestPluginYankedAfterInstall(t *testing.T) {
+	h, _ := humanEnv(t, "official")
+	if code, _, errText := runArgs(t, "", "plugin", "install", "pdf.parses@1.0.0"); code != 0 {
+		t.Fatal(errText)
+	}
+	fakeIndex.Plugins[0].Versions[0].Yanked = true
+	fakeIndex.Generated = fakeIndex.Generated.Add(time.Minute)
+	code, out, _ := runArgs(t, "", "plugin", "verify")
+	if code != product.ExitRefused || !strings.Contains(out, "YANKED pdf.parses@1.0.0") {
+		t.Fatalf("verify %d: %s", code, out)
+	}
+	s := plugin.Store{Dir: filepath.Join(h.stateDir, product.P.Name)}
+	if _, _, err := s.Open("pdf.parses"); !errors.Is(err, plugin.ErrYanked) {
+		t.Fatalf("open after yank: %v", err)
+	}
+	if code, out, _ := runArgs(t, "", "plugin", "list"); code != 0 || !strings.Contains(out, "YANKED") {
+		t.Fatalf("list %d: %s", code, out)
+	}
+	// Updating to a version that is not yanked clears it.
+	if code, out, _ := runArgs(t, "y\n", "plugin", "update", "pdf.parses@1.0.1"); code != 0 {
+		t.Fatalf("update %d: %s", code, out)
+	}
+	f, _, err := s.Open("pdf.parses")
+	if err != nil {
+		t.Fatalf("open after update: %v", err)
+	}
+	f.Close()
 }
 
 func TestPluginInstallUnofficial(t *testing.T) {
