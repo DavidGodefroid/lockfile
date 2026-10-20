@@ -82,7 +82,9 @@ directory and paths; a few lockkit messages are not yet passed through lockfile'
   expiry, on console exit, and swept at start. Deletion is an unlink, not a secure erase
   (residual on SSDs and copy-on-write filesystems). The directory (`work_dir`), the total cap
   (`max_workspace_bytes`) and the TTL (`handle_ttl`, fixed per handle at fetch) are read from
-  the approved policy only, never from an unreviewed config edit.
+  the approved policy only, never from an unreviewed config edit. A fetch reserves its share of
+  the cap before streaming (concurrent fetches never exceed it together), and at most 64 files
+  are held or being fetched at once.
 - The S3 SDK keeps the secret access key in the console's memory for the session; core dumps
   are disabled.
 - The audit log (`~lockfile/.local/state/lockfile/audit.log`, 0600) is the one place file
