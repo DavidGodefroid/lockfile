@@ -298,6 +298,31 @@ func doctorConsoleSide(h doctorHooks, sys *sysconf.Config, add func(string, stri
 	for _, m := range f.Marketplaces {
 		add("marketplace", "warn", "UNOFFICIAL "+m.Name+" ("+m.IndexURL+")")
 	}
+	doctorYanked(add)
+}
+
+// doctorYanked reports the installed versions plugins.lock records as
+// yanked (they refuse to run). It reads no index: lockfile plugin verify
+// refreshes the status from the marketplaces.
+func doctorYanked(add func(string, string, string)) {
+	store, err := pluginStore()
+	if err != nil {
+		return
+	}
+	installed, err := store.Installed()
+	if err != nil || len(installed) == 0 {
+		return
+	}
+	yanked := 0
+	for _, in := range installed {
+		if in.Yanked {
+			yanked++
+			add("plugin", "fail", in.Name+"@"+in.Version+" was withdrawn by its marketplace and no longer runs: lockfile plugin update")
+		}
+	}
+	if yanked == 0 {
+		add("plugin", "ok", fmt.Sprintf("%d installed, none recorded as yanked (lockfile plugin verify refreshes the status)", len(installed)))
+	}
 }
 
 // doctorWiring reports the agents not wired to lockfile, and wires them

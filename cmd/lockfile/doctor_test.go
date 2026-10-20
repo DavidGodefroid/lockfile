@@ -14,6 +14,7 @@ import (
 	"github.com/DavidGodefroid/lockkit/agentwire"
 	"github.com/DavidGodefroid/lockkit/sysconf"
 
+	"github.com/DavidGodefroid/lockfile/internal/plugin"
 	"github.com/DavidGodefroid/lockfile/internal/product"
 )
 
@@ -269,6 +270,30 @@ func TestReachableByOthers(t *testing.T) {
 	}
 	if _, err := reachableByOthers(filepath.Join(open, "missing"), gid, owner); err == nil {
 		t.Errorf("missing directory: no error")
+	}
+}
+
+// doctor reports an installed version plugins.lock records as yanked.
+func TestDoctorReportsYanked(t *testing.T) {
+	h := doctorEnv(t, "/nonexistent")
+	h.sys = func() (*sysconf.Config, error) { return nil, nil }
+	hh, _ := humanEnv(t, "official")
+	if err := os.WriteFile(hh.configPath, []byte("[profiles.docs]\nsource = \"local\"\npath = \"/srv/x\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, errText := runArgs(t, "", "plugin", "install", "pdf.parses@1.0.0"); code != 0 {
+		t.Fatal(errText)
+	}
+	if _, out, _ := runArgs(t, "", "doctor"); !strings.Contains(out, "1 installed, none recorded as yanked") {
+		t.Fatalf("before yank:\n%s", out)
+	}
+	s := plugin.Store{Dir: filepath.Join(hh.stateDir, product.P.Name)}
+	if _, err := s.MarkYanked(plugin.OfficialMarketplace, func(string, string) (bool, bool) { return true, true }); err != nil {
+		t.Fatal(err)
+	}
+	code, out, _ := runArgs(t, "", "doctor")
+	if code != product.ExitError || !strings.Contains(out, "pdf.parses@1.0.0 was withdrawn by its marketplace") {
+		t.Fatalf("yanked: exit %d:\n%s", code, out)
 	}
 }
 
