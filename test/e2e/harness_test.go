@@ -96,7 +96,7 @@ var allowedKeys = map[string]bool{
 	// lockkit hello and status, lockfile's status part
 	"protocol_major": true, "console_version": true, "profile": true, "production": true, "auto_approve": true,
 	"allow_unmask": true, "show_results": true, "idle_timeout_in_s": true, "session_ends_in_s": true, "level": true,
-	"product": true, "protocol": true, "sandbox": true,
+	"product": true, "protocol": true, "sandbox": true, "answer_quantum_ms": true,
 	// change.request, sources (busy: documented addition to §7b)
 	"queued": true, "busy": true,
 }
@@ -104,7 +104,7 @@ var allowedKeys = map[string]bool{
 // Keys whose value may be a number, and what it may be.
 var numericKeys = map[string]bool{
 	"id": true, "code": true, "result": true, "answers": true, "protocol_major": true, "level": true,
-	"idle_timeout_in_s": true, "session_ends_in_s": true, "protocol": true,
+	"idle_timeout_in_s": true, "session_ends_in_s": true, "protocol": true, "answer_quantum_ms": true,
 }
 
 func closedVocab(agent ...string) vocab {

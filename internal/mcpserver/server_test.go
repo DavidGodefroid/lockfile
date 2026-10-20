@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -25,6 +26,7 @@ type session struct {
 	cs       *mcp.ClientSession
 	mu       sync.Mutex
 	progress []string
+	at       []time.Time
 }
 
 func connect(t *testing.T, pinned string) *session {
@@ -42,6 +44,7 @@ func connect(t *testing.T, pinned string) *session {
 			s.mu.Lock()
 			defer s.mu.Unlock()
 			s.progress = append(s.progress, r.Params.Message)
+			s.at = append(s.at, time.Now())
 		},
 	})
 	cs, err := c.Connect(ctx, ct, nil)
@@ -150,13 +153,14 @@ func TestRunToolOutputClosed(t *testing.T) {
 }
 
 func TestRunProgressTextConstant(t *testing.T) {
-	// A 6 s quantum: the run answers after 6 s, two heartbeats (0 s, 5 s).
-	consoletest.Start(t, consoletest.Options{Answers: []string{"y", "y"}, Profile: "answer_quantum = \"6s\"\n",
+	// A 12 s quantum: the run answers after 12 s, heartbeats every 6 s (on
+	// the quantum's halves), not on lockkit's default 5 s.
+	consoletest.Start(t, consoletest.Options{Answers: []string{"y", "y"}, Profile: "answer_quantum = \"12s\"\n",
 		Plugins: []consoletest.Plugin{{Name: "test.answer1"}}})
 	s := connect(t, "samples")
 	_, _, st := s.call(t, ToolPlan, map[string]any{"key": "invoices/a.pdf", "plugins": []string{"test.answer1"}}, nil)
 	s.mu.Lock()
-	s.progress = nil
+	s.progress, s.at = nil, nil
 	s.mu.Unlock()
 	res, text, _ := s.call(t, ToolRun, map[string]any{"plan_id": st["plan_id"]}, "tok")
 	if res.IsError {
@@ -166,6 +170,9 @@ func TestRunProgressTextConstant(t *testing.T) {
 	defer s.mu.Unlock()
 	if len(s.progress) < 2 {
 		t.Fatalf("progress %q", s.progress)
+	}
+	if gap := s.at[1].Sub(s.at[0]); gap < 5500*time.Millisecond || gap > 7*time.Second {
+		t.Fatalf("heartbeat every %v, want 6s (12s quantum / 2)", gap)
 	}
 	for _, m := range s.progress {
 		if m != RunningMessage {

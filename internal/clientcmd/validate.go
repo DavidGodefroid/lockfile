@@ -51,7 +51,7 @@ func validPluginInfo(p rpc.PluginInfo) bool {
 }
 
 func validStatus(s rpc.Status) bool {
-	return s.Sandbox == "ok" || s.Sandbox == "unavailable"
+	return (s.Sandbox == "ok" || s.Sandbox == "unavailable") && s.AnswerQuantumMS >= 0 && s.AnswerQuantumMS <= rpc.MaxQuantumMS
 }
 
 // validResult checks the handle and each answer's plugin and version; the

@@ -235,5 +235,8 @@ func (b *Backend) Status(console.Session) any {
 	if _, _, err := b.o.Probe(); err != nil {
 		st.Sandbox = "unavailable"
 	}
+	if pol, err := b.approved(); err == nil {
+		st.AnswerQuantumMS = pol.P.AnswerQuantum.Milliseconds()
+	}
 	return st
 }

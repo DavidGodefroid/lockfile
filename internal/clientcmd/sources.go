@@ -47,6 +47,29 @@ func GetStatus(ctx context.Context, profile string) (Status, error) {
 	return out, nil
 }
 
+// Quantum is profile's approved answer quantum as its console reports it,
+// or 0 when it does not answer within the probe timeout.
+func Quantum(ctx context.Context, profile string) time.Duration {
+	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
+	defer cancel()
+	st, err := GetStatus(ctx, profile)
+	if err != nil {
+		return 0
+	}
+	return time.Duration(st.Product.AnswerQuantumMS) * time.Millisecond
+}
+
+// HeartbeatEvery is the interval of a run's progress notifications for
+// quantum q: q itself, or q divided into equal parts under the 10 s that
+// lockkit's mcpkit.Progress accepts, so that a heartbeat falls on every
+// quantum boundary. 0 (unknown q) leaves lockkit's default.
+func HeartbeatEvery(q time.Duration) time.Duration {
+	if q <= 0 {
+		return 0
+	}
+	return q / (q/(10*time.Second) + 1)
+}
+
 // StatusEntry is one profile's line of a status report: its console's
 // status, or why there is none.
 type StatusEntry struct {

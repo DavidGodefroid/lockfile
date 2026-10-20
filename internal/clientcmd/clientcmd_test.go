@@ -386,6 +386,21 @@ func TestResolveTextsAndSingleProbe(t *testing.T) {
 	}
 }
 
+func TestHeartbeatEvery(t *testing.T) {
+	for q, want := range map[time.Duration]time.Duration{
+		0: 0, time.Second: time.Second, 5 * time.Second: 5 * time.Second, 9 * time.Second: 9 * time.Second,
+		10 * time.Second: 5 * time.Second, 12 * time.Second: 6 * time.Second, 30 * time.Second: 7500 * time.Millisecond,
+	} {
+		got := HeartbeatEvery(q)
+		if got != want {
+			t.Errorf("HeartbeatEvery(%v) = %v, want %v", q, got, want)
+		}
+		if got > 0 && (got >= 10*time.Second || q%got != 0) {
+			t.Errorf("HeartbeatEvery(%v) = %v: not under 10s or not on the quantum", q, got)
+		}
+	}
+}
+
 func TestResultKeepsClosedValues(t *testing.T) {
 	two, one := 2, 1
 	in := answers.Result{Handle: "f_x", Answers: []answers.Answer{

@@ -76,7 +76,13 @@ type PluginInfo struct {
 type Status struct {
 	Protocol int    `json:"protocol"`
 	Sandbox  string `json:"sandbox"` // "ok" or "unavailable"
+	// AnswerQuantumMS is the approved answer_quantum, in milliseconds (0:
+	// unknown). Clients pace their run heartbeats on it.
+	AnswerQuantumMS int64 `json:"answer_quantum_ms,omitempty"`
 }
+
+// MaxQuantumMS bounds the answer quantum a client accepts from a status.
+const MaxQuantumMS = 3_600_000
 
 // Source is a running console's profile.
 type Source struct {

@@ -43,11 +43,11 @@ lists. `test/e2e` walks every response of every method against this list.
 | profile names and `production` flag (`sources`), `busy` | lockfile configuration; `busy` = the console did not answer the probe in time because it serves another request (a plan waiting for the human, or a run until its quantum) |
 | approval outcome (`approval_denied`, `approval_timeout`) | a human decision; the reason the human types is never forwarded |
 | refusals `key_outside_prefix`, `too_many_plugins`, `unknown_profile`, `plugin_not_installed`, `plugin_tampered`, `plugin_yanked`, `sandbox_unavailable`, `proc_not_hidden`, `handle_expired` (as `E_*` codes with a static hint) | computed from the request and the local install, before or without reading the file |
-| `status` (console up, production, auto mode, security level, idle/session timers, plugin protocol, sandbox ok) | console state |
+| `status` (console up, production, auto mode, security level, idle/session timers, plugin protocol, sandbox ok, approved `answer_quantum`) | console state and configuration |
 
 Never sent: size, media type, sha256, key listings, file or path names, page or byte counts,
 library or OS error text, per-plugin timing, progress during a run (the MCP server's run
-heartbeat is a constant text), stderr. The client also refuses to forward any console text it
+heartbeat is a constant text, paced by the client on the quantum, never by the console), stderr. The client also refuses to forward any console text it
 does not recognise: an unknown error becomes `console error`, and so does a successful result
 with a value outside its shape (plan id, handle, plugin name, version, marketplace, manifest
 text with control characters, sandbox state, a status for another profile).

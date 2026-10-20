@@ -189,7 +189,8 @@ func New(pinned string) *mcp.Server {
 			if err != nil {
 				return refusedOr(err, ResultOut{Answers: []answers.Answer{}})
 			}
-			stop := mcpkit.Progress(ctx, req, 0, func(time.Duration) string { return RunningMessage })
+			every := clientcmd.HeartbeatEvery(clientcmd.Quantum(ctx, profile))
+			stop := mcpkit.Progress(ctx, req, every, func(time.Duration) string { return RunningMessage })
 			res, err := clientcmd.Run(ctx, profile, in.PlanID)
 			stop()
 			return resultOut(res, err)
