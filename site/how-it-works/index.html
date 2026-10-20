@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How lockfile works — plan, approve, fetch, answer</title>
+  <meta name="description" content="The agent plans questions about a file key, you approve them in the console, the console fetches the file and runs signed plugins in a sandbox, and the agent gets 1, 0 or no answer per plugin.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
+  <link rel="canonical" href="https://davidgodefroid.github.io/lockfile/how-it-works/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="lockfile">
+  <meta property="og:title" content="How lockfile works — plan, approve, fetch, answer">
+  <meta property="og:description" content="The agent plans questions about a file key, you approve them in the console, the console fetches the file and runs signed plugins in a sandbox, and the agent gets 1, 0 or no answer per plugin.">
+  <meta property="og:url" content="https://davidgodefroid.github.io/lockfile/how-it-works/">
+  <meta property="og:image" content="https://davidgodefroid.github.io/lockfile/assets/og.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="lockfile — Your AI asks about the file. It never reads it.">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="How lockfile works — plan, approve, fetch, answer">
+  <meta name="twitter:description" content="The agent plans questions about a file key, you approve them in the console, the console fetches the file and runs signed plugins in a sandbox, and the agent gets 1, 0 or no answer per plugin.">
+  <meta name="twitter:image" content="https://davidgodefroid.github.io/lockfile/assets/og.png">
+  <meta name="twitter:image:alt" content="lockfile — Your AI asks about the file. It never reads it.">
+  <link rel="icon" href="../assets/logo.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/anchors.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="32" height="32"><span class="wordmark">lock<span>file</span></span></a>
+      <nav class="site-nav" aria-label="Main">
+        <ul>
+          <li><a href="../">Home</a></li>
+          <li><a href="../install/">Install</a></li>
+          <li><a href="../how-it-works/" aria-current="page">How it works</a></li>
+          <li><a href="../plugins/">Plugins</a></li>
+          <li><a href="../security/">Security</a></li>
+          <li><a href="../faq/">FAQ</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+  <main id="main" tabindex="-1">
+    <div class="wrap">
+
+<h1>How lockfile works</h1>
+<div class="prose">
+  <p class="lead">Two sides in two OS accounts. Only the console touches the file.</p>
+  <p>The source credentials, the plugins, the fetched files and the audit log live in the console account <code>lockfile</code>. The agent side, in your own account, holds none of them and gets 1s and 0s.</p>
+</div>
+
+<section aria-labelledby="processes">
+  <h2 id="processes">Two sides</h2>
+  <pre tabindex="0" class="diagram" role="img" aria-label="Process layout: the agent account runs lockfile plan, run and answers or the lockfile MCP server, and talks over a Unix socket with JSON-RPC to the console in the lockfile account; the console asks for approval, fetches the file into a 0700 workspace, passes it read-only as fd 3 to a sandboxed plugin process, checks the answer strictly and returns 1 or 0 per plugin."><code> agent account (CLI / MCP)            lockfile account (console, human terminal)
+   lockfile plan/run/answers  ──UDS──▶  approve ─▶ fetch ─▶ workspace (0700)
+            ▲                   JSON-RPC                       │ fd 3, read-only
+            │                                                  ▼
+            └────── 1 / 0 per plugin ◀── strict check ◀── sandboxed plugin process</code></pre>
+  <ul class="prose">
+    <li><strong>The console</strong> (<code>lockfile console --profile P</code>) runs in the <code>lockfile</code> account’s own session, in a terminal you keep in view. It serves the profile on a socket in <code>/run/lockfile</code>.</li>
+    <li><strong>The agent side</strong> is the <code>lockfile</code> CLI (<code>status</code>, <code>sources</code>, <code>plugins</code>, <code>plan</code>, <code>run</code>, <code>answers</code>, <code>release</code>) and the <code>lockfile mcp</code> server with the same seven tools. It holds no secret, no plugin and no file.</li>
+  </ul>
+</section>
+
+<section aria-labelledby="life">
+  <h2 id="life">The life of a plan</h2>
+  <ol class="steps prose">
+    <li><strong>The agent picks its questions.</strong> <code>lockfile plugins</code> lists the installed plugins: each one’s question and what <code>1</code> and <code>0</code> mean. The agent knows the exact key from you or from a ticket: there is no listing and no stat.</li>
+    <li><strong>The agent submits a plan.</strong> <code>lockfile plan --key K --plugin X --plugin Y</code> (or the <code>lockfile_plan</code> MCP tool). The console validates the request alone, without touching the source: the profile exists, the key is under the profile’s <code>prefix</code>, every plugin is installed and verified, and the plugin count stays within <code>max_plugins_per_handle</code>.</li>
+    <li><strong>You approve.</strong> The console shows the approval screen: the key as the agent typed it, each plugin with its question, version and marketplace, and how many answers the plan reveals. <code>y</code> approves (the profile name on production), <code>n &lt;reason&gt;</code> denies.</li>
+    <li><strong>The console fetches.</strong> The file goes into a fresh workspace (<code>0700</code>) in the console account; an object above <code>max_object_bytes</code> is refused while streaming. Any fetch failure (missing, too big, denied, network) reaches the agent as one code, <code>fetch_failed</code>; the cause goes to the audit.</li>
+    <li><strong>Each plugin runs in its own sandbox</strong> with the file as a read-only fd 3, and must write exactly <code>1</code> or <code>0</code> and exit 0. Anything else is <code>plugin_error</code> with <code>result: null</code>.</li>
+    <li><strong>The answers come back together</strong>, released at the next multiple of <code>answer_quantum</code> after the run started. The agent gets a handle (<code>f_…</code>) for follow-up questions.</li>
+  </ol>
+  <p class="prose">An approved plan runs once, for the peer that asked, within 10 minutes and with the policy unchanged. <code>plan --run</code> asks for approval and runs it in one call.</p>
+</section>
+
+<section aria-labelledby="screen">
+  <h2 id="screen">The approval screen</h2>
+  <h3 id="first-plan">A first plan on a file</h3>
+  <pre tabindex="0" class="term"><code>╭─ SAMPLES · file plan · 2 answers ─────
+│ requested by uid 1000 (alice) · pid 48211 · exe /usr/local/bin/lockfile
+│ agent: check the invoice reported as blank
+│
+│ key    invoices/2026/10/abc123.pdf
+│
+│ file.non-empty@1.0.0  (official)
+│   ? Does the file contain at least one byte?   1 = size &gt; 0   0 = the file is empty
+│ format.is-pdf@1.0.0  (official)
+│   ? Does the file start like a PDF?   1 = `%PDF-` appears within the first 1024 bytes   0 = no PDF header
+│
+│ this plan reveals at most 2 answers about the file
+╰─ Approve? [y/N]</code></pre>
+  <h3 id="follow-up">A follow-up on the same file</h3>
+  <pre tabindex="0" class="term"><code>╭─ SAMPLES · follow-up on f_8Kq2xR · 1 answers ─────
+│ requested by uid 1000 (alice) · pid 48211 · exe /usr/local/bin/lockfile
+│
+│ handle f_8Kq2xR (no new fetch)
+│
+│ pdf.parses@1.0.0  (official)
+│   ? Does the file parse as a PDF without errors?   1 = pdfcpu reads and validates it (relaxed mode)   0 = parsing or validation fails
+│
+│ this plan reveals at most 1 answers about the file
+╰─ Approve? [y/N]</code></pre>
+  <p class="prose">There is no size, type, hash or path on the screen: no source has been touched yet, and at desktop security level 1 the agent’s account can read this window. A plugin from an unofficial marketplace adds a red <code>▲ UNOFFICIAL MARKETPLACE</code> line and is never auto-approved.</p>
+</section>
+
+<section aria-labelledby="flow">
+  <h2 id="flow">From the agent’s side</h2>
+  <pre tabindex="0" class="term"><code><span class="cmt"># What can I ask?</span>
+lockfile plugins --json
+
+<span class="cmt"># Ask, and wait for the human</span>
+lockfile plan --key invoices/2026/10/abc123.pdf \
+  --plugin file.non-empty --plugin format.is-pdf --run --json
+
+<span class="cmt"># One more question on the same file, no refetch</span>
+lockfile plan --handle f_8Kq2xR --plugin pdf.parses --run --json
+
+<span class="cmt"># What was already answered, then delete the fetched file now</span>
+lockfile answers f_8Kq2xR --json
+lockfile release f_8Kq2xR</code></pre>
+  <div class="table-wrap" role="region" aria-label="Agent commands and MCP tools" tabindex="0">
+  <table>
+  <caption>Agent commands and MCP tools</caption>
+  <thead><tr><th scope="col">Command</th><th scope="col">MCP tool</th><th scope="col">What</th></tr></thead>
+  <tbody>
+  <tr><td><code>lockfile status</code></td><td><code>lockfile_status</code></td><td>the running consoles’ state</td></tr>
+  <tr><td><code>lockfile sources</code></td><td><code>lockfile_sources</code></td><td>profiles of the running consoles (<code>busy</code>: waiting on the human)</td></tr>
+  <tr><td><code>lockfile plugins</code></td><td><code>lockfile_plugins</code></td><td>questions, meaning of 1 and 0</td></tr>
+  <tr><td><code>lockfile plan --key K --plugin X…</code></td><td><code>lockfile_plan</code></td><td>ask the human to approve</td></tr>
+  <tr><td><code>lockfile run PLAN_ID</code></td><td><code>lockfile_run</code></td><td>run an approved plan once</td></tr>
+  <tr><td><code>lockfile answers HANDLE</code></td><td><code>lockfile_answers</code></td><td>answers already given</td></tr>
+  <tr><td><code>lockfile release HANDLE</code></td><td><code>lockfile_release</code></td><td>delete the fetched file now</td></tr>
+  </tbody>
+  </table>
+  </div>
+  <p class="prose">Exit codes depend on the outcome only, never on an answer: <code>0</code> answered, <code>1</code> no console or error, <code>2</code> refused, <code>3</code> denied or no answer in time, <code>64</code> usage.</p>
+</section>
+
+<section aria-labelledby="refusals">
+  <h2 id="refusals">Refusals the agent can act on</h2>
+  <p class="prose">Every refusal but <code>E_FETCH_FAILED</code> is computed from the request and the local install, before or without reading the file. Each one carries a stable code, a static hint and a retry rule: rewrite the request, ask the user, or stop.</p>
+  <div class="table-wrap" role="region" aria-label="Refusal codes" tabindex="0">
+  <table>
+  <caption>Refusal codes</caption>
+  <thead><tr><th scope="col">Code</th><th scope="col">Retry</th><th scope="col">Meaning</th></tr></thead>
+  <tbody>
+  <tr><td><code>E_KEY_OUTSIDE_PREFIX</code></td><td>rewrite</td><td>the key is not under the profile’s prefix</td></tr>
+  <tr><td><code>E_UNKNOWN_PROFILE</code></td><td>rewrite</td><td>no console serves that profile</td></tr>
+  <tr><td><code>E_TOO_MANY_PLUGINS</code></td><td>rewrite</td><td>the plan would pass <code>max_plugins_per_handle</code></td></tr>
+  <tr><td><code>E_HANDLE_EXPIRED</code></td><td>rewrite</td><td>the handle expired or was released; plan again with the key</td></tr>
+  <tr><td><code>E_PLUGIN_NOT_INSTALLED</code></td><td>ask the user</td><td>the human must install it</td></tr>
+  <tr><td><code>E_PLUGIN_YANKED</code></td><td>ask the user</td><td>the marketplace withdrew that version (reserved: not produced yet by v0.2.0)</td></tr>
+  <tr><td><code>E_PLUGIN_TAMPERED</code></td><td>stop</td><td>an installed plugin does not match its lock entry (<code>lockfile plugin verify</code>)</td></tr>
+  <tr><td><code>E_SANDBOX_UNAVAILABLE</code></td><td>stop</td><td>the plugin sandbox is unavailable (<code>lockfile doctor</code>)</td></tr>
+  <tr><td><code>E_FETCH_FAILED</code></td><td>stop</td><td>the key could not be fetched (the cause is in the audit only)</td></tr>
+  </tbody>
+  </table>
+  </div>
+</section>
+
+<section aria-labelledby="console">
+  <h2 id="console">In the console</h2>
+  <div class="prose">
+    <p>The console prints each outcome as <code>plan pl_…: answered</code> or <code>refused &lt;code&gt;</code>; the answers, causes, sizes and hashes go to the audit, read with <code>lockfile audit [--since 24h] [--json]</code> in the console account only.</p>
+    <ul>
+      <li><code>:review</code>: apply a pending loosening (a plugin installed or a marketplace added while the console runs).</li>
+      <li><code>:status</code>: the console state.</li>
+      <li><code>:mode</code> or Shift+Tab: auto mode, where plans run without a prompt. Never on production, never for unofficial plugins.</li>
+      <li><code>:quit</code>: stop the console; fetched files are deleted.</li>
+    </ul>
+  </div>
+</section>
+
+<div class="more prose">
+  <p><strong>More:</strong></p>
+  <ul>
+    <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/usage.md">Usage guide</a>: every command, profiles, the agent flow, MCP.</li>
+    <li><a href="../security/">Security model</a>: what the agent can see, the boundaries, the residual risks.</li>
+    <li><a href="../plugins/">Plugins</a>: the official marketplace and how to write a plugin.</li>
+  </ul>
+</div>
+
+    </div>
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <ul>
+        <li><a href="https://github.com/DavidGodefroid/lockfile">Source on GitHub</a></li>
+        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/README.md">README</a></li>
+        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/usage.md">Usage guide</a></li>
+        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/security-model.md">Security model (full)</a></li>
+        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/plugin-contract.md">Plugin contract</a></li>
+      </ul>
+      <p>Pre-release (<code>v0.2.x</code>). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
+      <p class="family-line">Part of the lock family: <a href="https://github.com/DavidGodefroid/locksql">locksql</a> · <a href="https://github.com/DavidGodefroid/lockmq">lockmq</a> · <a href="https://github.com/DavidGodefroid/lockfile">lockfile</a> · <a href="https://github.com/DavidGodefroid/lockkit">lockkit</a></p>
+    </div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>lockfile security model — the agent only ever sees 1s and 0s</title>
+  <meta name="description" content="The boundaries lockfile enforces, the exhaustive list of what the agent can see, the side channels and the residual risks.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
+  <link rel="canonical" href="https://davidgodefroid.github.io/lockfile/security/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="lockfile">
+  <meta property="og:title" content="lockfile security model — the agent only ever sees 1s and 0s">
+  <meta property="og:description" content="The boundaries lockfile enforces, the exhaustive list of what the agent can see, the side channels and the residual risks.">
+  <meta property="og:url" content="https://davidgodefroid.github.io/lockfile/security/">
+  <meta property="og:image" content="https://davidgodefroid.github.io/lockfile/assets/og.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="lockfile — Your AI asks about the file. It never reads it.">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="lockfile security model — the agent only ever sees 1s and 0s">
+  <meta name="twitter:description" content="The boundaries lockfile enforces, the exhaustive list of what the agent can see, the side channels and the residual risks.">
+  <meta name="twitter:image" content="https://davidgodefroid.github.io/lockfile/assets/og.png">
+  <meta name="twitter:image:alt" content="lockfile — Your AI asks about the file. It never reads it.">
+  <link rel="icon" href="../assets/logo.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script src="../assets/anchors.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="32" height="32"><span class="wordmark">lock<span>file</span></span></a>
+      <nav class="site-nav" aria-label="Main">
+        <ul>
+          <li><a href="../">Home</a></li>
+          <li><a href="../install/">Install</a></li>
+          <li><a href="../how-it-works/">How it works</a></li>
+          <li><a href="../plugins/">Plugins</a></li>
+          <li><a href="../security/" aria-current="page">Security</a></li>
+          <li><a href="../faq/">FAQ</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+  <main id="main" tabindex="-1">
+    <div class="wrap">
+
+<h1>Security model</h1>
+<div class="prose">
+  <p class="lead">The rule: the agent only ever sees 1s and 0s about a file.</p>
+  <p>The human approves every plan in a console the agent cannot drive, in an account the agent cannot read. Skills, rules and MCP tool descriptions only guide the agent; the console’s checks are the guarantee. This page summarises the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/security-model.md">full security model</a>.</p>
+</div>
+
+<section aria-labelledby="boundaries">
+  <h2 id="boundaries">Boundaries</h2>
+  <div class="table-wrap" role="region" aria-label="Boundaries and what enforces them" tabindex="0">
+  <table>
+  <caption>Boundaries and what enforces them</caption>
+  <thead><tr><th scope="col">Boundary</th><th scope="col">Enforced by</th></tr></thead>
+  <tbody>
+  <tr><td>The agent cannot read the file, the credentials, the plugins or the audit</td><td>a separate OS account <code>lockfile</code> (home <code>0700</code>); <code>lockfile doctor</code> checks from the agent’s side that opening it fails</td></tr>
+  <tr><td>The agent cannot drive the console</td><td>lockkit’s isolation checks: the console runs in its own login session (or a desktop terminal of its own account, Wayland only), refuses X11 on production, refuses relays</td></tr>
+  <tr><td>Only the clients group reaches the console</td><td>socket directory <code>/run/lockfile</code> (<code>2750</code>, setgid group <code>lockfile-clients</code>), socket <code>0660</code>, kernel peer credentials checked on every connection</td></tr>
+  <tr><td>The agent cannot replace the binary the console runs</td><td><code>/usr/local/bin/lockfile</code> owned by root; <code>install</code> refuses a user-writable source unless its sha256 is pinned</td></tr>
+  <tr><td>A plugin cannot read anything but its input, nor talk to the network</td><td>Landlock (execute and read its own binary only; TCP denied with ABI ≥ 4), seccomp (no sockets, <code>ptrace</code>, <code>mount</code>, <code>bpf</code>, <code>keyctl</code>, second <code>execve</code>), rlimits, empty environment, input as a read-only fd 3, stdout capped at 3 bytes, stderr discarded; see the <a href="#upcoming">hardening coming in v0.2.1</a></td></tr>
+  <tr><td>A plugin answers only its signed question</td><td>the manifest’s question and meanings of 1 and 0 are signed with the binary; marketplace review; a changed question is a loosening the human types to accept</td></tr>
+  <tr><td>Plugins and releases are what their publisher built</td><td>cosign keyless signatures checked through lockkit (index, manifest, binary, lockfile releases); no unsigned mode; a missing cosign refuses</td></tr>
+  <tr><td>The agent cannot widen the policy</td><td>no socket method installs, trusts or loosens anything; a change request only queues text for the human</td></tr>
+  </tbody>
+  </table>
+  </div>
+</section>
+
+<section aria-labelledby="visible">
+  <h2 id="visible">What the agent can see: the exhaustive list</h2>
+  <p class="prose">Everything the console sends to the client (socket, CLI, MCP) is one of these, from closed lists. The end-to-end tests walk every response of every method against this list.</p>
+  <div class="table-wrap" role="region" aria-label="Everything the agent can receive" tabindex="0">
+  <table>
+  <caption>Everything the agent can receive</caption>
+  <thead><tr><th scope="col">Output</th><th scope="col">Why it is not file information</th></tr></thead>
+  <tbody>
+  <tr><td>plugin answer <code>1</code> / <code>0</code></td><td>the one allowed thing</td></tr>
+  <tr><td><code>result: null</code> + <code>plugin_error</code></td><td>absence of an answer; <strong>residual</strong>: it depends on the file (a plugin failed on it); at most one symbol per plugin, capped by <code>max_plugins_per_handle</code></td></tr>
+  <tr><td><code>fetch_failed</code></td><td>the plan could not start; <strong>residual</strong>: says “this key could not be fetched” (missing, too big, denied and network are not distinguished)</td></tr>
+  <tr><td>handle <code>f_…</code>, plan id <code>pl_…</code></td><td>random, from <code>crypto/rand</code></td></tr>
+  <tr><td>plugin name, version, <code>official</code>, <code>warning: unofficial_marketplace</code>, question, meaning of 1/0</td><td>plugin metadata from the signed manifest</td></tr>
+  <tr><td>profile names and <code>production</code> flag, <code>busy</code></td><td>lockfile configuration; <code>busy</code> means the console is waiting for the human on another request</td></tr>
+  <tr><td><code>approval_denied</code>, <code>approval_timeout</code></td><td>a human decision; the reason the human types is never forwarded</td></tr>
+  <tr><td>refusal codes (<code>E_*</code>, with a static hint)</td><td>computed from the request and the local install, before or without reading the file; <code>plugin_yanked</code> is in the list but not produced yet by v0.2.0</td></tr>
+  <tr><td><code>status</code>: console up, production, auto mode, security level, timers, plugin protocol, sandbox ok</td><td>console state</td></tr>
+  </tbody>
+  </table>
+  </div>
+  <p class="prose"><strong>Never sent:</strong> size, media type, sha256, key listings, file or path names, page or byte counts, library or OS error text, per-plugin timing, progress during a run, stderr. The client also refuses to forward any console text it does not recognise: an unknown error becomes <code>console error</code>.</p>
+</section>
+
+<section aria-labelledby="side-channels">
+  <h2 id="side-channels">Side channels</h2>
+  <ul class="prose">
+    <li><strong>Timing.</strong> A run’s response leaves the console only at the next multiple of <code>answer_quantum</code> (default 5 s) after the run started; a fetch failure after approval too. Residual: a plan that takes longer than one quantum shows it took longer.</li>
+    <li><strong>The console window.</strong> At desktop security level 1 the agent’s account can read the console’s window. It shows the agent’s own request, the plugin metadata and the outcome codes; causes, sizes and hashes go to the audit only. Residual: the start-up lines show the profile’s location, and a reason you type with a denial (<code>n &lt;reason&gt;</code>) is echoed in the window: do not type file details there.</li>
+    <li><strong>Exit codes</strong> depend on the outcome only, never on an answer.</li>
+  </ul>
+</section>
+
+<section aria-labelledby="at-rest">
+  <h2 id="at-rest">Data at rest</h2>
+  <ul class="prose">
+    <li><strong>Fetched files</strong> live in a random <code>0700</code> workspace in the console account, deleted on <code>release</code>, on handle expiry, on console exit, and swept at start. Deletion is an unlink, not a secure erase.</li>
+    <li><strong>Credentials</strong>: the S3 SDK keeps the secret access key in the console’s memory for the session; core dumps are disabled.</li>
+    <li><strong>The audit log</strong> (<code>~lockfile/.local/state/lockfile/audit.log</code>, <code>0600</code>) is the one place file metadata exists: key, size, sha256, fetch cause, each plugin’s precise outcome, stderr byte count. Never file bytes. <code>lockfile audit</code> reads it, in the console account only.</li>
+  </ul>
+</section>
+
+<section aria-labelledby="upcoming">
+  <h2 id="upcoming">Sandbox hardening coming in v0.2.1</h2>
+  <div class="prose">
+    <p>“The agent only ever sees 1s and 0s” is the design goal and what the wire carries; the v0.2.0 plugin sandbox is not yet complete around it. A review found side channels a plugin could use to pass more than its bit to another process on the machine:</p>
+    <ul>
+      <li>SysV IPC and POSIX message queues are not denied to plugins;</li>
+      <li><code>/proc</code> is visible to plugins unless it is mounted with <code>hidepid</code>;</li>
+      <li>on older Landlock ABIs, signals through <code>fcntl</code> are not blocked.</li>
+    </ul>
+    <p>v0.2.1 denies SysV IPC and message queues and requires <code>/proc</code> mounted with <code>hidepid=invisible</code>. Until then, install only plugins you trust from the official marketplace.</p>
+  </div>
+</section>
+
+<section class="limits" aria-labelledby="residual">
+  <h2 id="residual">Residual risks</h2>
+  <ul class="prose">
+    <li>A plugin whose code does not match its question (it lies, or answers a content question under a structural name) is mitigated by review, build from reviewed source, signing and the unofficial-marketplace warnings; it is not prevented.</li>
+    <li>Many plugins over one file combine bits: bounded by <code>max_plugins_per_handle</code> and by the per-plan approval that states how many answers the plan reveals.</li>
+    <li>A question can itself be about content (“is the amount above 10 000?”): the official marketplace’s review refuses such questions; an unofficial marketplace may not.</li>
+    <li><code>fetch_failed</code> and <code>plugin_error</code> each carry one symbol that depends on the file.</li>
+    <li>Fetched files are unlinked, not securely erased (a residual on SSDs and copy-on-write filesystems).</li>
+    <li>Malware running as the console account, or as root, is out of scope.</li>
+  </ul>
+</section>
+
+<div class="more prose">
+  <p><strong>Read the source documents:</strong></p>
+  <ul>
+    <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/security-model.md">docs/security-model.md</a>: the security model in full.</li>
+    <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/plugin-contract.md">docs/plugin-contract.md</a>: the plugin runtime and answer rules.</li>
+  </ul>
+</div>
+
+    </div>
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <ul>
+        <li><a href="https://github.com/DavidGodefroid/lockfile">Source on GitHub</a></li>
+        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/README.md">README</a></li>
+        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/usage.md">Usage guide</a></li>
+        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/security-model.md">Security model (full)</a></li>
+        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/plugin-contract.md">Plugin contract</a></li>
+      </ul>
+      <p>Pre-release (<code>v0.2.x</code>). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
+      <p class="family-line">Part of the lock family: <a href="https://github.com/DavidGodefroid/locksql">locksql</a> · <a href="https://github.com/DavidGodefroid/lockmq">lockmq</a> · <a href="https://github.com/DavidGodefroid/lockfile">lockfile</a> · <a href="https://github.com/DavidGodefroid/lockkit">lockkit</a></p>
+    </div>
+  </footer>
+</body>
+</html>
