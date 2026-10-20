@@ -23,12 +23,15 @@ var (
 	ErrTooLarge      = errors.New("workspace: file too large")
 	ErrExpired       = errors.New("handle_expired")
 	ErrUnknownHandle = errors.New("workspace: unknown handle")
+	// ErrTooManyHandles refuses a fetch while MaxHandles files are held.
+	ErrTooManyHandles = errors.New("workspace: too many handles")
 )
 
 // Defaults for zero Config fields.
 const (
-	DefaultMaxBytes = 1 << 30
-	DefaultTTL      = 30 * time.Minute
+	DefaultMaxBytes   = 1 << 30
+	DefaultTTL        = 30 * time.Minute
+	DefaultMaxHandles = 64
 )
 
 // Handle names a fetched file for the agent: "f_" and 10 base62 characters
@@ -39,7 +42,9 @@ type Config struct {
 	Dir      string
 	MaxBytes int64 // all handles together
 	TTL      time.Duration
-	Now      func() time.Time
+	// MaxHandles bounds the files held (or being fetched) at once.
+	MaxHandles int
+	Now        func() time.Time
 }
 
 // Info is audit-only data about a fetched file.
@@ -53,14 +58,19 @@ type entry struct {
 	file    string
 	info    Info
 	created time.Time
-	gone    bool // expired and removed; kept so the handle still says expired
+	ttl     time.Duration // fixed at fetch: a later policy does not extend it
+	gone    bool          // expired and removed; kept so the handle still says expired
 }
 
 type Manager struct {
 	c       Config
 	mu      sync.Mutex
 	handles map[Handle]*entry
-	used    int64
+	// used counts the bytes of live handles plus those reserved by fetches
+	// in progress; open and inflight count them.
+	used     int64
+	open     int
+	inflight int
 }
 
 // Open prepares the workspace root (0700) and removes everything a previous
@@ -74,6 +84,9 @@ func Open(c Config) (*Manager, error) {
 	}
 	if c.TTL <= 0 {
 		c.TTL = DefaultTTL
+	}
+	if c.MaxHandles <= 0 {
+		c.MaxHandles = DefaultMaxHandles
 	}
 	if c.Now == nil {
 		c.Now = time.Now
@@ -141,18 +154,36 @@ func randomHex() (string, error) {
 
 // Create streams r into a new handle, hashing as it copies. It fails with
 // ErrTooLarge, and leaves nothing behind, as soon as the file exceeds max or
-// the space left in the workspace.
+// the space left in the workspace, and with ErrTooManyHandles when
+// MaxHandles files are already held or being fetched. The bytes it may
+// write are reserved before streaming, so concurrent fetches never take
+// more than the workspace budget together; what the file did not use is
+// refunded.
 func (m *Manager) Create(r io.Reader, max int64) (h Handle, info Info, err error) {
 	m.mu.Lock()
-	budget := m.c.MaxBytes - m.used
-	m.mu.Unlock()
-	limit := budget
+	if m.open+m.inflight >= m.c.MaxHandles {
+		m.mu.Unlock()
+		return "", Info{}, ErrTooManyHandles
+	}
+	limit := m.c.MaxBytes - m.used
 	if max > 0 && max < limit {
 		limit = max
 	}
 	if limit < 0 {
 		limit = 0
 	}
+	m.used += limit
+	m.inflight++
+	m.mu.Unlock()
+	kept := false
+	defer func() {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		m.inflight--
+		if !kept {
+			m.used -= limit
+		}
+	}()
 	dirName, err := randomHex()
 	if err != nil {
 		return "", Info{}, err
@@ -188,22 +219,43 @@ func (m *Manager) Create(r io.Reader, max int64) (h Handle, info Info, err error
 	}
 	info = Info{Size: n, SHA256: hex.EncodeToString(hash.Sum(nil))}
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.used+n > m.c.MaxBytes {
-		return "", Info{}, ErrTooLarge
-	}
+	// The handle is named before taking the lock the deferred refund needs.
 	for {
 		if h, err = newHandle(); err != nil {
 			return "", Info{}, err
 		}
-		if _, taken := m.handles[h]; !taken {
-			break
+		m.mu.Lock()
+		_, taken := m.handles[h]
+		if !taken {
+			// Keep n of the reserved limit, refund the rest.
+			m.handles[h] = &entry{dir: dir, file: path, info: info, created: m.c.Now(), ttl: m.c.TTL}
+			m.used -= limit - n
+			m.open++
+			kept = true
+		}
+		m.mu.Unlock()
+		if !taken {
+			return h, info, nil
 		}
 	}
-	m.handles[h] = &entry{dir: dir, file: path, info: info, created: m.c.Now()}
-	m.used += n
-	return h, info, nil
+}
+
+// Dir is the workspace root.
+func (m *Manager) Dir() string { return m.c.Dir }
+
+// SetLimits applies the approved policy's workspace budget and handle TTL
+// to the handles fetched from now on (zero keeps the default). A handle
+// keeps the TTL it was fetched with.
+func (m *Manager) SetLimits(maxBytes int64, ttl time.Duration) {
+	if maxBytes <= 0 {
+		maxBytes = DefaultMaxBytes
+	}
+	if ttl <= 0 {
+		ttl = DefaultTTL
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.c.MaxBytes, m.c.TTL = maxBytes, ttl
 }
 
 func (m *Manager) live(h Handle) (*entry, error) {
@@ -211,7 +263,7 @@ func (m *Manager) live(h Handle) (*entry, error) {
 	if !ok {
 		return nil, ErrUnknownHandle
 	}
-	if e.gone || !m.c.Now().Before(e.created.Add(m.c.TTL)) {
+	if e.gone || !m.c.Now().Before(e.created.Add(e.ttl)) {
 		return nil, ErrExpired
 	}
 	return e, nil
@@ -238,6 +290,7 @@ func (m *Manager) remove(e *entry) error {
 	}
 	e.gone = true
 	m.used -= e.info.Size
+	m.open--
 	return os.RemoveAll(e.dir)
 }
 
@@ -261,7 +314,7 @@ func (m *Manager) Expire() {
 	defer m.mu.Unlock()
 	now := m.c.Now()
 	for _, e := range m.handles {
-		if !now.Before(e.created.Add(m.c.TTL)) {
+		if !now.Before(e.created.Add(e.ttl)) {
 			_ = m.remove(e)
 		}
 	}

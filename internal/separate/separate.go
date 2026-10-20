@@ -6,8 +6,8 @@
 // name of its own. It only builds and checks; running the script (sudo) is
 // the caller's.
 //
-// Copied from lockmq (same API) until it moves to lockkit; the one
-// addition is Options.SocketMode.
+// Copied from another lockkit-based tool (same API) until it moves to
+// lockkit; the one addition is Options.SocketMode.
 package separate
 
 import (
@@ -115,13 +115,33 @@ func FileSum(path string) (string, error) {
 // than root (a binary the agent replaced would become the one the console
 // trusts); "" for a root-owned binary neither group nor others may write.
 func SourceRefusal(p kit.Product, bin string) (string, error) {
-	fi, err := os.Stat(bin)
+	_, msg, err := SourceSum(p, bin)
+	return msg, err
+}
+
+// SourceSum checks bin as SourceRefusal does and returns its sha256, both
+// from one open file: the owner and mode checked are those of the bytes
+// hashed. The caller pins the copy to sum (PinnedSource), so a binary
+// swapped after the check (its parent directory may be writable by the
+// agent) is not installed. refusal is "" for an acceptable binary.
+func SourceSum(p kit.Product, bin string) (sum, refusal string, err error) {
+	f, err := os.Open(bin)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		return "", "", err
+	}
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", "", err
+	}
+	sum = hex.EncodeToString(h.Sum(nil))
 	uid, ok := fileOwner(fi)
 	if ok && uid == 0 && fi.Mode().Perm()&0o022 == 0 {
-		return "", nil
+		return sum, "", nil
 	}
 	owner := "an unknown account"
 	if ok {
@@ -133,11 +153,7 @@ func SourceRefusal(p kit.Product, bin string) (string, error) {
 	if ok && uid == 0 {
 		owner = "root but writable by group or others"
 	}
-	sum, err := FileSum(bin)
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf(`%s install: %s is owned by %s and could have been replaced by the agent;
+	return sum, fmt.Sprintf(`%s install: %s is owned by %s and could have been replaced by the agent;
 install a release into a root-owned directory (scripts/install.sh with the default /usr/local/bin),
 or pass --trust-binary to copy this one (sha256 %s).
 `, p.Name, bin, owner, sum), nil

@@ -4,11 +4,14 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"golang.org/x/term"
 
 	"github.com/DavidGodefroid/lockkit/config"
 	"github.com/DavidGodefroid/lockkit/kit"
@@ -32,6 +35,8 @@ type humanHooks struct {
 	verifier             verify.Verifier
 	// officialIndex replaces the official marketplace's index URL.
 	officialIndex string
+	// terminal replaces the terminal check of typed confirmations.
+	terminal func(io.Reader) bool
 }
 
 var testHumanHooks *humanHooks
@@ -104,7 +109,7 @@ func verifier() verify.Verifier {
 }
 
 func installer(store plugin.Store) marketplace.Installer {
-	return marketplace.Installer{HTTP: hooks().http, Verifier: verifier(), Store: store, OS: runtime.GOOS, Arch: runtime.GOARCH}
+	return marketplace.Installer{HTTP: hooks().http, Verifier: verifier(), Store: store, OS: runtime.GOOS, Arch: runtime.GOARCH, StateDir: store.Dir}
 }
 
 func officialMarketplace() marketplace.Marketplace {
@@ -115,8 +120,23 @@ func officialMarketplace() marketplace.Marketplace {
 	return m
 }
 
-// confirm asks the human to type want; "y" accepts y or yes.
+// isTerminal reports whether r is a terminal. Tests that set humanHooks
+// without terminal act as one.
+func isTerminal(r io.Reader) bool {
+	if testHumanHooks != nil {
+		return testHumanHooks.terminal == nil || testHumanHooks.terminal(r)
+	}
+	f, ok := r.(*os.File)
+	return ok && term.IsTerminal(int(f.Fd()))
+}
+
+// confirm asks the human to type want; "y" accepts y or yes. A name to
+// type must come from a terminal, never from a pipe.
 func confirm(e env, in *bufio.Reader, prompt, want string) bool {
+	if want != "y" && !isTerminal(e.stdin) {
+		fmt.Fprintln(e.stderr, "lockfile: type the name in a terminal; a typed confirmation is never read from a pipe")
+		return false
+	}
 	fmt.Fprint(e.stdout, prompt)
 	line, err := in.ReadString('\n')
 	if err != nil && line == "" {

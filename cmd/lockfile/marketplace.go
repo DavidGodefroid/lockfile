@@ -71,6 +71,9 @@ func marketplaceAdd(e env, args []string) int {
 	fmt.Fprintln(e.stdout, "  index    "+sanitize.Terminal(t.IndexURL, false))
 	fmt.Fprintln(e.stdout, "  signer   "+sanitize.Terminal(t.IdentityRegexp, false))
 	fmt.Fprintln(e.stdout, "  issuer   "+sanitize.Terminal(t.OIDCIssuer, false))
+	for _, w := range profile.SignerWarnings(t.IdentityRegexp) {
+		fmt.Fprintln(e.stdout, red("WARNING "+w))
+	}
 	if !confirm(e, bufio.NewReader(e.stdin), fmt.Sprintf("Type the marketplace name %q to trust it: ", t.Name), t.Name) {
 		fmt.Fprintln(e.stdout, "not added")
 		return product.ExitDenied
@@ -107,6 +110,9 @@ func marketplaceRemove(e env, args []string) int {
 func marketplaceList(e env, args []string) int {
 	if len(args) != 0 {
 		return usageErr(e, marketplaceUsage)
+	}
+	if err := serviceAccount(); err != nil {
+		return failHuman(e, "marketplace list", err)
 	}
 	fmt.Fprintf(e.stdout, "official  %s  (signer %s)\n", marketplace.OfficialIndexURL, verify.Official.IdentityRegexp)
 	path, err := configPath()

@@ -22,6 +22,23 @@ release into `/usr/local/bin` first, or pass `--trust-binary` to pin this one's 
 After it: give the console account a password, log out and in again (the new group), and
 open a separate session as `lockfile` (switch user; prefer Wayland) for the console.
 
+`/proc` must hide other accounts' processes, or consoles refuse to start and plans are
+refused with `proc_not_hidden` (`E_PROC_NOT_HIDDEN`); `lockfile install` does not change it:
+
+```sh
+sudo mount -o remount,hidepid=invisible,gid=<admin group> /proc
+# /etc/fstab, to keep it after a reboot:
+proc /proc proc defaults,hidepid=invisible,gid=<admin group> 0 0
+```
+
+Members of `gid=` still see every process (monitoring tools, admins).
+
+From the console account, `lockfile doctor` also checks the work directory (mode 0700, parents
+other accounts cannot traverse, not under a world-writable directory such as `/tmp`, not on a
+network filesystem), every `local` source directory (not reachable by other accounts or by the
+clients group) and the socket directory's owner (`lockfile:lockfile-clients`). It prints no
+path from the configuration.
+
 ## Profiles (console account)
 
 Profiles live in the lockfile account's `~/.config/lockfile/config.toml`; there is no per-project
@@ -51,9 +68,18 @@ handle_ttl = "30m"            # a fetched file is deleted after this
 answer_quantum = "5s"         # results leave the console only on multiples of this
 ```
 
+Top-level `work_dir` (absolute, default under the state directory) and `max_workspace_bytes`
+(default `1GiB`, all fetched files together) are part of the approved policy: the console
+uses them, and `handle_ttl`, only once `:review` has accepted them. Moving `work_dir`, raising
+`max_workspace_bytes` or lengthening `handle_ttl` is a loosening; a fetched file keeps the TTL
+it was fetched with.
+
 Credentials: S3 takes the access key id as `user` and the secret access key as the secret;
 SFTP `auth = "password"` takes user + password; `auth = "key"` reads the private key (mode
 0600 or stricter, no symlink) in the lockfile account and takes its passphrase as the secret.
+A leading `~/` in `key` and `known_hosts` is the lockfile account's home.
+On SFTP a key whose path below `base_dir` goes through a symbolic link on the server, or that
+the server resolves outside `base_dir`, is not fetched (`fetch_failed`).
 `lockfile forget --profile P` deletes a keychain secret.
 
 ## Plugins and marketplaces (console account)
@@ -67,8 +93,19 @@ lockfile marketplace add acme --index https://plugins.acme.example/index.json \
 lockfile marketplace list | remove NAME
 ```
 
-The official marketplace's signer is pinned in the binary. An unofficial marketplace needs
-its name typed when added, is flagged on every approval screen and in every agent result,
+In a separated setup every `plugin` and `marketplace` command, `list` and `verify` included,
+refuses to run outside the lockfile account (from another account the store looks empty).
+
+A version its marketplace withdraws (yanked) refuses to run (`plugin_yanked`). The yanked
+status comes from the marketplace's signed index: `plugin install`, `plugin update` and
+`plugin verify` read it and record it in `plugins.lock`; run `lockfile plugin verify`
+regularly, and `plugin update` to a version that is not yanked.
+
+The official marketplace's signer is pinned in the binary. An unofficial marketplace's
+`--identity-regexp` must start with `^https://`; `marketplace add` warns when it has an
+unescaped `.` or does not pin `HOST/OWNER/REPO/` (other signers would match). It needs
+its name typed when added (in a terminal: a typed name is never read from a pipe, nor the
+plugin name `plugin update` asks for), is flagged on every approval screen and in every agent result,
 and never runs in auto mode. Keyless signers only in v0.2 (`--public-key` is refused).
 
 A running console sees an installed plugin or an added marketplace as a policy loosening:
@@ -96,18 +133,28 @@ lockfile audit [--since 24h] [--json]           # console account only
 
 | Command | MCP tool | What |
 |---|---|---|
-| `lockfile status [--profile P]` | `lockfile_status` | the running consoles' state |
-| `lockfile sources` | `lockfile_sources` | profiles of the running consoles (`busy`: waiting on the human) |
+| `lockfile status [--profile P]` | `lockfile_status` | the running consoles' state (`busy`: see below) |
+| `lockfile sources` | `lockfile_sources` | profiles of the running consoles (`busy`: see below) |
 | `lockfile plugins [--profile P]` | `lockfile_plugins` | questions, meaning of 1 and 0 |
 | `lockfile plan --key K --plugin X… [--intent T] [--run]` | `lockfile_plan` | ask the human to approve |
 | `lockfile run PLAN_ID` | `lockfile_run` | run an approved plan once |
 | `lockfile plan --handle H --plugin X… --run` | `lockfile_plan` + `lockfile_run` | follow-up on the same file |
 | `lockfile answers HANDLE` | `lockfile_answers` | answers already given |
-| `lockfile release HANDLE` | `lockfile_release` | delete the fetched file now |
+| `lockfile release HANDLE` | `lockfile_release` | delete the fetched file now (answers at the next `answer_quantum`) |
 
 Every command takes `--json` and `--profile P` (optional when one console runs). Exit codes
-depend on the outcome only, never on an answer: 0 answered, 1 no console or error, 2 refused, 3
-denied or no answer in time, 64 usage.
+depend on the outcome only, never on an answer: 0 answered, 1 no console running or another
+error, 2 refused (an `E_*` refusal; `unknown_profile` is 2 whether the client or the console finds
+it), 3 denied or no answer in time, 64 usage. `status` exits 1 when a profile it reports on has
+no console.
+
+A console serves one request at a time. `busy` means it did not answer the probe within 2 s
+because it is serving another one: a plan waiting for the human, or a run until its
+`answer_quantum`. A console whose profile name is too long for a plain socket name cannot be
+listed while it is busy; passing its profile with `--profile` still reaches it.
+
+Output is capped in text and in JSON alike: a value (a text line) is cut at 512 characters, and
+output above 64 KiB is not printed (`output too large`, exit 1).
 
 There is no listing or stat: the agent asks the user for the exact key.
 
@@ -125,9 +172,15 @@ prompt; plans and runs always go through Claude Code's permission prompt and the
 ## Updates
 
 ```sh
-lockfile update [--check] [--yes]
+lockfile update [--check] [--yes] [--allow-downgrade]
 ```
 
-checks `checksums.txt` against the signature of lockfile's release workflow (cosign), then
-the archive against it, then replaces the binary (with sudo from a pinned copy when root
-owns it).
+checks `checksums.txt` against the signature of lockfile's release workflow run on the
+release's own tag (cosign), then the archive against it, then replaces the binary (with sudo
+from a pinned copy when root owns it). A release older than the running one is refused
+unless `--allow-downgrade`; `scripts/install.sh` likewise refuses to replace a newer
+installed binary unless `LOCKFILE_ALLOW_DOWNGRADE=1`.
+
+A marketplace index older than the last one verified for that marketplace is refused (a
+replayed index could lift a yank); the last `generated` time of each marketplace is kept next
+to `plugins.lock`.

@@ -13,6 +13,7 @@ import (
 
 	"github.com/DavidGodefroid/lockkit/sanitize"
 
+	"github.com/DavidGodefroid/lockfile/index"
 	"github.com/DavidGodefroid/lockfile/internal/marketplace"
 	"github.com/DavidGodefroid/lockfile/internal/plugin"
 	"github.com/DavidGodefroid/lockfile/internal/product"
@@ -69,7 +70,10 @@ func findMarketplace(name string) (marketplace.Marketplace, error) {
 
 // staged downloads and verifies a plugin version into a staging store and
 // returns its lock entry, binary and manifest.
-func staged(ctx context.Context, home string, m marketplace.Marketplace, name, version string) (plugin.LockEntry, []byte, []byte, pluginspec.Manifest, error) {
+// The verified index it reads refreshes the yanked status of store's
+// plugins of that marketplace.
+func staged(ctx context.Context, e env, store plugin.Store, m marketplace.Marketplace, name, version string) (plugin.LockEntry, []byte, []byte, pluginspec.Manifest, error) {
+	home := store.Dir
 	if err := os.MkdirAll(home, 0o700); err != nil {
 		return plugin.LockEntry{}, nil, nil, pluginspec.Manifest{}, err
 	}
@@ -79,7 +83,9 @@ func staged(ctx context.Context, home string, m marketplace.Marketplace, name, v
 	}
 	stage := plugin.Store{Dir: dir}
 	defer stage.RemoveAll()
-	ent, err := installer(stage).Install(ctx, m, name, version)
+	inst := installer(stage)
+	inst.OnIndex, inst.StateDir = yankRefresher(e, store), store.Dir
+	ent, err := inst.Install(ctx, m, name, version)
 	if err != nil {
 		return plugin.LockEntry{}, nil, nil, pluginspec.Manifest{}, err
 	}
@@ -97,6 +103,44 @@ func staged(ctx context.Context, home string, m marketplace.Marketplace, name, v
 		return plugin.LockEntry{}, nil, nil, pluginspec.Manifest{}, err
 	}
 	return ent, bin, man, in.Manifest, nil
+}
+
+// yankRefresher persists into store the yanked status a verified index
+// gives the installed plugins of its marketplace, and says what changed.
+func yankRefresher(e env, store plugin.Store) func(marketplace.Marketplace, index.Index) error {
+	return func(m marketplace.Marketplace, idx index.Index) error {
+		changed, err := marketplace.MarkYanked(store, m, idx)
+		for _, c := range changed {
+			if c.Yanked {
+				fmt.Fprintln(e.stdout, red("YANKED "+c.Name+"@"+c.Version+": withdrawn by its marketplace, it no longer runs (lockfile plugin update)"))
+			} else {
+				fmt.Fprintln(e.stdout, c.Name+"@"+c.Version+": no longer yanked by its marketplace")
+			}
+		}
+		return err
+	}
+}
+
+// refreshYanked reads the signed index of every marketplace with an
+// installed plugin and records yanked versions. A marketplace that cannot
+// be read keeps its recorded status.
+func refreshYanked(ctx context.Context, e env, store plugin.Store, installed []plugin.Installed) {
+	seen := map[string]bool{}
+	for _, in := range installed {
+		if seen[in.Marketplace] {
+			continue
+		}
+		seen[in.Marketplace] = true
+		m, err := findMarketplace(in.Marketplace)
+		if err == nil {
+			inst := installer(store)
+			inst.OnIndex = yankRefresher(e, store)
+			_, err = inst.Index(ctx, m)
+		}
+		if err != nil {
+			fmt.Fprintln(e.stdout, yellow("could not refresh the yanked status from marketplace "+in.Marketplace+": "+sanitize.Terminal(err.Error(), false)))
+		}
+	}
 }
 
 func pluginInstall(e env, args []string, update bool) int {
@@ -161,7 +205,7 @@ func pluginInstall(e env, args []string, update bool) int {
 	}
 	ctx, stop := agentContext()
 	defer stop()
-	ent, bin, man, mf, err := staged(ctx, store.Dir, m, name, version)
+	ent, bin, man, mf, err := staged(ctx, e, store, m, name, version)
 	if errors.Is(err, marketplace.ErrYanked) {
 		return failHuman(e, cmd, fmt.Errorf("%s@%s was withdrawn by its marketplace (yanked)", qualified, version))
 	}
@@ -222,6 +266,9 @@ func pluginList(e env, args []string) int {
 	if len(args) != 0 {
 		return usageErr(e, pluginUsage)
 	}
+	if err := serviceAccount(); err != nil {
+		return failHuman(e, "plugin list", err)
+	}
 	store, err := pluginStore()
 	if err != nil {
 		return failHuman(e, "plugin list", err)
@@ -242,6 +289,9 @@ func pluginList(e env, args []string) int {
 			fmt.Fprintln(e.stdout, head+"  "+red("TAMPERED: lockfile plugin verify"))
 			continue
 		}
+		if in.Yanked {
+			head += "  " + red("YANKED: lockfile plugin update")
+		}
 		fmt.Fprintln(e.stdout, head)
 		fmt.Fprintln(e.stdout, "  ? "+sanitize.Terminal(in.Manifest.Question, false))
 	}
@@ -252,6 +302,10 @@ func pluginVerify(e env, args []string) int {
 	if len(args) > 1 {
 		return usageErr(e, pluginUsage)
 	}
+	// From another account the store is empty: "ok" would be false assurance.
+	if err := serviceAccount(); err != nil {
+		return failHuman(e, "plugin verify", err)
+	}
 	store, err := pluginStore()
 	if err != nil {
 		return failHuman(e, "plugin verify", err)
@@ -260,6 +314,12 @@ func pluginVerify(e env, args []string) int {
 	if err != nil {
 		return failHuman(e, "plugin verify", err)
 	}
+	// The yanked status is refreshed from the signed indexes.
+	if len(installed) > 0 {
+		ctx, stop := agentContext()
+		refreshYanked(ctx, e, store, installed)
+		stop()
+	}
 	bad, seen := 0, false
 	for _, in := range installed {
 		if len(args) == 1 && in.Name != args[0] {
@@ -267,6 +327,11 @@ func pluginVerify(e env, args []string) int {
 		}
 		seen = true
 		f, _, err := store.Open(in.Name)
+		if errors.Is(err, plugin.ErrYanked) {
+			bad++
+			fmt.Fprintln(e.stdout, red("YANKED")+" "+in.Name+"@"+in.Version+": withdrawn by its marketplace (lockfile plugin update)")
+			continue
+		}
 		if err != nil {
 			bad++
 			fmt.Fprintln(e.stdout, red("TAMPERED")+" "+in.Name+"@"+in.Version+": reinstall it (lockfile plugin remove, then install)")

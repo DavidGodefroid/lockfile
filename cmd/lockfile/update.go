@@ -15,11 +15,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/DavidGodefroid/lockkit/update"
 
+	"github.com/DavidGodefroid/lockfile/internal/marketplace"
 	"github.com/DavidGodefroid/lockfile/internal/product"
 	"github.com/DavidGodefroid/lockfile/internal/separate"
 )
@@ -28,11 +31,40 @@ func init() {
 	commands["update"] = command{human: true, help: "install the latest signed release [--check]", run: runUpdate}
 }
 
-// releaseIdentity is the signer of lockfile's releases: its release
+// releaseWorkflow is the signer of lockfile's releases: its release
 // workflow, run on a version tag.
-var releaseIdentity = update.Identity{
-	CertIdentityRegexp: `^https://github\.com/DavidGodefroid/lockfile/\.github/workflows/release\.yml@refs/tags/v[0-9]`,
-	OIDCIssuer:         "https://token.actions.githubusercontent.com",
+const releaseWorkflow = `^https://github\.com/DavidGodefroid/lockfile/\.github/workflows/release\.yml@refs/tags/`
+
+// releaseTag is an exact release tag vX.Y.Z.
+var releaseTag = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
+
+// releaseIdentity binds the signature to the release's own tag: a
+// checksums.txt signed by the run of another (older) tag does not verify.
+func releaseIdentity(tag string) update.Identity {
+	return update.Identity{
+		CertIdentityRegexp: releaseWorkflow + regexp.QuoteMeta(tag) + "$",
+		OIDCIssuer:         "https://token.actions.githubusercontent.com",
+	}
+}
+
+// compareTags compares two vX.Y.Z tags; ok is false when either is not one
+// (a development build).
+func compareTags(a, b string) (cmp int, ok bool) {
+	ma, mb := releaseTag.FindStringSubmatch(a), releaseTag.FindStringSubmatch(b)
+	if ma == nil || mb == nil {
+		return 0, false
+	}
+	for i := 1; i <= 3; i++ {
+		x, _ := strconv.Atoi(ma[i])
+		y, _ := strconv.Atoi(mb[i])
+		if x != y {
+			if x < y {
+				return -1, true
+			}
+			return 1, true
+		}
+	}
+	return 0, true
 }
 
 const latestRelease = "https://api.github.com/repos/DavidGodefroid/lockfile/releases/latest"
@@ -78,7 +110,7 @@ func download(ctx context.Context, c *http.Client, url string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	resp, err := c.Do(req)
+	resp, err := marketplace.SafeClient(c).Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -122,8 +154,9 @@ func runUpdate(e env, args []string) int {
 	fs.SetOutput(io.Discard)
 	check := fs.Bool("check", false, "only tell whether a newer release exists")
 	yes := fs.Bool("yes", false, "replace the binary without asking")
+	force := fs.Bool("allow-downgrade", false, "install a release older than this one")
 	if err := fs.Parse(args); err != nil || fs.NArg() != 0 {
-		return usageErr(e, "update [--check] [--yes]")
+		return usageErr(e, "update [--check] [--yes] [--allow-downgrade]")
 	}
 	h := updateHooks{latest: latestRelease, http: http.DefaultClient, goos: runtime.GOOS, goarch: runtime.GOARCH}
 	if testUpdateHooks != nil {
@@ -136,12 +169,17 @@ func runUpdate(e env, args []string) int {
 		return failHuman(e, "update", err)
 	}
 	var rel release
-	if err := json.Unmarshal(body, &rel); err != nil || !strings.HasPrefix(rel.Tag, "v") {
+	if err := json.Unmarshal(body, &rel); err != nil || !releaseTag.MatchString(rel.Tag) {
 		return failHuman(e, "update", errors.New("unexpected answer from the release API"))
 	}
 	if rel.Tag == product.Version {
 		fmt.Fprintln(e.stdout, "lockfile "+product.Version+" is the latest release")
 		return product.ExitOK
+	}
+	if c, ok := compareTags(rel.Tag, product.Version); ok && c < 0 && !*force {
+		// An older signed release is still validly signed: refuse it, or a
+		// replayed answer would roll back fixes.
+		return failHuman(e, "update", fmt.Errorf("the release offered (%s) is older than this one (%s): nothing installed (--allow-downgrade to force)", rel.Tag, product.Version))
 	}
 	fmt.Fprintf(e.stdout, "lockfile %s is available (this is %s)\n", rel.Tag, product.Version)
 	if *check {
@@ -163,7 +201,7 @@ func runUpdate(e env, args []string) int {
 		return failHuman(e, "update", err)
 	}
 	// The signature first: nothing else of the release is trusted before.
-	if err := update.Verify(ctx, sums, bundle, releaseIdentity, update.Options{Cosign: h.cosign}); err != nil {
+	if err := update.Verify(ctx, sums, bundle, releaseIdentity(rel.Tag), update.Options{Cosign: h.cosign}); err != nil {
 		if errors.Is(err, update.ErrCosignMissing) {
 			return failHuman(e, "update", fmt.Errorf("%w: nothing installed", err))
 		}

@@ -1,6 +1,6 @@
 // Package rpc holds the wire types of lockfile's console methods, shared by
 // the console's backend and its clients (CLI and MCP). Every result is
-// built from the closed list of design §7b.
+// built from the closed list of docs/security-model.md.
 package rpc
 
 // Method names. lockkit serves hello, status, change.request and logout.
@@ -76,13 +76,19 @@ type PluginInfo struct {
 type Status struct {
 	Protocol int    `json:"protocol"`
 	Sandbox  string `json:"sandbox"` // "ok" or "unavailable"
+	// AnswerQuantumMS is the approved answer_quantum, in milliseconds (0:
+	// unknown). Clients pace their run heartbeats on it.
+	AnswerQuantumMS int64 `json:"answer_quantum_ms,omitempty"`
 }
+
+// MaxQuantumMS bounds the answer quantum a client accepts from a status.
+const MaxQuantumMS = 3_600_000
 
 // Source is a running console's profile.
 type Source struct {
 	Profile    string `json:"profile"`
 	Production bool   `json:"production"`
-	// Busy: the console is waiting for the human on another request, so
-	// Production is not known yet.
+	// Busy: the console is serving another request (a plan waiting for the
+	// human, or a run until its quantum), so Production is not known yet.
 	Busy bool `json:"busy,omitempty"`
 }

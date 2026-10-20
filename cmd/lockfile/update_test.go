@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -110,8 +111,82 @@ func TestUpdateVerifiesBeforeReplace(t *testing.T) {
 		t.Fatalf("binary %q", b)
 	}
 	argv, _ := os.ReadFile(log)
-	if !strings.Contains(string(argv), `^https://github\.com/DavidGodefroid/lockfile/\.github/workflows/release\.yml@refs/tags/v[0-9]`) {
-		t.Fatalf("identity not checked:\n%s", argv)
+	// The identity is bound to the release's own tag, anchored.
+	if !strings.Contains(string(argv), `^https://github\.com/DavidGodefroid/lockfile/\.github/workflows/release\.yml@refs/tags/v9\.9\.9$`+"\n") {
+		t.Fatalf("identity not bound to the tag:\n%s", argv)
+	}
+}
+
+func TestUpdateRefusesDowngrade(t *testing.T) {
+	srv := releaseServer(t, []byte("new binary"), "")
+	good, _ := fakeCosignBin(t, 0)
+	target := updateEnv(t, srv, good)
+	old := product.Version
+	product.Version = "v10.0.0"
+	t.Cleanup(func() { product.Version = old })
+	code, _, errText := runArgs(t, "", "update", "--yes")
+	if b, _ := os.ReadFile(target); code != product.ExitError || string(b) != "old binary" || !strings.Contains(errText, "older than this one") {
+		t.Fatalf("downgrade: exit %d, binary %q: %s", code, b, errText)
+	}
+	if code, out, errText := runArgs(t, "", "update", "--yes", "--allow-downgrade"); code != 0 {
+		t.Fatalf("forced downgrade: exit %d: %s %s", code, out, errText)
+	}
+	if b, _ := os.ReadFile(target); string(b) != "new binary" {
+		t.Fatalf("binary %q", b)
+	}
+}
+
+func TestDownloadRefusesRedirectToHTTP(t *testing.T) {
+	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("plain")) }))
+	t.Cleanup(plain.Close)
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, plain.URL+"/latest", http.StatusFound)
+	}))
+	t.Cleanup(srv.Close)
+	if b, err := download(context.Background(), srv.Client(), srv.URL+"/latest"); err == nil {
+		t.Fatalf("followed a redirect to http: %q", b)
+	}
+}
+
+func TestCompareTags(t *testing.T) {
+	for _, tc := range []struct {
+		a, b string
+		cmp  int
+		ok   bool
+	}{
+		{"v1.2.3", "v1.2.3", 0, true},
+		{"v1.10.0", "v1.9.9", 1, true},
+		{"v0.2.0", "v0.10.0", -1, true},
+		{"v1.0.0", "dev", 0, false},
+		{"v1.0.0-rc1", "v1.0.0", 0, false},
+		{"v01.0.0", "v1.0.0", 0, false},
+	} {
+		if c, ok := compareTags(tc.a, tc.b); c != tc.cmp || ok != tc.ok {
+			t.Errorf("compareTags(%s, %s) = %d %v", tc.a, tc.b, c, ok)
+		}
+	}
+}
+
+// install.sh is checked as text, never executed: its signer identity is
+// bound to the tag it installs, the tag is an exact vX.Y.Z, and it refuses
+// a downgrade of an installed binary unless asked.
+func TestInstallScriptBindsTagAndRefusesDowngrade(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "..", "scripts", "install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	for _, want := range []string{
+		`identity="^https://github\\.com/DavidGodefroid/lockfile/\\.github/workflows/release\\.yml@refs/tags/$(printf '%s' "$tag" | sed 's/\./\\./g')\$"`,
+		`*[!0-9.]* | .* | *. | *..*) die "invalid release tag $tag" ;;`,
+		`LOCKFILE_ALLOW_DOWNGRADE`,
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("install.sh lacks %s", want)
+		}
+	}
+	if strings.Contains(s, `refs/tags/v[0-9]'`) {
+		t.Error("install.sh still accepts any v[0-9] tag")
 	}
 }
 

@@ -37,6 +37,8 @@ var refusals = map[answers.Code]refusalDef{
 		"a plugin version was withdrawn by its marketplace", "ask the user to update the plugin"},
 	answers.CodeSandboxUnavailable: {"E_SANDBOX_UNAVAILABLE", refusal.RetryStop,
 		"the plugin sandbox is unavailable", "tell the user to run lockfile doctor"},
+	answers.CodeProcNotHidden: {"E_PROC_NOT_HIDDEN", refusal.RetryStop,
+		"other accounts can watch the plugins' processes in /proc", "tell the user to run lockfile doctor"},
 	answers.CodeHandleExpired: {"E_HANDLE_EXPIRED", refusal.RetryRewrite,
 		"the handle expired or was released", "plan again with the key"},
 }
@@ -74,7 +76,7 @@ func Refuse(id int64, c answers.Code) ipc.Response {
 }
 
 // ApprovalRefusal replaces lockkit's refusal of an approval with a fixed
-// message: the outcome only (design §7b), never the human's typed reason,
+// message: the outcome only (docs/security-model.md), never the human's typed reason,
 // which lockkit already keeps in the audit.
 func ApprovalRefusal(id int64, r ipc.Response) ipc.Response {
 	if r.Error != nil && r.Error.Code == ipc.CodeTimeout {

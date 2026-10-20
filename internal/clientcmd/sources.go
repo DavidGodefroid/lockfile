@@ -41,7 +41,33 @@ func GetStatus(ctx context.Context, profile string) (Status, error) {
 	if err := call(ctx, profile, ipc.MethodStatus, nil, &out); err != nil {
 		return Status{}, err
 	}
+	if out.Profile != profile || !validStatus(out.Product) {
+		return Status{}, errBadResult()
+	}
 	return out, nil
+}
+
+// Quantum is profile's approved answer quantum as its console reports it,
+// or 0 when it does not answer within the probe timeout.
+func Quantum(ctx context.Context, profile string) time.Duration {
+	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
+	defer cancel()
+	st, err := GetStatus(ctx, profile)
+	if err != nil {
+		return 0
+	}
+	return time.Duration(st.Product.AnswerQuantumMS) * time.Millisecond
+}
+
+// HeartbeatEvery is the interval of a run's progress notifications for
+// quantum q: q itself, or q divided into equal parts under the 10 s that
+// lockkit's mcpkit.Progress accepts, so that a heartbeat falls on every
+// quantum boundary. 0 (unknown q) leaves lockkit's default.
+func HeartbeatEvery(q time.Duration) time.Duration {
+	if q <= 0 {
+		return 0
+	}
+	return q / (q/(10*time.Second) + 1)
 }
 
 // StatusEntry is one profile's line of a status report: its console's
@@ -49,8 +75,11 @@ func GetStatus(ctx context.Context, profile string) (Status, error) {
 type StatusEntry struct {
 	Profile string  `json:"profile"`
 	Console *Status `json:"console,omitempty"`
-	Error   string  `json:"error,omitempty"`
-	Hint    string  `json:"hint,omitempty"`
+	// Busy: the console is serving another request (waiting for the human
+	// on a plan, or a run until its quantum) and did not answer in time.
+	Busy  bool   `json:"busy,omitempty"`
+	Error string `json:"error,omitempty"`
+	Hint  string `json:"hint,omitempty"`
 }
 
 // Statuses reports on profile, or on every running console when it is "".
@@ -69,9 +98,16 @@ func Statuses(ctx context.Context, profile string) (out []StatusEntry, ok bool, 
 	}
 	out, ok = []StatusEntry{}, len(profiles) > 0
 	for _, p := range profiles {
-		st, err := GetStatus(ctx, p)
+		pctx, cancel := context.WithTimeout(ctx, probeTimeout)
+		st, err := GetStatus(pctx, p)
+		cancel()
 		if err == nil {
 			out = append(out, StatusEntry{Profile: p, Console: &st})
+			continue
+		}
+		if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+			// Alive, serving another request: it answers later.
+			out = append(out, StatusEntry{Profile: p, Busy: true})
 			continue
 		}
 		ok = false
@@ -95,8 +131,16 @@ func StatusLines(out []StatusEntry) []string {
 	}
 	var lines []string
 	for _, en := range out {
+		if en.Busy {
+			lines = append(lines, en.Profile+": console up, busy with another request (waiting for the human or a run)")
+			continue
+		}
 		if en.Console == nil {
-			lines = append(lines, fmt.Sprintf("%s: %s; %s", en.Profile, en.Error, en.Hint))
+			l := en.Profile + ": " + en.Error
+			if en.Hint != "" {
+				l += "; " + en.Hint
+			}
+			lines = append(lines, l)
 			continue
 		}
 		s := en.Console
@@ -116,9 +160,10 @@ func yesNo(b bool) string {
 // NoConsoleText says that no console runs and how to start one.
 var NoConsoleText = "no lockfile console is running: ask the user to start one in the lockfile account (" + StartCommand("NAME") + ")"
 
-// probeTimeout bounds the status call of each socket in Sources. A console
-// serves one request at a time: one waiting for the human answers later,
-// and is listed as busy.
+// probeTimeout bounds the status call of each console in Sources and
+// Statuses. A console serves one request at a time: one serving another
+// request (a plan waiting for the human, a run until its quantum) answers
+// later, and is reported busy.
 var probeTimeout = 2 * time.Second
 
 // socketDir is where the consoles' sockets are: the shared directory of a
@@ -233,7 +278,7 @@ func helloProfile(ctx context.Context, path string) (string, bool) {
 	return resp.Result.Profile, true
 }
 
-// SourceNames lists the profiles of the running consoles (mcpkit.Profiles).
+// SourceNames lists the profiles of the running consoles.
 func SourceNames() ([]string, error) {
 	src, err := Sources(context.Background())
 	if err != nil {
@@ -246,32 +291,69 @@ func SourceNames() ([]string, error) {
 	return names, nil
 }
 
+// Fixed texts of Resolve; lockkit's own texts name config files that
+// lockfile does not have, so they are never passed on.
+const (
+	pinnedText  = "this lockfile MCP server is pinned to one profile: leave the profile out"
+	severalText = "several lockfile consoles are running: pass the profile (lockfile sources lists them)"
+)
+
+// pinnedProfile is the profile of a pinned MCP server's call: lockkit's
+// rule (the argument may only repeat the pinned profile), lockfile's text.
+func pinnedProfile(pinned, arg string) (string, error) {
+	p, err := mcpkit.Profiles{Product: product.P, Pinned: pinned}.Resolve(arg)
+	if err != nil {
+		return "", &Error{Kind: KindOther, Msg: pinnedText}
+	}
+	return p, nil
+}
+
+// StatusProfile is the profile a status call reports on: a pinned
+// server's (the argument may only repeat it), else arg ("" for every
+// running console).
+func StatusProfile(pinned, arg string) (string, error) {
+	if pinned == "" {
+		return arg, nil
+	}
+	return pinnedProfile(pinned, arg)
+}
+
+// socketExists reports whether profile's console socket is there. A
+// console serving another request does not answer the probe, and one whose
+// socket name is hashed cannot be named without that answer, so Sources
+// may leave out a console that runs.
+func socketExists(profile string) bool {
+	p, err := client.SocketPath(product.P, "/", profile)
+	if err != nil {
+		return false
+	}
+	fi, err := os.Lstat(p)
+	return err == nil && fi.Mode()&os.ModeSocket != 0
+}
+
 // Resolve picks the profile of a call: pinned (MCP --profile), given, or
-// the only running console's. A given profile no console serves is the
-// unknown_profile refusal naming its start command.
+// the only running console's, probing the consoles once. A given profile
+// no console serves is the unknown_profile refusal naming its start
+// command.
 func Resolve(pinned, arg string) (string, error) {
-	if pinned == "" && arg != "" {
-		names, err := SourceNames()
-		if err != nil {
-			return "", err
-		}
-		if !slices.Contains(names, arg) {
+	if pinned != "" {
+		return pinnedProfile(pinned, arg)
+	}
+	names, err := SourceNames()
+	if err != nil {
+		return "", err
+	}
+	if arg != "" {
+		if !slices.Contains(names, arg) && !socketExists(arg) {
 			return "", unknownProfile(arg)
 		}
 		return arg, nil
 	}
-	if pinned == "" {
-		names, err := SourceNames()
-		if err != nil {
-			return "", err
-		}
-		if len(names) == 0 {
-			return "", &Error{Kind: KindNoConsole, Msg: NoConsoleText}
-		}
+	switch len(names) {
+	case 0:
+		return "", &Error{Kind: KindNoConsole, Msg: NoConsoleText}
+	case 1:
+		return names[0], nil
 	}
-	p, err := mcpkit.Profiles{Product: product.P, Pinned: pinned, List: SourceNames}.Resolve(arg)
-	if err != nil {
-		return "", &Error{Kind: KindOther, Msg: err.Error()}
-	}
-	return p, nil
+	return "", &Error{Kind: KindOther, Msg: severalText}
 }

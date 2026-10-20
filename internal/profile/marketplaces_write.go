@@ -150,6 +150,11 @@ var (
 	nameLine    = regexp.MustCompile(`^\s*name\s*=\s*["']([^"']*)["']\s*(#.*)?$`)
 )
 
+func commentOrBlank(line string) bool {
+	l := strings.TrimSpace(line)
+	return l == "" || strings.HasPrefix(l, "#")
+}
+
 // RemoveMarketplace cuts the [[marketplaces]] block named name from the
 // config file at path.
 func RemoveMarketplace(path, name string) error {
@@ -169,6 +174,11 @@ func RemoveMarketplace(path, name string) error {
 		end := i + 1
 		for end < len(lines) && !tableHeader.MatchString(lines[end]) {
 			end++
+		}
+		// Comments and blank lines at the end of the block belong to what
+		// follows (or to the file): the block stops at its last key line.
+		for end > i+1 && commentOrBlank(lines[end-1]) {
+			end--
 		}
 		match := false
 		for _, l := range lines[i+1 : end] {

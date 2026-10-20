@@ -89,12 +89,19 @@ func runInstall(e env, args []string) int {
 			return product.ExitError
 		}
 		fmt.Fprintf(e.stdout, "--trust-binary: copying %s (sha256 %s, checked again before it is installed)\n\n", bin, pin)
-	} else if msg, err := separate.SourceRefusal(product.P, bin); err != nil {
-		fmt.Fprintln(e.stderr, "lockfile install:", err)
-		return product.ExitError
-	} else if msg != "" {
-		fmt.Fprint(e.stderr, msg)
-		return product.ExitError
+	} else {
+		// A root-owned binary is pinned too: its directory may be the
+		// agent's, which could swap it between this check and sudo.
+		sum, msg, err := separate.SourceSum(product.P, bin)
+		if err != nil {
+			fmt.Fprintln(e.stderr, "lockfile install:", err)
+			return product.ExitError
+		}
+		if msg != "" {
+			fmt.Fprint(e.stderr, msg)
+			return product.ExitError
+		}
+		pin = sum
 	}
 	script := separate.Script(product.P, goos, bin, o, pin)
 	fmt.Fprintf(e.stdout, `lockfile install separates the console from the agent:

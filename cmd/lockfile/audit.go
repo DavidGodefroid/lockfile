@@ -40,8 +40,8 @@ func sinceTime(s string, now time.Time) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("--since %q: want a duration (24h) or a date (2026-10-19)", s)
 }
 
-// runAudit prints the audit log: the one place for file metadata (design
-// §10), read by the human in the console account only.
+// runAudit prints the audit log: the one place for file metadata (docs/security-model.md,
+// "Data at rest"), read by the human in the console account only.
 func runAudit(e env, args []string) int {
 	fs := flag.NewFlagSet("audit", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)

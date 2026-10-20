@@ -109,6 +109,32 @@ func TestSFTPPassword(t *testing.T) {
 	}
 }
 
+func TestSFTPKnownHostsInHome(t *testing.T) {
+	root := sftpRoot(t)
+	srv := testenv.NewSFTP(t, root, testenv.SFTPOptions{User: "reader", Password: "pw"})
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	kh, err := os.ReadFile(srv.KnownHosts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(home, ".ssh"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".ssh", "known_hosts"), kh, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p := sftpProfile(srv, profile.AuthPassword, "", root)
+	p.SFTP.KnownHosts = "~/.ssh/known_hosts"
+	s, err := connect(p, console.Credentials{User: "reader", Secret: []byte("pw")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := readAll(t, s, "a.pdf"); got != payload {
+		t.Fatalf("read %q", got)
+	}
+}
+
 func TestSFTPEncryptedKey(t *testing.T) {
 	pemKey, pub := testenv.ClientKey(t, []byte("passphrase"))
 	root := sftpRoot(t)

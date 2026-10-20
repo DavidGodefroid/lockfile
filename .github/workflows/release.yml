@@ -11,8 +11,28 @@ permissions:
   contents: read
 
 jobs:
+  on-main:
+    name: tag is on main
+    # Only reviewed code is released: the tagged commit must be on main.
+    # This check lives in the tagged commit's own workflow, so it is only as
+    # strong as the tag ruleset (v* tags: maintainers only) that keeps
+    # anyone else from tagging a commit whose workflow drops it.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: the tagged commit is an ancestor of main
+        run: |
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main; then
+            echo "::error::$GITHUB_REF_NAME ($GITHUB_SHA) is not on main: nothing released"
+            exit 1
+          fi
+
   test:
     name: test before release
+    needs: on-main
     # The sandbox tests need Landlock and seccomp from the kernel.
     runs-on: ubuntu-24.04
     env:
@@ -30,7 +50,7 @@ jobs:
 
   goreleaser:
     name: goreleaser
-    needs: test
+    needs: [on-main, test]
     runs-on: ubuntu-latest
     permissions:
       contents: write # create the GitHub release and upload assets

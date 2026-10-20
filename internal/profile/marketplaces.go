@@ -15,7 +15,7 @@ import (
 	"github.com/DavidGodefroid/lockfile/internal/verify"
 )
 
-// RawMarketplace is one [[marketplaces]] entry (design §9).
+// RawMarketplace is one [[marketplaces]] entry (docs/usage.md).
 type RawMarketplace struct {
 	Name           string `toml:"name"`
 	IndexURL       string `toml:"index_url"`
@@ -78,4 +78,72 @@ func parseMarketplace(r RawMarketplace) (Trust, error) {
 		return Trust{}, fmt.Errorf("marketplace %s: oidc_issuer must be an https:// URL", r.Name)
 	}
 	return Trust{Name: r.Name, IndexURL: r.IndexURL, IdentityRegexp: r.IdentityRegexp, OIDCIssuer: r.OIDCIssuer}, nil
+}
+
+// SignerWarnings lists the weaknesses of an identity_regexp that let other
+// signers in: an unescaped '.' between two name characters
+// ("github.com" also matches "githubXcom"), and a literal prefix that does
+// not pin host, owner and repository each followed by '/'
+// ("^https://github\.com/acme" also matches "acme-evil").
+func SignerWarnings(re string) []string {
+	var out []string
+	if unescapedDot(re) {
+		out = append(out, `the signer pattern has an unescaped "." (it matches any character): write \.`)
+	}
+	lit := literalPrefix(strings.TrimPrefix(re, "^"))
+	if rest, ok := strings.CutPrefix(lit, "https://"); !ok || strings.Count(rest, "/") < 3 {
+		out = append(out, "the signer pattern does not pin a repository path ending in '/' (https://HOST/OWNER/REPO/...): other repositories match it")
+	}
+	return out
+}
+
+func isNameChar(c byte) bool {
+	return c == '-' || c == '_' || (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+}
+
+// unescapedDot reports a '.' outside a character class, not escaped,
+// between two name characters.
+func unescapedDot(re string) bool {
+	inClass := false
+	for i := 0; i < len(re); i++ {
+		switch c := re[i]; {
+		case c == '\\':
+			i++
+		case inClass:
+			if c == ']' {
+				inClass = false
+			}
+		case c == '[':
+			inClass = true
+		case c == '.' && i > 0 && i+1 < len(re) && isNameChar(re[i-1]) && isNameChar(re[i+1]):
+			return true
+		}
+	}
+	return false
+}
+
+// literalPrefix is the text re matches literally at its start: escaped
+// punctuation is unescaped, and it stops at the first operator.
+func literalPrefix(re string) string {
+	var b strings.Builder
+	for i := 0; i < len(re); i++ {
+		c := re[i]
+		switch {
+		case c == '\\' && i+1 < len(re) && !isNameChar(re[i+1]):
+			i++
+			b.WriteByte(re[i])
+		case c == '*' || c == '?' || c == '{' || c == '|':
+			// The previous character (or, for |, everything) is optional.
+			s := b.String()
+			if c == '|' || s == "" {
+				return ""
+			}
+			return s[:len(s)-1]
+		case strings.IndexByte(`\.[]()+}$^`, c) >= 0:
+			return b.String()
+		default:
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
 }

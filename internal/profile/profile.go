@@ -1,4 +1,4 @@
-// Package profile reads lockfile's configuration (design §4) on lockkit's
+// Package profile reads lockfile's configuration (docs/usage.md) on lockkit's
 // config base: source profiles, limits and marketplaces, from the config
 // file of the lockfile account. It never reads a secret: credentials come
 // from the console (ask, the OS keychain or Vault).
@@ -36,13 +36,17 @@ const (
 	AuthPassword = "password"
 )
 
-// Defaults of design §4 and §7b.
+// Defaults, as docs/usage.md lists them.
 const (
 	DefaultMaxObjectBytes      = 50 << 20
 	DefaultMaxObjectsPerPlan   = 5
 	DefaultMaxPluginsPerHandle = 16
 	DefaultHandleTTL           = 30 * time.Minute
 	DefaultAnswerQuantum       = 5 * time.Second
+	// DefaultIdleTimeout and DefaultMaxSession are lockkit's console
+	// defaults, applied here so the approved policy states them.
+	DefaultIdleTimeout = 20 * time.Minute
+	DefaultMaxSession  = 4 * time.Hour
 	MaxPluginsPerHandleCap     = 64
 	DefaultSFTPPort            = 22
 	httpsPort                  = 443
@@ -117,6 +121,18 @@ type Workspace struct {
 	MaxBytes int64  `json:"max_bytes"`
 }
 
+// DefaultMaxWorkspaceBytes bounds all fetched files together.
+const DefaultMaxWorkspaceBytes = 1 << 30
+
+// withDefaults fills a zero MaxBytes (a policy approved before the
+// workspace was part of it).
+func (w Workspace) withDefaults() Workspace {
+	if w.MaxBytes <= 0 {
+		w.MaxBytes = DefaultMaxWorkspaceBytes
+	}
+	return w
+}
+
 // File is a decoded, validated config file.
 type File struct {
 	Workspace    Workspace
@@ -144,7 +160,7 @@ func Parse(data []byte, name string) (*File, error) {
 	if raw.WorkDir != "" && !filepath.IsAbs(raw.WorkDir) {
 		return nil, fmt.Errorf("config: %s: work_dir must be absolute", name)
 	}
-	f.Workspace.MaxBytes = 1 << 30
+	f.Workspace.MaxBytes = DefaultMaxWorkspaceBytes
 	if raw.MaxWorkspaceBytes != "" {
 		n, err := pluginspec.ParseBytes(raw.MaxWorkspaceBytes)
 		if err != nil || n <= 0 {
@@ -203,12 +219,15 @@ func parseProfile(name string, r RawProfile) (Profile, error) {
 	if p.CredentialsTTL, err = duration("credentials_ttl", r.CredentialsTTL, 0); err != nil {
 		return Profile{}, err
 	}
-	if p.IdleTimeout, err = duration("idle_timeout", r.IdleTimeout, 0); err != nil {
+	// lockkit reads 0 as its default; state the default so that removing a
+	// value diffs as the longer timer it really is.
+	if p.IdleTimeout, err = duration("idle_timeout", r.IdleTimeout, DefaultIdleTimeout); err != nil {
 		return Profile{}, err
 	}
-	if p.MaxSession, err = duration("max_session", r.MaxSession, 0); err != nil {
+	if p.MaxSession, err = duration("max_session", r.MaxSession, DefaultMaxSession); err != nil {
 		return Profile{}, err
 	}
+	p.Base = withTimerDefaults(p.Base)
 	if p.HandleTTL, err = duration("handle_ttl", r.HandleTTL, DefaultHandleTTL); err != nil {
 		return Profile{}, err
 	}
@@ -251,6 +270,18 @@ func parseProfile(name string, r RawProfile) (Profile, error) {
 		return Profile{}, errors.New(`vault_path is set but credentials is not "vault"`)
 	}
 	return p, nil
+}
+
+// withTimerDefaults replaces a zero idle_timeout or max_session (lockkit's
+// "default") with the default it stands for.
+func withTimerDefaults(b config.Base) config.Base {
+	if b.IdleTimeout == 0 {
+		b.IdleTimeout = DefaultIdleTimeout
+	}
+	if b.MaxSession == 0 {
+		b.MaxSession = DefaultMaxSession
+	}
+	return b
 }
 
 func orDefault(v, def int) int {

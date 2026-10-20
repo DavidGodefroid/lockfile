@@ -84,7 +84,7 @@ func runConsole(e env, args []string) int {
 		// Runs are released at the profile's answer quantum by the backend;
 		// the other answers say nothing about a file.
 		Quantum:   -1,
-		Sanitizer: backend.Sanitizer(),
+		Sanitizer: b.Sanitizer(),
 		Isolation: h.isolation, Harden: h.harden, Ready: h.ready,
 	})
 	if err != nil && !errors.Is(err, context.Canceled) {

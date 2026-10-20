@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/DavidGodefroid/lockfile/internal/answers"
 	"github.com/DavidGodefroid/lockfile/internal/plugin"
+	"github.com/DavidGodefroid/lockfile/internal/procmount"
 	"github.com/DavidGodefroid/lockfile/internal/product"
 	"github.com/DavidGodefroid/lockfile/internal/profile"
 	"github.com/DavidGodefroid/lockfile/internal/rpc"
@@ -44,6 +46,9 @@ type fakeEnv struct {
 	records  []audit.Record
 	lines    []string
 	sessions int
+	// onSession runs inside Session, after run's pin check and before the
+	// plugins are opened.
+	onSession func()
 }
 
 func (e *fakeEnv) Approve(ctx context.Context, id int64, s console.Screen) console.Approval {
@@ -60,6 +65,9 @@ func (e *fakeEnv) ShowResults() bool   { return false }
 func (e *fakeEnv) UnmaskAllowed() bool { return false }
 func (e *fakeEnv) Session(ctx context.Context) (console.Session, error) {
 	e.sessions++
+	if e.onSession != nil {
+		e.onSession()
+	}
 	return e.b.source(), nil
 }
 func (e *fakeEnv) Lost()                  {}
@@ -140,7 +148,8 @@ func newHarness(t *testing.T, plugins ...string) *harness {
 		testenv.Install(t, store, p, bin, "Is it "+p+"?", 2)
 	}
 	b, err := New(Options{ConfigPath: cfg, Profile: "samples", StateDir: state, PluginDir: store.Dir,
-		WorkDir: filepath.Join(t.TempDir(), "work"), Probe: func() (int, bool, error) { return 4, true, nil }})
+		WorkDir: filepath.Join(t.TempDir(), "work"), Probe: func() (int, bool, error) { return 4, true, nil },
+		ProcHidden: func() error { return nil }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,6 +255,16 @@ func TestScreenContent(t *testing.T) {
 		if forbidden.MatchString(l) {
 			t.Errorf("screen line %q holds file information", l)
 		}
+	}
+
+	// A percent-encoded or uncleaned key: the human sees the key that will
+	// be fetched, and what the agent typed.
+	if _, resp := h.plan(t, rpc.PlanParams{Key: "invoices/./%61.pdf", Plugins: []string{"test.answer1"}}); resp.Error != nil {
+		t.Fatal(resp.Error)
+	}
+	body := h.env.screens[1].Body
+	if len(body) < 2 || body[0] != "key    invoices/a.pdf" || body[1] != "typed  invoices/./%61.pdf" {
+		t.Fatalf("encoded key screen:\n%s", strings.Join(body, "\n"))
 	}
 }
 
@@ -439,6 +458,47 @@ func TestRunAfterPolicyChange(t *testing.T) {
 	}
 }
 
+// A plugin update between run's pin check and the open of the plugin: the
+// runner checks the opened lock entry against the approved pin, so the new
+// code never answers.
+func TestRunPluginUpdatedAfterCheck(t *testing.T) {
+	h := newHarness(t, "test.answer1")
+	pr, _ := h.plan(t, rpc.PlanParams{Key: "invoices/a.pdf", Plugins: []string{"test.answer1"}})
+	other := testenv.BuildPlugin(t, "answer0")
+	h.env.onSession = func() { testenv.Install(t, h.store, "test.answer1", other, "Is it test.answer1?", 2) }
+	res, resp := h.runPlan(t, pr.PlanID)
+	if resp.Error != nil {
+		t.Fatal(resp.Error)
+	}
+	if len(res.Answers) != 1 || res.Answers[0].Result != nil || res.Answers[0].Error != "plugin_tampered" {
+		t.Fatalf("answers after an update = %+v", res.Answers)
+	}
+}
+
+// A version its marketplace yanked after install refuses to run: at plan
+// time with E_PLUGIN_YANKED, and per answer if yanked after approval.
+func TestYankedPluginRefused(t *testing.T) {
+	h := newHarness(t, "test.answer1")
+	yank := func() {
+		if _, err := h.store.MarkYanked(plugin.OfficialMarketplace, func(string, string) (bool, bool) { return true, true }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pr, _ := h.plan(t, rpc.PlanParams{Key: "invoices/a.pdf", Plugins: []string{"test.answer1"}})
+	h.env.onSession = yank
+	res, resp := h.runPlan(t, pr.PlanID)
+	if resp.Error != nil || len(res.Answers) != 1 || res.Answers[0].Result != nil || res.Answers[0].Error != "plugin_yanked" {
+		t.Fatalf("run after yank: %+v %+v", resp.Error, res.Answers)
+	}
+	_, resp = h.plan(t, rpc.PlanParams{Key: "invoices/a.pdf", Plugins: []string{"test.answer1"}})
+	if refusalCode(resp) != "plugin_yanked" {
+		t.Fatalf("plan of a yanked plugin: %+v", resp.Error)
+	}
+	if data, _ := json.Marshal(resp.Error.Data); !strings.Contains(string(data), "E_PLUGIN_YANKED") {
+		t.Fatalf("refusal data = %s", data)
+	}
+}
+
 func TestFetchFailureIsCode(t *testing.T) {
 	h := newHarness(t, "test.answer1")
 	h.src.err = errors.New("/srv/x/john.pdf: 4821 bytes denied at sftp.example.org:22")
@@ -475,6 +535,24 @@ func TestQuantumAppliesToRun(t *testing.T) {
 	}
 	if d := time.Since(start); d < time.Second {
 		t.Fatalf("answered after %v, before the 1s quantum", d)
+	}
+}
+
+func TestQuantumAppliesToRelease(t *testing.T) {
+	h := newHarness(t, "test.answer1")
+	pr, _ := h.plan(t, rpc.PlanParams{Key: "invoices/a.pdf", Plugins: []string{"test.answer1"}})
+	res, _ := h.runPlan(t, pr.PlanID)
+	for _, c := range []struct {
+		handle, code string
+	}{{res.Handle, ""}, {"f_unknown000", "handle_expired"}} {
+		start := time.Now()
+		resp := h.call(peerCtx(1000), rpc.MethodRelease, rpc.HandleParams{Handle: c.handle})
+		if refusalCode(resp) != c.code {
+			t.Fatalf("release %s: %+v", c.handle, resp.Error)
+		}
+		if d := time.Since(start); d < time.Second {
+			t.Fatalf("release %s answered after %v, before the 1s quantum", c.handle, d)
+		}
 	}
 }
 
@@ -531,5 +609,98 @@ func TestChecksRefuseWithoutSandbox(t *testing.T) {
 	}
 	if st := h.b.Status(nil).(rpc.Status); st.Sandbox != "unavailable" {
 		t.Fatalf("status = %+v", st)
+	}
+}
+
+// /proc without hidepid=invisible lets the agent watch a running plugin:
+// the console refuses to start, and a plan already in flight is refused
+// with its own code (the mount may change after start).
+func TestProcNotHiddenRefuses(t *testing.T) {
+	h := newHarness(t, "test.answer1")
+	h.b.o.ProcHidden = func() error { return procmount.ErrNotHidden }
+	f := h.b.Checks(context.Background(), nil)
+	if len(f) != 1 || !f[0].Refuse || !strings.Contains(f[0].Text, "hidepid=invisible") || !strings.Contains(f[0].Text, "/etc/fstab") {
+		t.Fatalf("findings = %+v", f)
+	}
+	_, resp := h.plan(t, rpc.PlanParams{Key: "invoices/a.pdf", Plugins: []string{"test.answer1"}})
+	if refusalCode(resp) != "proc_not_hidden" || resp.Error.Data == nil || resp.Error.Data.Code != "E_PROC_NOT_HIDDEN" {
+		t.Fatalf("plan: %+v", resp.Error)
+	}
+	if len(h.env.screens) != 0 {
+		t.Fatalf("a refused plan reached the human")
+	}
+	h.b.o.ProcHidden = func() error { return nil }
+	if f := h.b.Checks(context.Background(), nil); len(f) != 0 {
+		t.Fatalf("hidden /proc: findings = %+v", f)
+	}
+}
+
+// Production reads the real mount table: the default is not a stub.
+func TestProcHiddenDefault(t *testing.T) {
+	h := newHarness(t)
+	b, err := New(Options{ConfigPath: h.b.o.ConfigPath, Profile: "samples", StateDir: t.TempDir(), PluginDir: h.b.o.PluginDir,
+		WorkDir: filepath.Join(t.TempDir(), "work")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	if got, want := fmt.Sprint(b.o.ProcHidden()), fmt.Sprint(procmount.CheckSystem()); got != want {
+		t.Fatalf("default ProcHidden = %v, CheckSystem = %v", got, want)
+	}
+}
+
+// The workspace limits come from the approved policy only: an edit of the
+// config file the human has not reviewed (handle_ttl 24h,
+// max_workspace_bytes 1) changes nothing, and a handle keeps the TTL it was
+// fetched with.
+func TestWorkspaceFollowsApprovedPolicy(t *testing.T) {
+	h := newHarness(t, "test.answer1")
+	approvedPol := h.env.policy
+	cfg := h.b.o.ConfigPath
+	raw, err := os.ReadFile(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	edited := "max_workspace_bytes = \"1\"\n" + string(raw) + "handle_ttl = \"24h\"\n"
+	if err := os.WriteFile(cfg, []byte(edited), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	var offset time.Duration
+	now := func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		return time.Now().Add(offset)
+	}
+	o := h.b.o
+	o.Now, o.WorkDir = now, filepath.Join(t.TempDir(), "work")
+	h.b.Close()
+	b, err := New(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { b.Close() })
+	if _, err := b.Connect(context.Background(), console.Credentials{}); err != nil {
+		t.Fatal(err)
+	}
+	h.b, h.env.b = b, b
+
+	pr, _ := h.plan(t, rpc.PlanParams{Key: "invoices/a.pdf", Plugins: []string{"test.answer1"}})
+	res, resp := h.runPlan(t, pr.PlanID)
+	if resp.Error != nil {
+		t.Fatalf("fetch under the approved 1 GiB budget: %+v", resp.Error)
+	}
+	// A longer TTL approved after the fetch does not extend the handle.
+	longer := *approvedPol
+	longer.P.HandleTTL = 24 * time.Hour
+	h.env.policy = &longer
+	if _, resp := h.plan(t, rpc.PlanParams{Handle: res.Handle, Plugins: []string{"test.answer1"}}); resp.Error != nil {
+		t.Fatalf("follow-up before expiry: %+v", resp.Error)
+	}
+	mu.Lock()
+	offset = profile.DefaultHandleTTL + time.Minute
+	mu.Unlock()
+	if resp := h.call(peerCtx(1000), rpc.MethodAnswers, rpc.HandleParams{Handle: res.Handle}); refusalCode(resp) != "handle_expired" {
+		t.Fatalf("handle alive past the approved TTL: %+v", resp.Error)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/DavidGodefroid/lockfile/internal/product"
+	"github.com/DavidGodefroid/lockfile/internal/separate"
 )
 
 func installEnv(t *testing.T, goos string) (*installHooks, *string) {
@@ -54,6 +55,39 @@ func TestInstallRefusesUserOwnedBinary(t *testing.T) {
 	code, _, errText := runArgs(t, "", "install", "--client", "agent", "--yes")
 	if code != product.ExitError || !strings.Contains(errText, "--trust-binary") || *ran != "" {
 		t.Fatalf("exit %d: %s", code, errText)
+	}
+}
+
+// Without --trust-binary, a root-owned binary is pinned as well: the
+// script copies it to a root-owned file and checks its sha256 first, so a
+// swap between the check and sudo installs nothing.
+func TestInstallPinsRootOwnedBinary(t *testing.T) {
+	h, ran := installEnv(t, "linux")
+	var root string
+	for _, p := range []string{"/usr/bin/env", "/bin/sh", "/usr/bin/true"} {
+		if fi, err := os.Stat(p); err == nil && fi.Mode().Perm()&0o022 == 0 {
+			if sum, msg, err := separate.SourceSum(product.P, p); err == nil && msg == "" && sum != "" {
+				root = p
+				break
+			}
+		}
+	}
+	if root == "" {
+		t.Skip("no root-owned, non-writable binary on this system")
+	}
+	h.executable = root
+	code, out, errText := runArgs(t, "", "install", "--client", "agent", "--yes")
+	if code != 0 {
+		t.Fatalf("exit %d: %s %s", code, out, errText)
+	}
+	sum, err := separate.FileSum(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"echo '" + sum + "  '\"$tmp\" | sha256sum -c -", `install -m 0755 -o root -g root "$tmp" /usr/local/bin/lockfile`} {
+		if !strings.Contains(*ran, want) {
+			t.Errorf("script lacks %q:\n%s", want, *ran)
+		}
 	}
 }
 

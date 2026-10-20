@@ -36,6 +36,14 @@ type Installer struct {
 	Verifier verify.Verifier
 	Store    plugin.Store
 	OS, Arch string
+	// OnIndex, when set, receives every index whose signature verified
+	// (to refresh the yanked status of installed plugins); its error
+	// aborts the operation.
+	OnIndex func(Marketplace, index.Index) error
+	// StateDir, when set, keeps the generated time of the last verified
+	// index of each marketplace: an older one (a replayed index, which could
+	// un-yank a version) is refused.
+	StateDir string
 }
 
 // Install downloads, verifies and installs one exact version of a plugin.
@@ -49,9 +57,6 @@ func (i Installer) Install(ctx context.Context, m Marketplace, name, version str
 	if !m.Official && m.Name == plugin.OfficialMarketplace {
 		return plugin.LockEntry{}, errors.New("marketplace: an unofficial marketplace cannot be named official")
 	}
-	if err := m.Root.Validate(); err != nil {
-		return plugin.LockEntry{}, err
-	}
 	tmp, err := os.MkdirTemp("", "lockfile-install-")
 	if err != nil {
 		return plugin.LockEntry{}, err
@@ -59,23 +64,9 @@ func (i Installer) Install(ctx context.Context, m Marketplace, name, version str
 	defer os.RemoveAll(tmp)
 
 	// 1. The index and its signature.
-	idxPath := filepath.Join(tmp, "index.json")
-	idxBytes, err := i.fetch(ctx, m.IndexURL, idxPath, maxIndex)
+	idx, err := i.index(ctx, m, tmp)
 	if err != nil {
 		return plugin.LockEntry{}, err
-	}
-	if _, err := i.fetch(ctx, m.IndexURL+".sigstore.json", idxPath+".sigstore.json", maxBundle); err != nil {
-		return plugin.LockEntry{}, err
-	}
-	if err := i.Verifier.VerifyBlob(ctx, idxPath, idxPath+".sigstore.json", m.Root); err != nil {
-		return plugin.LockEntry{}, fmt.Errorf("marketplace %s: index signature: %w", m.Name, err)
-	}
-	idx, err := index.Parse(idxBytes)
-	if err != nil {
-		return plugin.LockEntry{}, err
-	}
-	if idx.Marketplace != m.Name {
-		return plugin.LockEntry{}, fmt.Errorf("marketplace %s: index is for marketplace %q", m.Name, idx.Marketplace)
 	}
 	v, err := idx.Find(name, version)
 	if err != nil {
@@ -147,6 +138,66 @@ func (i Installer) Install(ctx context.Context, m Marketplace, name, version str
 	return e, nil
 }
 
+// Index downloads a marketplace's index and checks its signature.
+func (i Installer) Index(ctx context.Context, m Marketplace) (index.Index, error) {
+	tmp, err := os.MkdirTemp("", "lockfile-index-")
+	if err != nil {
+		return index.Index{}, err
+	}
+	defer os.RemoveAll(tmp)
+	return i.index(ctx, m, tmp)
+}
+
+// index fetches and verifies the index of m into tmp, then hands it to
+// OnIndex.
+func (i Installer) index(ctx context.Context, m Marketplace, tmp string) (index.Index, error) {
+	if err := m.Root.Validate(); err != nil {
+		return index.Index{}, err
+	}
+	idxPath := filepath.Join(tmp, "index.json")
+	idxBytes, err := i.fetch(ctx, m.IndexURL, idxPath, maxIndex)
+	if err != nil {
+		return index.Index{}, err
+	}
+	if _, err := i.fetch(ctx, m.IndexURL+".sigstore.json", idxPath+".sigstore.json", maxBundle); err != nil {
+		return index.Index{}, err
+	}
+	if err := i.Verifier.VerifyBlob(ctx, idxPath, idxPath+".sigstore.json", m.Root); err != nil {
+		return index.Index{}, fmt.Errorf("marketplace %s: index signature: %w", m.Name, err)
+	}
+	idx, err := index.Parse(idxBytes)
+	if err != nil {
+		return index.Index{}, err
+	}
+	if idx.Marketplace != m.Name {
+		return index.Index{}, fmt.Errorf("marketplace %s: index is for marketplace %q", m.Name, idx.Marketplace)
+	}
+	if i.StateDir != "" {
+		if err := checkFresh(i.StateDir, m.Name, idx.Generated); err != nil {
+			return index.Index{}, err
+		}
+	}
+	if i.OnIndex != nil {
+		if err := i.OnIndex(m, idx); err != nil {
+			return index.Index{}, err
+		}
+	}
+	return idx, nil
+}
+
+// MarkYanked records in store the yanked status idx, a verified index of
+// marketplace m, gives every installed plugin of m. It returns the entries
+// whose status changed.
+func MarkYanked(store plugin.Store, m Marketplace, idx index.Index) ([]plugin.LockEntry, error) {
+	return store.MarkYanked(m.Name, func(bare, version string) (bool, bool) {
+		v, err := idx.Find(bare, version)
+		if err != nil {
+			return false, false
+		}
+		return v.Yanked, true
+	})
+}
+
 // fetch downloads an https URL, at most max bytes, into path.
 func (i Installer) fetch(ctx context.Context, rawURL, path string, max int64) ([]byte, error) {
 	u, err := url.Parse(rawURL)
@@ -157,11 +208,7 @@ func (i Installer) fetch(ctx context.Context, rawURL, path string, max int64) ([
 	if err != nil {
 		return nil, err
 	}
-	client := i.HTTP
-	if client == nil {
-		client = http.DefaultClient
-	}
-	resp, err := client.Do(req)
+	resp, err := SafeClient(i.HTTP).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("marketplace: get %s: %w", rawURL, err)
 	}

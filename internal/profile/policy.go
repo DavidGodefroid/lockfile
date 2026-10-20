@@ -33,6 +33,9 @@ type Policy struct {
 	P            Profile     `json:"profile"`
 	Plugins      []PluginPin `json:"plugins"`
 	Marketplaces []Trust     `json:"marketplaces"`
+	// Workspace is where fetched files live and how much they may take:
+	// moving it or raising its cap is a loosening the human reviews.
+	Workspace Workspace `json:"workspace"`
 }
 
 var _ console.Policy = (*Policy)(nil)
@@ -60,7 +63,7 @@ func FromFile(f *File, name string, store plugin.Store) (*Policy, error) {
 	// A tampered plugin is left out: it can never be approved, and Open
 	// refuses it anyway.
 	installed = slices.DeleteFunc(installed, func(in plugin.Installed) bool { return in.Tampered })
-	pol := &Policy{P: p, Plugins: []PluginPin{}, Marketplaces: f.Marketplaces}
+	pol := &Policy{P: p, Plugins: []PluginPin{}, Marketplaces: f.Marketplaces, Workspace: f.Workspace}
 	if pol.Marketplaces == nil {
 		pol.Marketplaces = []Trust{}
 	}
@@ -87,13 +90,14 @@ func (p *Policy) Pin(name string) (PluginPin, bool) {
 	return PluginPin{}, false
 }
 
-// Diff implements config.Policy: the loosening rules of design §4, §8, §9.
+// Diff implements config.Policy: the loosening rules listed in docs/security-model.md.
 func (p *Policy) Diff(approved config.Policy) []config.Change {
 	a, ok := approved.(*Policy)
 	if !ok {
 		return []config.Change{{Field: "policy", Old: "?", New: "lockfile", Loosens: true}}
 	}
-	out := config.DiffBase(a.P.Base, p.P.Base)
+	// A policy approved before the timer defaults were explicit stores 0.
+	out := config.DiffBase(withTimerDefaults(a.P.Base), withTimerDefaults(p.P.Base))
 	same := func(field, o, n string) {
 		if o != n {
 			out = append(out, config.Change{Field: field, Old: o, New: n, Loosens: true})
@@ -114,7 +118,9 @@ func (p *Policy) Diff(approved config.Policy) []config.Change {
 	same("path", o.LocalPath, n.LocalPath)
 	if o.Prefix != n.Prefix {
 		// A prefix under the old one narrows the keys; anything else widens.
-		out = append(out, config.Change{Field: "prefix", Old: o.Prefix, New: n.Prefix, Loosens: !strings.HasPrefix(n.Prefix, o.Prefix)})
+		// The prefix is a directory (source.CheckKey), so compare on path
+		// boundaries: "inv" -> "invoices/" is a sibling, not a narrowing.
+		out = append(out, config.Change{Field: "prefix", Old: o.Prefix, New: n.Prefix, Loosens: !prefixWithin(n.Prefix, o.Prefix)})
 	}
 	limit := func(field string, ov, nv int64) {
 		if ov != nv {
@@ -127,6 +133,14 @@ func (p *Policy) Diff(approved config.Policy) []config.Change {
 	limit("max_plugins_per_handle", int64(o.MaxPluginsPerHandle), int64(n.MaxPluginsPerHandle))
 	if o.HandleTTL != n.HandleTTL {
 		out = append(out, config.Change{Field: "limits.handle_ttl", Old: o.HandleTTL.String(), New: n.HandleTTL.String(), Loosens: n.HandleTTL > o.HandleTTL})
+	}
+	// Workspace: another directory may be shared or kept; a larger cap holds
+	// more file bytes at once.
+	ow, nw := a.Workspace.withDefaults(), p.Workspace.withDefaults()
+	same("work_dir", ow.Dir, nw.Dir)
+	if ow.MaxBytes != nw.MaxBytes {
+		out = append(out, config.Change{Field: "max_workspace_bytes", Old: strconv.FormatInt(ow.MaxBytes, 10), New: strconv.FormatInt(nw.MaxBytes, 10),
+			Loosens: nw.MaxBytes > ow.MaxBytes})
 	}
 	if o.AnswerQuantum != n.AnswerQuantum {
 		out = append(out, config.Change{Field: "limits.answer_quantum", Old: o.AnswerQuantum.String(), New: n.AnswerQuantum.String(),
@@ -174,6 +188,19 @@ func (p *Policy) Diff(approved config.Policy) []config.Change {
 	return out
 }
 
+// prefixWithin reports whether the key space of prefix n lies inside the
+// one of prefix o. "" is any key; any other prefix is the directory p + "/".
+func prefixWithin(n, o string) bool {
+	if o == "" {
+		return true
+	}
+	if n == "" {
+		return false
+	}
+	norm := func(p string) string { return strings.TrimSuffix(p, "/") + "/" }
+	return strings.HasPrefix(norm(n), norm(o))
+}
+
 func short(s string) string {
 	if len(s) > 12 {
 		return s[:12]
@@ -191,6 +218,12 @@ func (p *Policy) Describe() []string {
 		fmt.Sprintf("limits: max_object_bytes %d · max_plugins_per_handle %d · handle_ttl %s · answer_quantum %s",
 			pr.MaxObjectBytes, pr.MaxPluginsPerHandle, pr.HandleTTL, pr.AnswerQuantum),
 	}
+	ws := p.Workspace.withDefaults()
+	dir := ws.Dir
+	if dir == "" {
+		dir = "default"
+	}
+	lines = append(lines, fmt.Sprintf("workspace: work_dir %s · max_workspace_bytes %d", dir, ws.MaxBytes))
 	if pr.Production {
 		lines = append(lines, "PRODUCTION")
 	}

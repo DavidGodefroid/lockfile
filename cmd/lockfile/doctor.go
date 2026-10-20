@@ -10,6 +10,9 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime"
+	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -17,6 +20,7 @@ import (
 	"github.com/DavidGodefroid/lockkit/render"
 	"github.com/DavidGodefroid/lockkit/sysconf"
 
+	"github.com/DavidGodefroid/lockfile/internal/procmount"
 	"github.com/DavidGodefroid/lockfile/internal/product"
 	"github.com/DavidGodefroid/lockfile/internal/profile"
 	"github.com/DavidGodefroid/lockfile/internal/wiring"
@@ -35,6 +39,10 @@ type doctorHooks struct {
 	home     func(account string) (string, error)
 	lookPath func(string) (string, error)
 	agents   func() (agentwire.Env, error)
+	// mounts reads this process's mount table (/proc/self/mountinfo).
+	mounts func() ([]byte, error)
+	// owner returns a file's owner uid and gid.
+	owner func(fs.FileInfo) (uid, gid int, ok bool)
 }
 
 var testDoctorHooks *doctorHooks
@@ -83,6 +91,12 @@ func runDoctor(e env, args []string) int {
 	if h.agents == nil {
 		h.agents = agentwire.SystemEnv
 	}
+	if h.mounts == nil {
+		h.mounts = procmount.ReadMountinfo
+	}
+	if h.owner == nil {
+		h.owner = fileOwner
+	}
 	var out []finding
 	add := func(check, status, detail string) { out = append(out, finding{check, status, detail}) }
 
@@ -90,6 +104,10 @@ func runDoctor(e env, args []string) int {
 		add("sandbox", "fail", fmt.Sprintf("plugins cannot run here (Landlock ABI %d, seccomp %t): Linux ≥ 5.13 with Landlock and seccomp is required", abi, sec))
 	} else {
 		add("sandbox", "ok", fmt.Sprintf("Landlock ABI %d, seccomp", abi))
+	}
+
+	if runtime.GOOS == "linux" {
+		doctorProc(h, add)
 	}
 
 	sys, err := h.sys()
@@ -110,7 +128,7 @@ func runDoctor(e env, args []string) int {
 	}
 
 	if service || sys == nil {
-		doctorConsoleSide(add)
+		doctorConsoleSide(h, sys, add)
 	}
 
 	if !service {
@@ -163,6 +181,18 @@ func doctorSeparation(h doctorHooks, sys *sysconf.Config, add func(string, strin
 	} else {
 		add("socket dir", "ok", sys.SocketDir+" 2750")
 	}
+	if fi, err := os.Stat(sys.SocketDir); err == nil {
+		g, gerr := user.LookupGroup(sys.ClientGroup)
+		uid, gid, ok := h.owner(fi)
+		switch {
+		case !ok || gerr != nil:
+			add("socket dir", "warn", "cannot check the owner of "+sys.SocketDir)
+		case uid != svcUID || strconv.Itoa(gid) != g.Gid:
+			add("socket dir", "fail", fmt.Sprintf("%s is owned by %d:%d, want %s:%s (another owner could list or replace the consoles' sockets): run sudo lockfile install", sys.SocketDir, uid, gid, sys.ServiceUser, sys.ClientGroup))
+		default:
+			add("socket dir", "ok", "owned by "+sys.ServiceUser+":"+sys.ClientGroup)
+		}
+	}
 	uid := h.uid()
 	if uid == svcUID {
 		return true
@@ -190,6 +220,20 @@ func doctorSeparation(h doctorHooks, sys *sysconf.Config, add func(string, strin
 	return false
 }
 
+// doctorProc requires /proc to hide other accounts' processes: a running
+// plugin's /proc entries are a channel to the agent otherwise. Checked
+// from both accounts: each sees its own mount namespace.
+func doctorProc(h doctorHooks, add func(string, string, string)) {
+	switch err := procmount.Check(h.mounts); {
+	case err == nil:
+		add("proc", "ok", "hidepid=invisible: other accounts' processes are hidden")
+	case errors.Is(err, procmount.ErrNotHidden), errors.Is(err, procmount.ErrNoProc):
+		add("proc", "fail", "other accounts can read a running plugin's /proc entries (a covert channel to the agent); consoles refuse to run plugins: "+procmount.Fix)
+	default:
+		add("proc", "fail", "cannot read the mount table to check /proc hidepid: "+procmount.Fix)
+	}
+}
+
 func setgidBits(fi fs.FileInfo) fs.FileMode {
 	if fi.Mode()&fs.ModeSetgid != 0 {
 		return 0o2000
@@ -198,9 +242,10 @@ func setgidBits(fi fs.FileInfo) fs.FileMode {
 }
 
 // doctorConsoleSide checks the console account's own files: the work
-// directory's mode and the unofficial marketplaces. Paths inside the home
-// are not printed.
-func doctorConsoleSide(add func(string, string, string)) {
+// directory (mode, parents, mount), the local sources' directories and
+// the unofficial marketplaces. Paths are not printed: they may sit in the
+// console's home or name the data.
+func doctorConsoleSide(h doctorHooks, sys *sysconf.Config, add func(string, string, string)) {
 	path, err := configPath()
 	if err != nil {
 		return
@@ -221,13 +266,62 @@ func doctorConsoleSide(add func(string, string, string)) {
 			work = filepath.Join(home, "work")
 		}
 	}
-	if fi, err := os.Stat(work); err == nil && fi.Mode().Perm()&0o077 != 0 {
-		add("work dir", "fail", fmt.Sprintf("the work directory has mode %04o: other accounts may reach fetched files; chmod 0700 it", fi.Mode().Perm()))
-	} else if err == nil {
-		add("work dir", "ok", "0700")
+	table, _ := h.mounts()
+	for _, f := range workDirFindings(work, string(table)) {
+		add("work dir", f.Status, f.Detail)
+	}
+	clientGID := -1
+	if sys != nil {
+		if g, err := user.LookupGroup(sys.ClientGroup); err == nil {
+			clientGID, _ = strconv.Atoi(g.Gid)
+		}
+	}
+	names := make([]string, 0, len(f.Profiles))
+	for name := range f.Profiles {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		p := f.Profiles[name]
+		if p.Source != "local" {
+			continue
+		}
+		switch exposed, err := reachableByOthers(p.LocalPath, clientGID, h.owner); {
+		case err != nil:
+			add("local source", "warn", "profile "+name+": cannot check its directory (missing, or not readable by the console)")
+		case exposed:
+			add("local source", "fail", "profile "+name+": its directory can be reached by other accounts (the agent could read the files without lockfile): remove o+rx, and g+rx for the clients group, on it or a parent")
+		default:
+			add("local source", "ok", "profile "+name+": closed to other accounts")
+		}
 	}
 	for _, m := range f.Marketplaces {
 		add("marketplace", "warn", "UNOFFICIAL "+m.Name+" ("+m.IndexURL+")")
+	}
+	doctorYanked(add)
+}
+
+// doctorYanked reports the installed versions plugins.lock records as
+// yanked (they refuse to run). It reads no index: lockfile plugin verify
+// refreshes the status from the marketplaces.
+func doctorYanked(add func(string, string, string)) {
+	store, err := pluginStore()
+	if err != nil {
+		return
+	}
+	installed, err := store.Installed()
+	if err != nil || len(installed) == 0 {
+		return
+	}
+	yanked := 0
+	for _, in := range installed {
+		if in.Yanked {
+			yanked++
+			add("plugin", "fail", in.Name+"@"+in.Version+" was withdrawn by its marketplace and no longer runs: lockfile plugin update")
+		}
+	}
+	if yanked == 0 {
+		add("plugin", "ok", fmt.Sprintf("%d installed, none recorded as yanked (lockfile plugin verify refreshes the status)", len(installed)))
 	}
 }
 

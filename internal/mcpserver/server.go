@@ -1,6 +1,6 @@
 // Package mcpserver is lockfile's MCP server: one tool per agent command,
 // each a thin adapter over clientcmd. Its outputs are the CLI's: the closed
-// values of design §7b, as text and as structured content.
+// values of docs/security-model.md, as text and as structured content.
 package mcpserver
 
 import (
@@ -42,7 +42,7 @@ func Names() []string {
 }
 
 // RunningMessage is the one progress text of a run: constant, so that the
-// notifications say nothing the response time does not (design §7b).
+// notifications say nothing the response time does not (docs/security-model.md).
 const RunningMessage = "running in the lockfile console"
 
 // Inputs.
@@ -112,9 +112,9 @@ func New(pinned string) *mcp.Server {
 
 	mcp.AddTool(s, &mcp.Tool{Name: ToolStatus, Description: "State of the running lockfile consoles (or of one profile's): production, auto mode, security level, plugin protocol, sandbox."},
 		func(ctx context.Context, req *mcp.CallToolRequest, in ProfileIn) (*mcp.CallToolResult, StatusOut, error) {
-			p := in.Profile
-			if p == "" {
-				p = pinned
+			p, err := clientcmd.StatusProfile(pinned, in.Profile)
+			if err != nil {
+				return toolErr[StatusOut](err)
 			}
 			out, _, err := clientcmd.Statuses(ctx, p)
 			if err != nil {
@@ -134,7 +134,7 @@ func New(pinned string) *mcp.Server {
 				l := x.Profile
 				switch {
 				case x.Busy:
-					l += " (busy: waiting for the user)"
+					l += " (busy: serving another request)"
 				case x.Production:
 					l += " (production)"
 				}
@@ -189,7 +189,8 @@ func New(pinned string) *mcp.Server {
 			if err != nil {
 				return refusedOr(err, ResultOut{Answers: []answers.Answer{}})
 			}
-			stop := mcpkit.Progress(ctx, req, 0, func(time.Duration) string { return RunningMessage })
+			every := clientcmd.HeartbeatEvery(clientcmd.Quantum(ctx, profile))
+			stop := mcpkit.Progress(ctx, req, every, func(time.Duration) string { return RunningMessage })
 			res, err := clientcmd.Run(ctx, profile, in.PlanID)
 			stop()
 			return resultOut(res, err)
@@ -214,7 +215,7 @@ func New(pinned string) *mcp.Server {
 			if err != nil {
 				return refusedOr(err, ReleaseOut{})
 			}
-			return mcpkit.Text("released " + in.Handle), ReleaseOut{Released: r.Released}, nil
+			return mcpkit.Text(clientcmd.ReleasedText(in.Handle, r)), ReleaseOut{Released: r.Released}, nil
 		})
 	return s
 }

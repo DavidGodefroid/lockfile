@@ -258,7 +258,10 @@ func Start(t testing.TB, o Options) *Console {
 		c.SharedDir = separated(t, iso, o.Clients)
 	}
 	state := t.TempDir()
-	bo := backend.Options{ConfigPath: cfg, Profile: "samples", StateDir: state, PluginDir: store.Dir, WorkDir: c.Work}
+	// CI runners do not mount /proc with hidepid: the harness stands in for
+	// it, tests of the check itself replace this in o.Backend.
+	bo := backend.Options{ConfigPath: cfg, Profile: "samples", StateDir: state, PluginDir: store.Dir, WorkDir: c.Work,
+		ProcHidden: func() error { return nil }}
 	if o.Backend != nil {
 		o.Backend(&bo)
 	}
@@ -271,7 +274,7 @@ func Start(t testing.TB, o Options) *Console {
 	go func() {
 		defer b.Close()
 		c.done <- console.Run(ctx, product.P, b, console.Options{
-			Profile: "samples", IO: c.IO, StateDir: state, Quantum: -1, Sanitizer: backend.Sanitizer(),
+			Profile: "samples", IO: c.IO, StateDir: state, Quantum: -1, Sanitizer: b.Sanitizer(),
 			Isolation: iso, Harden: func() error { return nil }, Ready: func(s string) { ready <- s },
 		})
 	}()

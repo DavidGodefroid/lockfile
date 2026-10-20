@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"unicode/utf8"
 
 	"github.com/DavidGodefroid/lockkit/refusal"
 	"github.com/DavidGodefroid/lockkit/render"
@@ -80,10 +81,28 @@ func emit(e env, asJSON bool, v any, text func() []string) int {
 		}
 		return product.ExitOK
 	}
+	// Text gets the caps of JSON: a line is cut at the cell cap, and output
+	// over the total cap is not printed at all.
+	var b strings.Builder
 	for _, l := range text() {
-		fmt.Fprintln(e.stdout, sanitize.Terminal(l, false))
+		b.WriteString(cutChars(sanitize.Terminal(l, false), outCaps.MaxCellChars))
+		b.WriteByte('\n')
 	}
+	if b.Len() > outCaps.MaxOutputBytes {
+		fmt.Fprintln(e.stderr, "lockfile: output too large")
+		return product.ExitError
+	}
+	_, _ = io.WriteString(e.stdout, b.String())
 	return product.ExitOK
+}
+
+// cutChars cuts s to at most n characters, the last being "…" when cut.
+func cutChars(s string, n int) string {
+	if utf8.RuneCountInString(s) <= n {
+		return s
+	}
+	r := []rune(s)
+	return string(r[:n-1]) + "…"
 }
 
 // fail prints err and returns its exit code. Its text is a closed code or
@@ -107,10 +126,12 @@ func fail(e env, asJSON bool, err error) int {
 			fmt.Fprintf(e.stderr, "  refusal %s, retry: %s\n  %s\n", r.Code, r.Retry, sanitize.Terminal(r.Hint, false))
 		}
 	}
-	switch ce.Kind {
-	case clientcmd.KindRefused:
+	// A refusal exits 2 whoever detected it: unknown_profile is the same
+	// code when the client finds no console and when a console refuses.
+	switch {
+	case ce.Kind == clientcmd.KindRefused || ce.Refusal != nil:
 		return product.ExitRefused
-	case clientcmd.KindDenied:
+	case ce.Kind == clientcmd.KindDenied:
 		return product.ExitDenied
 	}
 	return product.ExitError
@@ -152,7 +173,7 @@ func runSources(e env, args []string) int {
 		for _, s := range src {
 			switch {
 			case s.Busy:
-				lines = append(lines, s.Profile+"  (busy: waiting for the human)")
+				lines = append(lines, s.Profile+"  (busy: serving another request)")
 			case s.Production:
 				lines = append(lines, s.Profile+"  PRODUCTION")
 			default:
@@ -301,6 +322,6 @@ func runAnswers(e env, args []string) int {
 func runRelease(e env, args []string) int {
 	return runOne(e, args, "release", "release HANDLE [--profile P] [--json]", func(ctx context.Context, profile, id string) (any, []string, error) {
 		r, err := clientcmd.Release(ctx, profile, id)
-		return r, []string{"released " + id}, err
+		return r, []string{clientcmd.ReleasedText(id, r)}, err
 	})
 }

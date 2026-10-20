@@ -35,8 +35,8 @@ limits = { cpu_s = 20, memory = "512MiB", timeout_s = 30 }
 | Environment | empty except `LOCKFILE_PLUGIN_PROTOCOL=1`; cwd `/` |
 | Filesystem | Landlock: execute and read its own binary only |
 | Network | none (seccomp denies sockets; Landlock denies TCP with ABI ≥ 4) |
-| Other syscalls denied | `ptrace`, `process_vm_*`, `mount`, `bpf`, `keyctl`, `perf_event_open`, a second `execve` |
-| Limits | CPU seconds, address space, no core, file size 0, few processes, wall-clock timeout then SIGKILL of the group |
+| Other syscalls denied | `ptrace`, `process_vm_*`, `mount`, `bpf`, `keyctl`, `perf_event_open`, a second `execve`; System V IPC (`shm*`, `msg*`, `sem*`) and POSIX message queues (`mq_*`); signals or limits aimed at any process but itself (`kill`, `tgkill`, `prlimit64`, …, and a descriptor owner set with `fcntl` `F_SETOWN`/`F_SETOWN_EX`/`F_SETSIG` or `ioctl` `FIOSETOWN`/`SIOCSPGRP`); child processes (threads only); file metadata of any kind (`chmod`, `chown`, xattrs, times, `truncate`, inode flags through `ioctl` `FS_IOC_SETFLAGS`/`FS_IOC_FSSETXATTR` or `file_setattr`); other processes' memory layout (`move_pages`, `migrate_pages`, `get_robust_list`); `mmap` of shared anonymous memory or with `MAP_GROWSDOWN`. Denied calls fail with `EPERM` |
+| Limits | CPU seconds; private writable memory (`RLIMIT_DATA` = `memory`) and address space (`RLIMIT_AS` = `memory` + 1 GiB, room for the Go runtime's reservations); no core; file size 0; threads: at most 512 tasks more than the console's account runs when the plugin starts (`RLIMIT_NPROC`, measured from the kernel's count; past it thread creation fails with `EAGAIN`); wall-clock timeout then SIGKILL of the group |
 | stderr | drained and discarded; only its byte count is audited |
 
 ## Answer
@@ -62,4 +62,8 @@ a tag `<name>/vX.Y.Z` whose release workflow builds, hashes and signs (cosign ke
 binaries and the manifest, and a signed `index.json`.
 
 An unofficial marketplace publishes the same index format, signed keyless by its own CI
-identity; its users add it with `lockfile marketplace add`.
+identity; its users add it with `lockfile marketplace add`. Give them an identity pattern
+that escapes every dot and pins the repository path, e.g.
+`^https://github\.com/acme/lockfile-plugins/\.github/workflows/release\.yml@refs/tags/`:
+`marketplace add` warns about an unescaped `.` or a path that other repositories also
+match (`^https://github\.com/acme` matches `acme-evil` too).

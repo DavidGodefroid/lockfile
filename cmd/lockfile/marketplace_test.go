@@ -46,6 +46,20 @@ func TestMarketplaceAddNeedsTypedName(t *testing.T) {
 	}
 }
 
+// The trust banner warns about a signer pattern other signers match.
+func TestMarketplaceAddWarnsWeakSigner(t *testing.T) {
+	humanEnv(t, "official")
+	weak := []string{"marketplace", "add", "acme", "--index", "https://example.org/index.json", "--identity-regexp", `^https://github.com/acme`}
+	code, out, _ := runArgs(t, "n\n", weak...)
+	if code != product.ExitDenied || !strings.Contains(out, `WARNING the signer pattern has an unescaped "."`) ||
+		!strings.Contains(out, "WARNING the signer pattern does not pin a repository path") {
+		t.Fatalf("weak signer: exit %d: %s", code, out)
+	}
+	if _, out, _ := runArgs(t, "n\n", addArgs("acme")...); strings.Contains(out, "WARNING") {
+		t.Fatalf("strict signer warned: %s", out)
+	}
+}
+
 func TestMarketplaceKeyRootRefused(t *testing.T) {
 	humanEnv(t, "official")
 	code, _, errText := runArgs(t, "acme\n", "marketplace", "add", "acme", "--index", "https://example.org/index.json", "--public-key", "/k.pub")
