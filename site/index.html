@@ -70,6 +70,14 @@
   </ul>
 </section>
 
+<section class="demo-section" aria-labelledby="demo">
+  <h2 id="demo" class="visually-hidden">See it run</h2>
+  <figure class="demo">
+    <img src="assets/demo.svg" alt="An AI agent asks three yes/no questions about an invoice. You approve the plan in the lockfile console, signed plugins run sandboxed on the file, and only their answers, 1, 1 and 1, reach the agent." width="1200" height="640" aria-describedby="demo-caption">
+    <figcaption id="demo-caption">Claude Code (left, in its own account) asks whether an invoice reported as blank is non-empty, parses as a PDF and has a blank page. The lockfile console (right, in the <code>lockfile</code> account) shows you the plan and waits for your <code>y</code>, fetches the file into the sandbox, and sends back one bit per plugin. The agent never gets the file, its name, size, type or path.</figcaption>
+  </figure>
+</section>
+
 <section aria-labelledby="answer">
   <h2 id="answer">What the agent gets</h2>
   <p class="prose">One plan, two questions about one file. The agent names the key it was given and the plugins it wants; this is the whole answer:</p>
