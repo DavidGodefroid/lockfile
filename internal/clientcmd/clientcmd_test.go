@@ -386,6 +386,21 @@ func TestResolveTextsAndSingleProbe(t *testing.T) {
 	}
 }
 
+func TestTextsFollowTheValues(t *testing.T) {
+	if l := StatusLines([]StatusEntry{{Profile: "a", Error: rpc.MsgInternal}}); l[0] != "a: "+rpc.MsgInternal {
+		t.Errorf("status line without hint: %q", l[0])
+	}
+	if l := StatusLines([]StatusEntry{{Profile: "a", Error: "unknown_profile", Hint: "h"}}); l[0] != "a: unknown_profile; h" {
+		t.Errorf("status line with hint: %q", l[0])
+	}
+	if s := ReleasedText("f_x", rpc.Released{}); s != "not released f_x" {
+		t.Errorf("not released: %q", s)
+	}
+	if s := ReleasedText("f_x", rpc.Released{Released: true}); s != "released f_x" {
+		t.Errorf("released: %q", s)
+	}
+}
+
 func TestHeartbeatEvery(t *testing.T) {
 	for q, want := range map[time.Duration]time.Duration{
 		0: 0, time.Second: time.Second, 5 * time.Second: 5 * time.Second, 9 * time.Second: 9 * time.Second,

@@ -1,6 +1,6 @@
 // Package rpc holds the wire types of lockfile's console methods, shared by
 // the console's backend and its clients (CLI and MCP). Every result is
-// built from the closed list of design §7b.
+// built from the closed list of docs/security-model.md.
 package rpc
 
 // Method names. lockkit serves hello, status, change.request and logout.

@@ -1,6 +1,6 @@
 // Package backend is lockfile on lockkit's console: the Backend that
 // connects a profile's source, validates and shows plans for approval, runs
-// the approved ones and returns only the closed result of design §7b.
+// the approved ones and returns only the closed result of docs/security-model.md.
 package backend
 
 import (

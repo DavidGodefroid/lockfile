@@ -15,7 +15,7 @@ import (
 	"github.com/DavidGodefroid/lockfile/internal/verify"
 )
 
-// RawMarketplace is one [[marketplaces]] entry (design §9).
+// RawMarketplace is one [[marketplaces]] entry (docs/usage.md).
 type RawMarketplace struct {
 	Name           string `toml:"name"`
 	IndexURL       string `toml:"index_url"`

@@ -322,6 +322,6 @@ func runAnswers(e env, args []string) int {
 func runRelease(e env, args []string) int {
 	return runOne(e, args, "release", "release HANDLE [--profile P] [--json]", func(ctx context.Context, profile, id string) (any, []string, error) {
 		r, err := clientcmd.Release(ctx, profile, id)
-		return r, []string{"released " + id}, err
+		return r, []string{clientcmd.ReleasedText(id, r)}, err
 	})
 }

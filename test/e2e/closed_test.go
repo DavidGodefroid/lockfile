@@ -135,7 +135,7 @@ func scenarios(t *testing.T) (*consoletest.Console, *wire, []string) {
 }
 
 // TestWireIsClosed: every response of every method, over the real socket
-// and framing, holds only §7b's closed values and what the agent sent.
+// and framing, holds only the closed values of docs/security-model.md and what the agent sent.
 func TestWireIsClosed(t *testing.T) {
 	_, w, agent := scenarios(t)
 	v := testenv.ClosedVocab(agent...)

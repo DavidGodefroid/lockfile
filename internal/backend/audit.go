@@ -11,7 +11,7 @@ import (
 
 // Record is lockfile's audit record: lockkit's base fields and the plan's.
 // The audit file is the lockfile account's (0600): the one place where
-// file metadata (key, size, sha256, failure causes) is kept, design §10.
+// file metadata (key, size, sha256, failure causes) is kept (docs/security-model.md, "Data at rest").
 // Never file bytes; error text is sanitized first.
 type Record struct {
 	audit.Base

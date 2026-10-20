@@ -136,7 +136,11 @@ func StatusLines(out []StatusEntry) []string {
 			continue
 		}
 		if en.Console == nil {
-			lines = append(lines, fmt.Sprintf("%s: %s; %s", en.Profile, en.Error, en.Hint))
+			l := en.Profile + ": " + en.Error
+			if en.Hint != "" {
+				l += "; " + en.Hint
+			}
+			lines = append(lines, l)
 			continue
 		}
 		s := en.Console

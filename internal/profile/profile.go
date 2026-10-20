@@ -1,4 +1,4 @@
-// Package profile reads lockfile's configuration (design §4) on lockkit's
+// Package profile reads lockfile's configuration (docs/usage.md) on lockkit's
 // config base: source profiles, limits and marketplaces, from the config
 // file of the lockfile account. It never reads a secret: credentials come
 // from the console (ask, the OS keychain or Vault).
@@ -36,7 +36,7 @@ const (
 	AuthPassword = "password"
 )
 
-// Defaults of design §4 and §7b.
+// Defaults, as docs/usage.md lists them.
 const (
 	DefaultMaxObjectBytes      = 50 << 20
 	DefaultMaxObjectsPerPlan   = 5

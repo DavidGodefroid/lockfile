@@ -76,7 +76,7 @@ func Refuse(id int64, c answers.Code) ipc.Response {
 }
 
 // ApprovalRefusal replaces lockkit's refusal of an approval with a fixed
-// message: the outcome only (design §7b), never the human's typed reason,
+// message: the outcome only (docs/security-model.md), never the human's typed reason,
 // which lockkit already keeps in the audit.
 func ApprovalRefusal(id int64, r ipc.Response) ipc.Response {
 	if r.Error != nil && r.Error.Code == ipc.CodeTimeout {

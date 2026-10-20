@@ -17,7 +17,7 @@ type screenPlugin struct {
 	Manifest                   pluginspec.Manifest
 }
 
-// planScreen is the approval screen of a plan (design §3 step 3, §7b): the
+// planScreen is the approval screen of a plan (docs/usage.md, "The console"; docs/security-model.md): the
 // agent's request as typed and the plugins' questions. No size, type, hash
 // or path: no source was touched yet. lockkit escapes every line and adds
 // the production banner and typed profile name.

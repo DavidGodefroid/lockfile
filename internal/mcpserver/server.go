@@ -1,6 +1,6 @@
 // Package mcpserver is lockfile's MCP server: one tool per agent command,
 // each a thin adapter over clientcmd. Its outputs are the CLI's: the closed
-// values of design §7b, as text and as structured content.
+// values of docs/security-model.md, as text and as structured content.
 package mcpserver
 
 import (
@@ -42,7 +42,7 @@ func Names() []string {
 }
 
 // RunningMessage is the one progress text of a run: constant, so that the
-// notifications say nothing the response time does not (design §7b).
+// notifications say nothing the response time does not (docs/security-model.md).
 const RunningMessage = "running in the lockfile console"
 
 // Inputs.
@@ -215,7 +215,7 @@ func New(pinned string) *mcp.Server {
 			if err != nil {
 				return refusedOr(err, ReleaseOut{})
 			}
-			return mcpkit.Text("released " + in.Handle), ReleaseOut{Released: r.Released}, nil
+			return mcpkit.Text(clientcmd.ReleasedText(in.Handle, r)), ReleaseOut{Released: r.Released}, nil
 		})
 	return s
 }

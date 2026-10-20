@@ -6,8 +6,8 @@
 // name of its own. It only builds and checks; running the script (sudo) is
 // the caller's.
 //
-// Copied from lockmq (same API) until it moves to lockkit; the one
-// addition is Options.SocketMode.
+// Copied from another lockkit-based tool (same API) until it moves to
+// lockkit; the one addition is Options.SocketMode.
 package separate
 
 import (

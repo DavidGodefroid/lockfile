@@ -33,7 +33,7 @@ const maxKeyFile = 64 << 10
 var errKeyFile = errors.New("sftp: the private key file (key) must be a regular file of the lockfile account, mode 0600 or stricter, under 64 KiB")
 
 // connect opens the source of p with the credentials the console obtained
-// (design §4, plan Call 4). The secret is the console's: it wipes it once
+// (docs/usage.md, "Profiles"). The secret is the console's: it wipes it once
 // Connect returns, so nothing here keeps a reference to it beyond what the
 // source client copied.
 func connect(p profile.Profile, c console.Credentials) (*session, error) {

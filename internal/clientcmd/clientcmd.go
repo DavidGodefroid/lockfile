@@ -1,6 +1,6 @@
 // Package clientcmd is the agent's side of lockfile, shared by the CLI and
 // the MCP server: it calls a running console and turns every answer into a
-// value of the closed list of design §7b. Nothing the console sends is
+// value of the closed list of docs/security-model.md. Nothing the console sends is
 // passed on as text: results are decoded into typed values, and every
 // error becomes a registered refusal or a fixed message chosen here.
 package clientcmd
@@ -213,6 +213,14 @@ func Release(ctx context.Context, profile, handle string) (rpc.Released, error) 
 	var out rpc.Released
 	err := call(ctx, profile, rpc.MethodRelease, rpc.HandleParams{Handle: handle}, &out)
 	return out, err
+}
+
+// ReleasedText is a release's outcome as text.
+func ReleasedText(handle string, r rpc.Released) string {
+	if r.Released {
+		return "released " + handle
+	}
+	return "not released " + handle
 }
 
 // result keeps only closed values: an answer is 1, 0 or null with

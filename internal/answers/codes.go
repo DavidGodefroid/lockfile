@@ -1,7 +1,7 @@
 package answers
 
 // Code is an agent-visible error or refusal code. The list is closed
-// (design §7b): nothing else about a request or a file reaches the agent.
+// (docs/security-model.md): nothing else about a request or a file reaches the agent.
 type Code string
 
 const (

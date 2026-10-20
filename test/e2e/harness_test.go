@@ -1,5 +1,5 @@
 // Package e2e checks, over the real socket and framing of a console run in
-// the test process, that nothing outside design §7b reaches the agent.
+// the test process, that nothing outside the closed list of docs/security-model.md reaches the agent.
 package e2e
 
 import (
