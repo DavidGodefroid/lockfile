@@ -83,6 +83,22 @@ The approval screen shows the key the console will fetch: percent-decoded once a
 (`invoices/./%61.pdf` is shown as `key    invoices/a.pdf`), followed by the text the agent
 typed on a `typed` line whenever the two differ.
 
+## Release and marketplace signers
+
+The keyless identities lockfile trusts are "the `release.yml` workflow of this repository, run
+on a tag": the lockfile repository for the binary (`update`, `scripts/install.sh`, bound to
+the exact `vX.Y.Z` tag) and the marketplace repository for its index and plugins. Whoever can
+push such a tag can therefore have an arbitrary commit, with a `release.yml` of their choice,
+signed under a trusted identity. Both repositories **must** keep these settings:
+
+- a tag ruleset restricting creation, update and deletion of `v*` (lockfile) and `*/v*`
+  (marketplace plugin tags) to maintainers, with no bypass for other roles;
+- a protected `main` (reviewed pull requests only).
+
+lockfile's `release.yml` also refuses to build or sign a tag whose commit is not on `main`
+(the `on-main` job). That check lives in the tagged commit's own workflow, so it complements
+the tag ruleset and does not replace it.
+
 ## Data at rest
 
 - Fetched files: `work/<random>/` (0700) in the console account, deleted on `release`, on handle
