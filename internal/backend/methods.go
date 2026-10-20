@@ -139,7 +139,7 @@ func (b *Backend) plan(ctx context.Context, req ipc.Request, env console.Env) ip
 	record := func(base audit.Base) audit.Record {
 		return Record{Base: base, PlanID: id, Key: pl.key, Handle: string(pl.handle), Plugins: pl.plugins}
 	}
-	a := env.Approve(ctx, req.ID, planScreen(p.Key, p.Handle, shown, p.Intent, record))
+	a := env.Approve(ctx, req.ID, planScreen(pl.key, p.Key, p.Handle, shown, p.Intent, record))
 	if !a.Approved {
 		return product.ApprovalRefusal(req.ID, a.Refusal)
 	}

@@ -76,6 +76,12 @@ directory and paths; a few lockkit messages are not yet passed through lockfile'
   which Ubuntu 24.04+ restricts through AppArmor by default and which would hand the plugin
   in-namespace capabilities; the seccomp denial is the control.
 
+## What the human approves
+
+The approval screen shows the key the console will fetch: percent-decoded once and cleaned
+(`invoices/./%61.pdf` is shown as `key    invoices/a.pdf`), followed by the text the agent
+typed on a `typed` line whenever the two differ.
+
 ## Data at rest
 
 - Fetched files: `work/<random>/` (0700) in the console account, deleted on `release`, on handle

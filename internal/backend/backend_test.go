@@ -250,6 +250,16 @@ func TestScreenContent(t *testing.T) {
 			t.Errorf("screen line %q holds file information", l)
 		}
 	}
+
+	// A percent-encoded or uncleaned key: the human sees the key that will
+	// be fetched, and what the agent typed.
+	if _, resp := h.plan(t, rpc.PlanParams{Key: "invoices/./%61.pdf", Plugins: []string{"test.answer1"}}); resp.Error != nil {
+		t.Fatal(resp.Error)
+	}
+	body := h.env.screens[1].Body
+	if len(body) < 2 || body[0] != "key    invoices/a.pdf" || body[1] != "typed  invoices/./%61.pdf" {
+		t.Fatalf("encoded key screen:\n%s", strings.Join(body, "\n"))
+	}
 }
 
 func TestPlanRefusals(t *testing.T) {
