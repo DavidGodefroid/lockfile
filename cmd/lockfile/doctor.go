@@ -11,6 +11,8 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -39,6 +41,8 @@ type doctorHooks struct {
 	agents   func() (agentwire.Env, error)
 	// mounts reads this process's mount table (/proc/self/mountinfo).
 	mounts func() ([]byte, error)
+	// owner returns a file's owner uid and gid.
+	owner func(fs.FileInfo) (uid, gid int, ok bool)
 }
 
 var testDoctorHooks *doctorHooks
@@ -90,6 +94,9 @@ func runDoctor(e env, args []string) int {
 	if h.mounts == nil {
 		h.mounts = procmount.ReadMountinfo
 	}
+	if h.owner == nil {
+		h.owner = fileOwner
+	}
 	var out []finding
 	add := func(check, status, detail string) { out = append(out, finding{check, status, detail}) }
 
@@ -121,7 +128,7 @@ func runDoctor(e env, args []string) int {
 	}
 
 	if service || sys == nil {
-		doctorConsoleSide(add)
+		doctorConsoleSide(h, sys, add)
 	}
 
 	if !service {
@@ -174,6 +181,18 @@ func doctorSeparation(h doctorHooks, sys *sysconf.Config, add func(string, strin
 	} else {
 		add("socket dir", "ok", sys.SocketDir+" 2750")
 	}
+	if fi, err := os.Stat(sys.SocketDir); err == nil {
+		g, gerr := user.LookupGroup(sys.ClientGroup)
+		uid, gid, ok := h.owner(fi)
+		switch {
+		case !ok || gerr != nil:
+			add("socket dir", "warn", "cannot check the owner of "+sys.SocketDir)
+		case uid != svcUID || strconv.Itoa(gid) != g.Gid:
+			add("socket dir", "fail", fmt.Sprintf("%s is owned by %d:%d, want %s:%s (another owner could list or replace the consoles' sockets): run sudo lockfile install", sys.SocketDir, uid, gid, sys.ServiceUser, sys.ClientGroup))
+		default:
+			add("socket dir", "ok", "owned by "+sys.ServiceUser+":"+sys.ClientGroup)
+		}
+	}
 	uid := h.uid()
 	if uid == svcUID {
 		return true
@@ -223,9 +242,10 @@ func setgidBits(fi fs.FileInfo) fs.FileMode {
 }
 
 // doctorConsoleSide checks the console account's own files: the work
-// directory's mode and the unofficial marketplaces. Paths inside the home
-// are not printed.
-func doctorConsoleSide(add func(string, string, string)) {
+// directory (mode, parents, mount), the local sources' directories and
+// the unofficial marketplaces. Paths are not printed: they may sit in the
+// console's home or name the data.
+func doctorConsoleSide(h doctorHooks, sys *sysconf.Config, add func(string, string, string)) {
 	path, err := configPath()
 	if err != nil {
 		return
@@ -246,10 +266,34 @@ func doctorConsoleSide(add func(string, string, string)) {
 			work = filepath.Join(home, "work")
 		}
 	}
-	if fi, err := os.Stat(work); err == nil && fi.Mode().Perm()&0o077 != 0 {
-		add("work dir", "fail", fmt.Sprintf("the work directory has mode %04o: other accounts may reach fetched files; chmod 0700 it", fi.Mode().Perm()))
-	} else if err == nil {
-		add("work dir", "ok", "0700")
+	table, _ := h.mounts()
+	for _, f := range workDirFindings(work, string(table)) {
+		add("work dir", f.Status, f.Detail)
+	}
+	clientGID := -1
+	if sys != nil {
+		if g, err := user.LookupGroup(sys.ClientGroup); err == nil {
+			clientGID, _ = strconv.Atoi(g.Gid)
+		}
+	}
+	names := make([]string, 0, len(f.Profiles))
+	for name := range f.Profiles {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		p := f.Profiles[name]
+		if p.Source != "local" {
+			continue
+		}
+		switch exposed, err := reachableByOthers(p.LocalPath, clientGID, h.owner); {
+		case err != nil:
+			add("local source", "warn", "profile "+name+": cannot check its directory (missing, or not readable by the console)")
+		case exposed:
+			add("local source", "fail", "profile "+name+": its directory can be reached by other accounts (the agent could read the files without lockfile): remove o+rx, and g+rx for the clients group, on it or a parent")
+		default:
+			add("local source", "ok", "profile "+name+": closed to other accounts")
+		}
 	}
 	for _, m := range f.Marketplaces {
 		add("marketplace", "warn", "UNOFFICIAL "+m.Name+" ("+m.IndexURL+")")

@@ -59,3 +59,27 @@ func TestCheck(t *testing.T) {
 		t.Errorf("read error: %v", err)
 	}
 }
+
+func TestMountOf(t *testing.T) {
+	table := "1 0 0:1 / / rw - ext4 /dev/sda1 rw\n" +
+		"2 1 0:2 / /srv rw - nfs4 server:/export rw\n" +
+		"3 2 0:3 / /srv/local rw - ext4 /dev/sdb1 rw\n" +
+		`4 1 0:4 / /mnt/my\040share rw - cifs //server/share rw` + "\n"
+	for path, want := range map[string]string{
+		"/":               "ext4",
+		"/home/x":         "ext4",
+		"/srv":            "nfs4",
+		"/srv/data/work":  "nfs4",
+		"/srv/local/work": "ext4",
+		"/srvx/work":      "ext4",
+		"/mnt/my share/w": "cifs",
+	} {
+		m, ok := MountOf(table, path)
+		if !ok || m.FSType != want {
+			t.Errorf("MountOf(%q) = %+v %v, want %s", path, m, ok, want)
+		}
+	}
+	if _, ok := MountOf("", "/x"); ok {
+		t.Errorf("empty table found a mount")
+	}
+}

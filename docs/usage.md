@@ -33,6 +33,12 @@ proc /proc proc defaults,hidepid=invisible,gid=<admin group> 0 0
 
 Members of `gid=` still see every process (monitoring tools, admins).
 
+From the console account, `lockfile doctor` also checks the work directory (mode 0700, parents
+other accounts cannot traverse, not under a world-writable directory such as `/tmp`, not on a
+network filesystem), every `local` source directory (not reachable by other accounts or by the
+clients group) and the socket directory's owner (`lockfile:lockfile-clients`). It prints no
+path from the configuration.
+
 ## Profiles (console account)
 
 Profiles live in the lockfile account's `~/.config/lockfile/config.toml`; there is no per-project

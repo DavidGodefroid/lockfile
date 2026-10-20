@@ -51,6 +51,37 @@ func Hidden(table string) (bool, error) {
 	return hidden, nil
 }
 
+// Mount is one line of a mount table.
+type Mount struct {
+	Point, FSType, Options string
+}
+
+// Mounts parses a mount table (mountinfo or /proc/mounts), in order.
+func Mounts(table string) []Mount {
+	var out []Mount
+	for _, line := range strings.Split(table, "\n") {
+		if point, fstype, opts, ok := parseLine(line); ok {
+			out = append(out, Mount{point, fstype, opts})
+		}
+	}
+	return out
+}
+
+// MountOf returns the mount holding path (absolute, symlinks resolved):
+// the last mount whose point is path or one of its parents.
+func MountOf(table, path string) (Mount, bool) {
+	var best Mount
+	found := false
+	for _, m := range Mounts(table) {
+		if m.Point == path || m.Point == "/" || strings.HasPrefix(path, m.Point+"/") {
+			if !found || len(m.Point) >= len(best.Point) {
+				best, found = m, true
+			}
+		}
+	}
+	return best, found
+}
+
 // parseLine returns the mount point, filesystem type and options of one
 // line of mountinfo (fields: id parent dev root point opts [tags] -
 // fstype source superopts) or of /proc/mounts (source point fstype opts
