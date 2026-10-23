@@ -6,11 +6,15 @@
 // hidepid=invisible (hidepid=2). The agent account could poll them: a
 // covert channel seccomp cannot close, since the plugin writes them from
 // inside its own process. A pid namespace would not help: the parent
-// namespace still lists the plugin. So lockfile requires the mount option.
+// namespace still lists the plugin. So lockfile requires the mount option,
+// except in a container that declares itself (ContainerFile) and passes
+// Container.Check: there no other account shares the pid namespace, and
+// the parent namespace is the Docker host's.
 package procmount
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 )
@@ -140,5 +144,21 @@ func Check(read func() ([]byte, error)) error {
 // ReadMountinfo reads this process's mount table.
 func ReadMountinfo() ([]byte, error) { return os.ReadFile("/proc/self/mountinfo") }
 
-// CheckSystem checks this process's /proc.
-func CheckSystem() error { return Check(ReadMountinfo) }
+// CheckSystem checks this process's /proc: hidepid=invisible, or, where
+// ContainerFile is present, the container's conditions instead.
+func CheckSystem() error { return CheckWith(ReadMountinfo, SystemContainer()) }
+
+// CheckWith is CheckSystem with the mount table and the container given.
+// Without hidepid, a declared container must pass c.Check; the error then
+// wraps both ErrNotHidden and ErrContainer. Undeclared, the result is
+// Check's.
+func CheckWith(read func() ([]byte, error), c Container) error {
+	err := Check(read)
+	if !errors.Is(err, ErrNotHidden) || !c.Declared() {
+		return err
+	}
+	if cerr := c.Check(); cerr != nil {
+		return fmt.Errorf("%w; %w", err, cerr)
+	}
+	return nil
+}

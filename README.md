@@ -42,8 +42,8 @@ no answer. No byte of the file, its name, size, type or path ever reaches the
 agent, and every plan is approved by the human first.
 
 > [!NOTE]
-> **Pre-release** (`v0.2.x`). The console runs on Linux; macOS gets the agent
-> side only. See [Status](#status).
+> **Pre-release** (`v0.2.x`). Deployed with Docker; the console needs a
+> Linux kernel with Landlock. See [Status](#status).
 
 ## Why lockfile?
 
@@ -121,27 +121,34 @@ A run's result leaves the console only at the next multiple of
 
 ## Quick start
 
-On Linux, with [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) on PATH:
+With Docker on Linux (a kernel with Landlock). The console runs in one
+container, your agent's commands in others; they share only the socket volume.
+Full guide: [docs/docker.md](docs/docker.md). Other deployment modes exist in
+the code but are no longer documented.
 
 ```sh
-# 1. The binary (checks the release signature with cosign).
-curl -fsSL https://raw.githubusercontent.com/DavidGodefroid/lockfile/main/scripts/install.sh -o install.sh
-sh install.sh
+# 1. The image, and the seccomp profile the console runs under (never seccomp=unconfined).
+git clone https://github.com/DavidGodefroid/lockfile.git && cd lockfile
+docker build -t lockfile .
 
-# 2. The separated setup: console account `lockfile`, your account in `lockfile-clients`.
-sudo lockfile install
-lockfile doctor
+# 2. The console account's setup, in its home volume: a profile on a directory
+#    mounted read-only, and the plugins (signatures checked with cosign, in the image).
+docker run --rm --user lockfile -v lockfile-home:/home/lockfile lockfile \
+  profile add samples --source local --path /srv/lockfile/samples --prefix invoices/
+docker run --rm --user lockfile -v lockfile-home:/home/lockfile lockfile plugin install file.non-empty@1.0.0
+docker run --rm --user lockfile -v lockfile-home:/home/lockfile lockfile plugin install format.is-pdf@1.0.0
 
-# 3. In the lockfile account's own session (switch user, Wayland):
-lockfile profile add samples --source local --path /srv/samples --prefix invoices/
-lockfile plugin install file.non-empty@1.0.0
-lockfile plugin install format.is-pdf@1.0.0
-lockfile console --profile samples
+# 3. The console, in a terminal you keep in view.
+docker run -it --rm --name lockfile-console --user lockfile \
+  --security-opt seccomp="$PWD/seccomp.json" \
+  -v lockfile-run:/run/lockfile -v lockfile-home:/home/lockfile \
+  -v /data/samples:/srv/lockfile/samples:ro \
+  lockfile console --profile samples
 
-# 4. In your account: wire your agent, then ask.
-lockfile init claude
-lockfile plugins --json
-lockfile plan --key invoices/2026/10/abc123.pdf --plugin file.non-empty --plugin format.is-pdf --run --json
+# 4. Your agent: wire it, then ask.
+claude mcp add --scope user lockfile -- docker run -i --rm -v lockfile-run:/run/lockfile lockfile mcp
+docker run --rm -v lockfile-run:/run/lockfile lockfile plan \
+  --key invoices/2026/10/abc123.pdf --plugin file.non-empty --plugin format.is-pdf --run --json
 ```
 
 ```json
@@ -216,10 +223,13 @@ walkthrough: [docs/usage.md](docs/usage.md).
 The console is the enforcement point. Skills, rules and MCP tool descriptions
 only guide the agent; the console's checks are the guarantee.
 
-- **OS separation.** `lockfile install` creates the `lockfile` console account
-  and the `lockfile-clients` group. The console runs in its own login session
-  and refuses to start without this setup; the socket in `/run/lockfile`
-  checks the kernel peer credentials of every connection.
+- **OS separation.** The console runs as the `lockfile` account in a
+  container of its own; the agent's commands run as `agent` (group
+  `lockfile-clients`) in others, which share only the socket volume. The
+  socket in `/run/lockfile` checks the kernel peer credentials of every
+  connection and refuses any other account (`ALLOWED_UIDS` names an agent in
+  its own container). Whoever runs `docker` on the host stays outside this
+  boundary: see [docs/docker.md](docs/docker.md#what-docker-does-and-does-not-separate).
 - **Human approval.** Every plan is approved in the console; no socket method
   approves, installs or loosens anything. On production you type the profile
   name, not `y`. Auto mode switches only from the console's keyboard, never
@@ -254,12 +264,11 @@ secure erase. Details: [docs/security-model.md](docs/security-model.md).
 
 > [!IMPORTANT]
 > "The agent only ever sees 1s and 0s" is the design goal and what the wire
-> carries; the v0.2.0 plugin sandbox is not yet complete around it. SysV IPC
-> and POSIX message queues are not denied to plugins, `/proc` is visible
-> unless mounted with `hidepid`, and older Landlock ABIs do not block
-> `fcntl` signals. v0.2.1 denies IPC and message queues and requires `/proc`
-> mounted with `hidepid=invisible`. The `plugin_yanked` refusal is listed but
-> not produced yet.
+> carries. Plugins' `/proc` entries are a channel to any account sharing
+> their pid namespace: the console refuses to run plugins unless no other
+> account shares it (in Docker: never `--pid=host`), and older Landlock ABIs
+> do not block `fcntl` signals (seccomp does). The `plugin_yanked` refusal is
+> listed but not produced yet.
 
 ## Configuration
 
@@ -274,7 +283,7 @@ bucket = "documents"
 region = "eu-west-1"
 endpoint = ""                 # S3-compatible server; https:// (http:// only for localhost)
 prefix = "invoices/"          # keys outside the prefix are refused
-credentials = "vault"         # ask | keychain | vault (none: local, or an unencrypted sftp key)
+credentials = "vault"         # ask | vault (none: local, or an unencrypted sftp key); no keychain in Docker
 vault_path = "secret/data/lockfile/docs"   # username = access key id, password = secret key
 production = true             # the profile name is typed for every approval
 max_object_bytes = "50MiB"    # larger objects are not fetched
@@ -284,8 +293,9 @@ answer_quantum = "5s"         # results leave the console only on multiples of t
 ```
 
 SFTP profiles take `host`, `port`, `user`, `auth = "password"` or
-`auth = "key"` with `key` (a private key in the `lockfile` account, mode 0600
-or stricter), `known_hosts` and `base_dir`; local profiles take `path`. See [docs/usage.md](docs/usage.md#profiles-console-account).
+`auth = "key"` with `key` (a private key in the `lockfile` account's home
+volume, mode 0600 or stricter), `known_hosts` and `base_dir`; local profiles
+take `path`, a read-only mount under `/srv/lockfile` in the console's container. See [docs/usage.md](docs/usage.md#profiles-console-account).
 
 ## Plugins
 
@@ -326,6 +336,7 @@ mode. **Writing a plugin**: see [docs/plugin-contract.md](docs/plugin-contract.m
 
 | | |
 |---|---|
+| 🐳 [docs/docker.md](docs/docker.md) | the setup: image, volumes, seccomp profile, console, agent wiring, what Docker separates |
 | 📘 [docs/usage.md](docs/usage.md) | every command, profiles, the agent flow, MCP |
 | 🛡️ [docs/security-model.md](docs/security-model.md) | what the agent can see (the exhaustive list), the boundaries, the residual risks |
 | 🧩 [docs/plugin-contract.md](docs/plugin-contract.md) | for plugin authors: manifest, runtime, answer, publishing |
@@ -334,51 +345,25 @@ mode. **Writing a plugin**: see [docs/plugin-contract.md](docs/plugin-contract.m
 
 ## Install
 
-Every release ships a static binary for Linux and macOS (amd64, arm64), a
-`checksums.txt` and its keyless cosign signature.
+Build the image from a clone (`docker build -t lockfile .`) or from the
+repository URL; [docs/docker.md](docs/docker.md) covers the volumes, the
+seccomp profile, the `vault` target and `ALLOWED_UIDS`. The base images are
+pinned by digest, cosign and the Vault CLI by sha256; the image has no `sudo`
+and starts no shell. Every release also ships static binaries and a signed
+`checksums.txt`, for other deployment modes, which are no longer documented.
 
-**Script.** Checks the signature of `checksums.txt` against lockfile's
-release workflow, then the archive against it, then installs
-`/usr/local/bin/lockfile` (with `sudo` if needed). cosign is required:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/DavidGodefroid/lockfile/main/scripts/install.sh -o install.sh
-less install.sh                     # read it first
-sh install.sh                       # LOCKFILE_VERSION=v0.2.0 to pin a version
-```
-
-**By hand.** Download `lockfile_<version>_<os>_<arch>.tar.gz`,
-`checksums.txt` and `checksums.txt.sigstore.json`, then:
-
-```sh
-cosign verify-blob --bundle checksums.txt.sigstore.json \
-  --certificate-identity-regexp '^https://github\.com/DavidGodefroid/lockfile/\.github/workflows/release\.yml@refs/tags/v[0-9]' \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  checksums.txt
-sha256sum --ignore-missing -c checksums.txt   # macOS: shasum -a 256 --ignore-missing -c checksums.txt
-tar -xzf lockfile_<version>_<os>_<arch>.tar.gz lockfile
-sudo install -m 0755 lockfile /usr/local/bin/lockfile
-```
-
-**From source.** `go install github.com/DavidGodefroid/lockfile/cmd/lockfile@latest`
-(Go 1.26 or later), then `sudo lockfile install --trust-binary`.
-
-**Upgrade.** `lockfile update [--check] [--yes]` verifies the release the
-same way, then replaces the binary.
-
-**Docker (demo).** The `Dockerfile` builds a demo image of the separated
-setup in one container, for trying lockfile out, not for production.
+**Upgrade.** Rebuild the image and restart the console; the volumes keep its
+state.
 
 ## Status
 
 v0.2: console, agent CLI, MCP server and agent wiring on
-[lockkit](https://github.com/DavidGodefroid/lockkit). The console needs Linux
-(Landlock and seccomp sandbox the plugins); macOS gets the agent side only.
+[lockkit](https://github.com/DavidGodefroid/lockkit), deployed with Docker.
+The console needs a Linux kernel with Landlock and seccomp (they sandbox the
+plugins).
 
-Roadmap, not in this release: the plugin sandbox hardening of v0.2.1 (IPC
-and message queues denied, `hidepid=invisible` required), an onboarding
-wizard (`setup`), a macOS console, public-key trust roots for unofficial
-marketplaces.
+Roadmap, not in this release: an onboarding wizard (`setup`), a macOS
+console, public-key trust roots for unofficial marketplaces.
 
 ## The lock family
 

@@ -43,6 +43,8 @@ type doctorHooks struct {
 	mounts func() ([]byte, error)
 	// owner returns a file's owner uid and gid.
 	owner func(fs.FileInfo) (uid, gid int, ok bool)
+	// container is the container stand-in for hidepid (procmount).
+	container func() procmount.Container
 }
 
 var testDoctorHooks *doctorHooks
@@ -96,6 +98,9 @@ func runDoctor(e env, args []string) int {
 	}
 	if h.owner == nil {
 		h.owner = fileOwner
+	}
+	if h.container == nil {
+		h.container = procmount.SystemContainer
 	}
 	var out []finding
 	add := func(check, status, detail string) { out = append(out, finding{check, status, detail}) }
@@ -224,9 +229,14 @@ func doctorSeparation(h doctorHooks, sys *sysconf.Config, add func(string, strin
 // plugin's /proc entries are a channel to the agent otherwise. Checked
 // from both accounts: each sees its own mount namespace.
 func doctorProc(h doctorHooks, add func(string, string, string)) {
-	switch err := procmount.Check(h.mounts); {
+	c := h.container()
+	switch err := procmount.CheckWith(h.mounts, c); {
+	case err == nil && c.Declared() && procmount.Check(h.mounts) != nil:
+		add("proc", "ok", "container: private pid namespace, no other account's process (hidepid is not available in Docker)")
 	case err == nil:
 		add("proc", "ok", "hidepid=invisible: other accounts' processes are hidden")
+	case errors.Is(err, procmount.ErrContainer):
+		add("proc", "fail", "other accounts could read a running plugin's /proc entries; consoles refuse to run plugins: "+err.Error())
 	case errors.Is(err, procmount.ErrNotHidden), errors.Is(err, procmount.ErrNoProc):
 		add("proc", "fail", "other accounts can read a running plugin's /proc entries (a covert channel to the agent); consoles refuse to run plugins: "+procmount.Fix)
 	default:

@@ -635,6 +635,22 @@ func TestProcNotHiddenRefuses(t *testing.T) {
 	}
 }
 
+// A container that fails its stand-in for hidepid is refused with the
+// failed condition, not the fstab remedy it cannot apply.
+func TestProcContainerRefuses(t *testing.T) {
+	h := newHarness(t, "test.answer1")
+	cerr := fmt.Errorf("%w; %w: pid namespace: the console runs in the host's pid namespace", procmount.ErrNotHidden, procmount.ErrContainer)
+	h.b.o.ProcHidden = func() error { return cerr }
+	f := h.b.Checks(context.Background(), nil)
+	if len(f) != 1 || !f[0].Refuse || !strings.Contains(f[0].Text, "host's pid namespace") || strings.Contains(f[0].Text, "/etc/fstab") {
+		t.Fatalf("findings = %+v", f)
+	}
+	_, resp := h.plan(t, rpc.PlanParams{Key: "invoices/a.pdf", Plugins: []string{"test.answer1"}})
+	if refusalCode(resp) != "proc_not_hidden" {
+		t.Fatalf("plan: %+v", resp.Error)
+	}
+}
+
 // Production reads the real mount table: the default is not a stub.
 func TestProcHiddenDefault(t *testing.T) {
 	h := newHarness(t)
