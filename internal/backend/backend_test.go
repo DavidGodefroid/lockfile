@@ -424,6 +424,46 @@ func TestRunOnce(t *testing.T) {
 	}
 }
 
+// An approved plan whose run finds another account's process in /proc (or
+// no sandbox) since the approval is refused, the plan consumed and the
+// file never fetched.
+func TestRunRechecksSandboxAndProc(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		set  func(h *harness)
+		want string
+	}{
+		{"proc", func(h *harness) {
+			h.b.o.ProcHidden = func() error {
+				return fmt.Errorf("%w; %w: process 7 runs as uid 10002", procmount.ErrNotHidden, procmount.ErrContainer)
+			}
+		}, "proc_not_hidden"},
+		{"sandbox", func(h *harness) {
+			h.b.o.Probe = func() (int, bool, error) { return 0, false, errors.New("no landlock") }
+		}, "sandbox_unavailable"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t, "test.answer1")
+			pr, resp := h.plan(t, rpc.PlanParams{Key: "invoices/a.pdf", Plugins: []string{"test.answer1"}})
+			if resp.Error != nil {
+				t.Fatal(resp.Error)
+			}
+			tc.set(h)
+			if _, resp := h.runPlan(t, pr.PlanID); refusalCode(resp) != tc.want {
+				t.Fatalf("run: %+v, want %s", resp.Error, tc.want)
+			}
+			if _, resp := h.runPlan(t, pr.PlanID); resp.Error == nil || resp.Error.Code != ipc.CodeNoSuchPlan {
+				t.Fatalf("second run: %+v", resp.Error)
+			}
+			if h.b.ws != nil {
+				if n, _ := os.ReadDir(h.b.ws.Dir()); len(n) != 0 {
+					t.Fatalf("a refused run fetched the file: %v", n)
+				}
+			}
+		})
+	}
+}
+
 func TestRunOtherPeer(t *testing.T) {
 	h := newHarness(t, "test.answer1")
 	pr, _ := h.plan(t, rpc.PlanParams{Key: "invoices/a.pdf", Plugins: []string{"test.answer1"}})

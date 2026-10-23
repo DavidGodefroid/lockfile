@@ -23,7 +23,7 @@ func fakeContainer(t *testing.T, ns, decl string, uids ...string) Container {
 	mustMkdir(t, filepath.Join(proc, "42", "ns"))
 	mustSymlink(t, "42", filepath.Join(proc, "self"))
 	mustSymlink(t, ns, filepath.Join(proc, "42", "ns", "pid"))
-	mustWrite(t, filepath.Join(proc, "42", "status"), "Name:\tlockfile\nUid:\t10001\t10001\t10001\t10001\n", 0o444)
+	mustWrite(t, filepath.Join(proc, "42", "status"), "Name:\tlockfile\nUid:\t10001\t10001\t10001\t10001\nSeccomp:\t2\nSeccomp_filters:\t1\n", 0o444)
 	mustWrite(t, filepath.Join(proc, "1", "status"), "Name:\tdocker-init\nUid:\t0\t0\t0\t0\n", 0o444)
 	for i, u := range uids {
 		mustWrite(t, filepath.Join(proc, string(rune('a'+i)), "status"), "", 0o444) // not a pid: ignored
@@ -141,6 +141,21 @@ func TestContainerOtherAccountRefused(t *testing.T) {
 	}
 }
 
+// seccomp=unconfined leaves the console without a filter: refused.
+func TestContainerSeccompRefused(t *testing.T) {
+	for _, status := range []string{
+		"Uid:\t10001\t10001\t10001\t10001\nSeccomp:\t0\n", // unconfined
+		"Uid:\t10001\t10001\t10001\t10001\nSeccomp:\t1\n", // strict mode, not a filter
+		"Uid:\t10001\t10001\t10001\t10001\n",              // no Seccomp line
+	} {
+		c := fakeContainer(t, privateNS, goodDecl)
+		mustWrite(t, filepath.Join(c.Proc, "42", "status"), status, 0o444)
+		if err := c.Check(); !errors.Is(err, ErrContainer) || !strings.Contains(err.Error(), "seccomp filter") {
+			t.Errorf("status %q: Check = %v, want a seccomp refusal", status, err)
+		}
+	}
+}
+
 func TestCheckWith(t *testing.T) {
 	const (
 		open   = "22 1 0:21 / /proc rw - proc proc rw\n"
@@ -152,8 +167,12 @@ func TestCheckWith(t *testing.T) {
 	none := good
 	none.File = filepath.Join(t.TempDir(), "absent.toml")
 
-	if err := CheckWith(table(hidden), bad); err != nil {
-		t.Errorf("hidepid: CheckWith = %v, want nil (the container is not needed)", err)
+	if err := CheckWith(table(hidden), none); err != nil {
+		t.Errorf("hidepid, no declaration: CheckWith = %v, want nil", err)
+	}
+	// A declared container needs its conditions even with hidepid.
+	if err := CheckWith(table(hidden), bad); !errors.Is(err, ErrContainer) || errors.Is(err, ErrNotHidden) {
+		t.Errorf("hidepid, failing container: CheckWith = %v, want ErrContainer alone", err)
 	}
 	if err := CheckWith(table(open), none); !errors.Is(err, ErrNotHidden) || errors.Is(err, ErrContainer) {
 		t.Errorf("no declaration: CheckWith = %v, want ErrNotHidden alone", err)
@@ -164,8 +183,11 @@ func TestCheckWith(t *testing.T) {
 	if err := CheckWith(table(open), bad); !errors.Is(err, ErrNotHidden) || !errors.Is(err, ErrContainer) {
 		t.Errorf("failing container: CheckWith = %v, want ErrNotHidden and ErrContainer", err)
 	}
-	if err := CheckWith(table(""), good); !errors.Is(err, ErrNoProc) {
-		t.Errorf("no /proc: CheckWith = %v, want ErrNoProc", err)
+	if err := CheckWith(table(""), none); !errors.Is(err, ErrNoProc) {
+		t.Errorf("no /proc, no declaration: CheckWith = %v, want ErrNoProc", err)
+	}
+	if err := CheckWith(table(""), bad); !errors.Is(err, ErrNoProc) || !errors.Is(err, ErrContainer) {
+		t.Errorf("no /proc, failing container: CheckWith = %v, want ErrNoProc and ErrContainer", err)
 	}
 }
 

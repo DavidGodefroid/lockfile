@@ -26,11 +26,12 @@ const initPidNS = 0xEFFFFFFC
 // hidepid=invisible; it wraps the failed condition.
 var ErrContainer = errors.New("not a private container")
 
-// Container is the stand-in for hidepid=invisible in a container. All three
+// Container is the stand-in for hidepid=invisible in a container. All
 // conditions must hold: File is a root-owned declaration that others
-// cannot write, in such a directory; the console is in a pid namespace other than the initial
-// one, and Proc is that namespace's /proc; no process listed there runs
-// under an account other than root and UID (the console's).
+// cannot write, in such a directory; the console is in a pid namespace
+// other than the initial one, and Proc is that namespace's /proc; no
+// process listed there runs under an account other than root and UID (the
+// console's); the console runs under a seccomp filter.
 type Container struct {
 	File string // ContainerFile
 	Proc string // "/proc"
@@ -72,7 +73,29 @@ func (c Container) Check() error {
 	if err := c.checkProcesses(); err != nil {
 		return fmt.Errorf("%w: %v", ErrContainer, err)
 	}
+	if err := c.checkSeccomp(); err != nil {
+		return fmt.Errorf("%w: %v", ErrContainer, err)
+	}
 	return nil
+}
+
+// checkSeccomp requires a seccomp filter on this process ("Seccomp: 2" in
+// /proc/self/status): a container started with seccomp=unconfined has
+// none, and lifts the limits Docker puts on the console itself.
+func (c Container) checkSeccomp() error {
+	b, err := os.ReadFile(filepath.Join(c.Proc, "self", "status"))
+	if err != nil {
+		return err
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		if v, ok := strings.CutPrefix(line, "Seccomp:"); ok {
+			if strings.TrimSpace(v) == "2" {
+				return nil
+			}
+			break
+		}
+	}
+	return errors.New("the console runs without a seccomp filter (docker run --security-opt seccomp=unconfined?): run it under the shipped seccomp.json")
 }
 
 func (c Container) checkFile() error {

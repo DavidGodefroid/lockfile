@@ -22,10 +22,10 @@ documented.
   could poll them and read file content out of them. seccomp cannot stop a process from writing
   its own entries. On a host this needs `/proc` mounted with `hidepid=invisible`, which Docker
   cannot do. The image declares a container of its own (`/etc/lockfile/container.toml`, owned
-  by root, not writable by others), and the console accepts a plain `/proc` only if, at start
-  and before every plan, that declaration holds, its pid namespace is not the host's and
-  `/proc` is that namespace's, and no listed process runs as an account other than root and
-  `lockfile`. Anything else is refused with `proc_not_hidden`, and `lockfile doctor` fails
+  by root, not writable by others), and the console accepts a plain `/proc` only if, at start,
+  when a plan arrives and just before it runs, that declaration holds, its pid namespace is not the host's and
+  `/proc` is that namespace's, no listed process runs as an account other than root and
+  `lockfile`, and the console runs under a seccomp filter (refusing `seccomp=unconfined`). Anything else is refused with `proc_not_hidden`, and `lockfile doctor` fails
   naming the condition. Residual: the host's pid namespace lists every container's processes,
   so the host's accounts read them unless the host's own `/proc` has `hidepid=invisible`;
   whoever has Docker on the host is outside the boundary anyway (below). Never `--pid=host` or

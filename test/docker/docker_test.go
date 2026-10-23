@@ -160,7 +160,9 @@ func openUp(t *testing.T, dir string) {
 func (s *setup) console(t *testing.T, img string, opts ...string) string {
 	t.Helper()
 	name := fmt.Sprintf("lockfile-e2e-console-%d", time.Now().UnixNano())
+	// As docs/docker.md runs it: no capability, no privilege gain.
 	args := []string{dockerCLI, "run", "-it", "--rm", "--name", name, "--user", "lockfile",
+		"--cap-drop=ALL", "--security-opt", "no-new-privileges",
 		"-v", s.run + ":/run/lockfile", "-v", s.home + ":/home/lockfile",
 		"-v", s.data + ":/srv/lockfile/samples:ro"}
 	args = append(args, opts...)
@@ -408,4 +410,28 @@ func openPTY(t *testing.T) (ptm, pts *os.File) {
 		t.Fatal(err)
 	}
 	return ptm, pts
+}
+
+// seccomp=unconfined lifts Docker's limits on the console itself: refused,
+// although Landlock and the plugins' own filter would still work.
+func TestUnconfinedRefuses(t *testing.T) {
+	s := newSetup(t)
+	s.console(t, image, "--security-opt", "seccomp=unconfined")
+	s.waitText(t, "without a seccomp filter")
+}
+
+// An agent container that joins the console's pid namespace could read the
+// plugins' /proc entries: its plan is refused.
+func TestSharedPidNamespaceRefuses(t *testing.T) {
+	s := newSetup(t)
+	c := s.console(t, image, "--security-opt", "seccomp="+s.seccomp)
+	s.waitServed(t)
+	got, out, ok := s.answers(t, image, []string{"--pid=container:" + c}, "test.answer1")
+	if ok || !strings.Contains(out, "proc_not_hidden") {
+		t.Fatalf("agent in the console's pid namespace: %v\n%s", got, out)
+	}
+	// The console still serves an agent in a container of its own.
+	if got, out, ok := s.answers(t, image, nil, "test.answer1"); !ok || got["test.answer1"] != "1" {
+		t.Fatalf("agent after the refusal: %v\n%s", got, out)
+	}
 }

@@ -140,7 +140,7 @@ docker run --rm --user lockfile -v lockfile-home:/home/lockfile lockfile plugin 
 
 # 3. The console, in a terminal you keep in view.
 docker run -it --rm --name lockfile-console --user lockfile \
-  --security-opt seccomp="$PWD/seccomp.json" \
+  --security-opt seccomp="$PWD/seccomp.json" --cap-drop=ALL --security-opt no-new-privileges \
   -v lockfile-run:/run/lockfile -v lockfile-home:/home/lockfile \
   -v /data/samples:/srv/lockfile/samples:ro \
   lockfile console --profile samples

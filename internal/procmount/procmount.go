@@ -149,16 +149,19 @@ func ReadMountinfo() ([]byte, error) { return os.ReadFile("/proc/self/mountinfo"
 func CheckSystem() error { return CheckWith(ReadMountinfo, SystemContainer()) }
 
 // CheckWith is CheckSystem with the mount table and the container given.
-// Without hidepid, a declared container must pass c.Check; the error then
-// wraps both ErrNotHidden and ErrContainer. Undeclared, the result is
-// Check's.
+// A declared container must pass c.Check, hidepid or not (its error wraps
+// ErrContainer, and ErrNotHidden too when /proc is not hidden). Undeclared,
+// the result is Check's.
 func CheckWith(read func() ([]byte, error), c Container) error {
-	err := Check(read)
-	if !errors.Is(err, ErrNotHidden) || !c.Declared() {
-		return err
+	if !c.Declared() {
+		return Check(read)
 	}
-	if cerr := c.Check(); cerr != nil {
+	cerr := c.Check()
+	if cerr == nil {
+		return nil
+	}
+	if err := Check(read); err != nil {
 		return fmt.Errorf("%w; %w", err, cerr)
 	}
-	return nil
+	return cerr
 }

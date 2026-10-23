@@ -185,7 +185,7 @@ func TestDoctorProcContainer(t *testing.T) {
 	if err := os.Symlink("pid:[4026532481]", filepath.Join(proc, "42", "ns", "pid")); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(proc, "42", "status"), []byte("Uid:\t10001\t10001\t10001\t10001\n"), 0o444); err != nil {
+	if err := os.WriteFile(filepath.Join(proc, "42", "status"), []byte("Uid:\t10001\t10001\t10001\t10001\nSeccomp:\t2\n"), 0o444); err != nil {
 		t.Fatal(err)
 	}
 	c := procmount.Container{File: decl, Proc: proc, PID: 42, UID: 10001, Owner: func(fs.FileInfo) (int, bool) { return 0, true }}

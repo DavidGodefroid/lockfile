@@ -140,16 +140,21 @@ In a terminal you keep in view:
 ```sh
 docker run -it --rm --name lockfile-console --user lockfile \
   --security-opt seccomp="$PWD/seccomp.json" \
+  --cap-drop=ALL --security-opt no-new-privileges \
   -v lockfile-run:/run/lockfile \
   -v lockfile-home:/home/lockfile \
   -v /data/samples:/srv/lockfile/samples:ro \
   lockfile console --profile samples
 ```
 
-Add `--auto` after `console` as on a host. The console refuses to run any
-plugin, with a message naming the reason, when Landlock or seccomp is
-unavailable or when the container is not private (below): there is no
-unsandboxed run.
+Add `--auto` after `console` as on a host. `--cap-drop=ALL` and
+`no-new-privileges` take from the container what the console never needs
+(it runs as an unprivileged account; the plugin sandbox sets
+`no_new_privs` itself). The console refuses to run any plugin, with a
+message naming the reason, when Landlock or seccomp is unavailable, when it
+runs without a seccomp filter (`seccomp=unconfined`), or when the container
+is not private (below): there is no unsandboxed run. Sandbox and container
+are checked at start, when a plan arrives and again just before it runs.
 
 ## Credentials from Vault
 
@@ -260,13 +265,14 @@ the plugin writes from inside its sandbox, a covert channel to the agent.
 Docker cannot mount `/proc` with that option. The image declares instead
 (`/etc/lockfile/container.toml`, root-owned) that the console runs in a
 container of its own, and the console then accepts a plain `/proc` only when,
-at start and before every plan:
+at start, when a plan arrives and just before it runs:
 
 - that declaration is a regular file owned by root that others cannot write;
 - the console is in a pid namespace other than the host's, and `/proc` is
   that namespace's;
 - no process listed in `/proc` runs as an account other than root and
-  `lockfile`.
+  `lockfile`;
+- the console runs under a seccomp filter (never `seccomp=unconfined`).
 
 Otherwise it refuses, naming the condition. So **never start the console
 with `--pid=host`** (the host's processes, your agent's among them, would

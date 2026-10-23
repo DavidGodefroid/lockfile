@@ -17,15 +17,18 @@ Docker is the deployment of lockfile, at parity with locksql (#10).
 - `/proc` in a container: Docker cannot mount it with `hidepid=invisible`. Where the image's
   root-owned `/etc/lockfile/container.toml` declares a container of its own, the console
   accepts a plain `/proc` only in a pid namespace other than the host's, whose `/proc` it is,
-  that lists no process of an account other than root and the console's; checked at start and
-  before every plan, refused otherwise (`proc_not_hidden`, the failed condition named).
+  that lists no process of an account other than root and the console's, with a seccomp filter
+  on the console (`seccomp=unconfined` is refused); checked at start, when a plan arrives and
+  just before it runs (the sandbox too), refused otherwise (`proc_not_hidden`, the failed
+  condition named).
   `lockfile doctor` reports it.
 - Documentation is Docker-only: `docs/docker.md` (new), the README quick start,
   `docs/usage.md` and `docs/security-model.md`. Other deployment modes (`lockfile install`, the
   session and desktop shapes) stay in the code but are no longer documented.
 - CI: a `docker` job builds the image, runs the sandbox tests in a container under
   `seccomp.json`, and runs `test/docker` (console and agent containers; sandbox active; peer
-  refused; `ALLOWED_UIDS`; no Landlock and `--pid=host` refused).
+  refused; `ALLOWED_UIDS`; no Landlock, `seccomp=unconfined`, `--pid=host` and an agent in the
+  console's pid namespace refused).
 
 ## v0.2.0
 
