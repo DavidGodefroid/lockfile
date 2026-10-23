@@ -39,6 +39,32 @@ jobs:
       - name: go test (integration)
         run: go test -count=1 -tags integration ./test/integration/...
 
+  docker:
+    name: docker (image, sandbox under the shipped seccomp profile, end to end)
+    runs-on: ubuntu-24.04
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.x"
+          check-latest: true
+      - name: docker build
+        run: |
+          docker build -t lockfile:e2e --build-arg VERSION=ci .
+          docker build -t lockfile:e2e-allowed --build-arg VERSION=ci --build-arg ALLOWED_UIDS=4242 .
+      - name: sandbox tests in a container under seccomp.json
+        # The build stage's image: the same Go, the same kernel interfaces
+        # the console's container gets.
+        run: |
+          go_image=$(sed -n 's/^FROM \(docker.io\/library\/golang:[^ ]*\) AS build$/\1/p' Dockerfile)
+          docker run --rm --security-opt seccomp="$PWD/seccomp.json" \
+            --user "$(id -u):$(id -g)" -e HOME=/tmp -e CGO_ENABLED=0 -e GOCACHE=/tmp/gocache -e GOMODCACHE=/tmp/gomod \
+            -v "$PWD:/src:ro" -w /src "$go_image" go test -count=1 ./sandbox/
+      - name: end to end (docs/docker.md)
+        run: go test -count=1 -v -tags docker ./test/docker/...
+
   lint:
     name: lint (staticcheck, govulncheck, actionlint)
     runs-on: ubuntu-latest

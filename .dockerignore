@@ -1,0 +1,5 @@
+.git
+/dist/
+/lockfile
+*.test
+.superpowers/

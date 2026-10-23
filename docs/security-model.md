@@ -3,26 +3,42 @@
 **Rule: the agent only ever sees 1s and 0s about a file.** The human approves every plan in a
 console the agent cannot drive, in an account the agent cannot read.
 
+## Deployment
+
+lockfile is deployed with Docker ([docker.md](docker.md)): the console in one container as the
+account `lockfile`, the agent's commands in others as `agent` or an `ALLOWED_UIDS` uid; they
+share only the socket volume. Other deployment modes exist in the code but are no longer
+documented.
+
 ## Preconditions
 
-- **`/proc` mounted with `hidepid=invisible`** (`hidepid=2`). While a plugin runs, its `/proc`
-  entries (command line, thread names and count, memory counters) are written by the plugin
-  itself and are readable by every account otherwise: the agent could poll them and read file
-  content out of them. seccomp cannot stop a process from writing its own entries, and a pid
-  namespace would not hide the plugin from the parent namespace (nor can one be made without a
-  user namespace). `lockfile doctor` (from either account) fails, and the console refuses to
-  start and refuses plans with `proc_not_hidden`, until `/proc` is remounted:
-  `mount -o remount,hidepid=invisible,gid=<admin group> /proc`, kept in `/etc/fstab` as
-  `proc /proc proc defaults,hidepid=invisible,gid=<admin group> 0 0`.
+- **Landlock and seccomp.** The console container runs under the shipped `seccomp.json`
+  (Docker's default profile, which allows the sandbox's system calls), never
+  `seccomp=unconfined`. Without Landlock or seccomp the console refuses to run plugins and
+  `lockfile doctor` fails: there is no unsandboxed run.
+- **No other account sees the plugins' processes.** While a plugin runs, its `/proc` entries
+  (command line, thread names and count, memory counters) are written by the plugin itself and
+  are readable by every account that shares its pid namespace or an ancestor of it: the agent
+  could poll them and read file content out of them. seccomp cannot stop a process from writing
+  its own entries. On a host this needs `/proc` mounted with `hidepid=invisible`, which Docker
+  cannot do. The image declares a container of its own (`/etc/lockfile/container.toml`, owned
+  by root, not writable by others), and the console accepts a plain `/proc` only if, at start,
+  when a plan arrives and just before it runs, that declaration holds, its pid namespace is not the host's and
+  `/proc` is that namespace's, no listed process runs as an account other than root and
+  `lockfile`, and the console runs under a seccomp filter (refusing `seccomp=unconfined`). Anything else is refused with `proc_not_hidden`, and `lockfile doctor` fails
+  naming the condition. Residual: the host's pid namespace lists every container's processes,
+  so the host's accounts read them unless the host's own `/proc` has `hidepid=invisible`;
+  whoever has Docker on the host is outside the boundary anyway (below). Never `--pid=host` or
+  `--pid=container:…` for the console, nor `--pid=container:<console>` for an agent.
 
 ## Boundaries
 
 | Boundary | Enforced by |
 |---|---|
-| The agent cannot read the file, the credentials, the plugins or the audit | a separate OS account `lockfile` (home 0700); `lockfile doctor` checks from the agent's side that opening it fails |
-| The agent cannot drive the console | lockkit's isolation checks: the console runs in its own login session (or a desktop terminal of its own account, Wayland only), refuses X11 on production, refuses relays |
-| Only the clients group reaches the console | socket in `/run/lockfile` (2750, setgid group `lockfile-clients`), socket 0660, kernel peer credentials checked on every connection |
-| The agent cannot replace the binary the console runs | `/usr/local/bin/lockfile` owned by root; `install` refuses a user-writable source unless `--trust-binary`, and always copies through a root-owned temporary file checked against the sha256 it printed (a binary swapped before sudo runs installs nothing) |
+| The agent cannot read the file, the credentials, the plugins or the audit | they are in the console's container and its home volume (`lockfile-home`, home 0700, account `lockfile`); the agent's containers mount only the socket volume; local sources are mounted read-only under `/srv/lockfile` (0700, `lockfile`) in the console's container only |
+| The agent cannot drive the console | the console's terminal is the one you started `docker run -it` in; lockkit's isolation checks run inside the container (no relay, the terminal belongs to the console account, X11 refused by `system.toml`). Residual: whoever runs `docker` commands can `attach` or `exec` into it ([docker.md](docker.md#what-docker-does-and-does-not-separate)) |
+| Only the clients group reaches the console | socket in the `lockfile-run` volume at `/run/lockfile` (2750, setgid group `lockfile-clients`), socket 0660, kernel peer credentials checked on every connection: a peer that is neither `lockfile`, nor in `lockfile-clients`, nor in `allowed_uids` (`ALLOWED_UIDS` at build time) is refused |
+| The agent cannot replace the binary the console runs | `/usr/local/bin/lockfile`, `/usr/local/bin/cosign` and `/etc/lockfile/*` owned by root in the image, which has no `sudo`; base images pinned by digest, cosign and the Vault CLI by sha256 |
 | A plugin cannot read anything but its input, nor talk to the network | Landlock (execute + read on its own binary only; TCP denied with ABI ≥ 4), seccomp (no sockets, ptrace, mount, bpf, keyctl, second execve, System V IPC, POSIX message queues, signals to other processes including through a descriptor owner, shared anonymous memory), rlimits (CPU, data and address space, a task cap relative to the account's tasks), empty environment, input as a read-only fd 3, stdout capped at 3 bytes, stderr discarded |
 | A plugin answers only its signed question | the manifest's question/1/0 are signed with the binary; marketplace review; a changed question is a loosening the human types to accept; a plan runs only the version and hashes it was approved with, checked on the opened binary (an update in between answers `plugin_tampered`) |
 | A withdrawn version does not run | the yanked flag of the signed index, recorded in `plugins.lock` by `plugin install`/`update`/`verify`; the store refuses to open a yanked version (`plugin_yanked`); `lockfile doctor` reports the recorded ones. Residual: a version yanked upstream keeps running until one of those commands reads the index |

@@ -264,7 +264,9 @@ func (b *Backend) Checks(ctx context.Context, s console.Session) []console.Findi
 	if _, _, err := b.o.Probe(); err != nil {
 		out = append(out, console.Finding{Refuse: true, Text: "the plugin sandbox is unavailable (Landlock and seccomp are required): run lockfile doctor"})
 	}
-	if err := b.o.ProcHidden(); err != nil {
+	if err := b.o.ProcHidden(); errors.Is(err, procmount.ErrContainer) {
+		out = append(out, console.Finding{Refuse: true, Text: "other accounts could read the plugins' processes in /proc (a covert channel to the agent): " + err.Error()})
+	} else if err != nil {
 		out = append(out, console.Finding{Refuse: true, Text: "other accounts can read the plugins' processes in /proc (a covert channel to the agent): " + procmount.Fix})
 	}
 	if ws, _ := b.current(); ws == nil {

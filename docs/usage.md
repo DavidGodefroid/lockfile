@@ -9,35 +9,30 @@ lockfile has two sides, in two OS accounts:
 
 ## Setup
 
-```sh
-sh scripts/install.sh            # or a release archive; cosign is required
-sudo lockfile install            # Linux: account lockfile, group lockfile-clients, /etc/lockfile/system.toml,
-                                 # /run/lockfile (2750), root-owned /usr/local/bin/lockfile
-lockfile doctor                  # from both accounts
-```
+lockfile runs in Docker: build the image, set up the console account's home volume, run the
+console in one container and the agent's commands in others. [docker.md](docker.md) is the
+setup guide. Other deployment modes exist in the code but are no longer documented.
 
-`lockfile install` prints the root script before it runs it (`--print` only prints it,
-`--yes` skips the question). It refuses a binary another account could replace (install a
-release into `/usr/local/bin` first, or pass `--trust-binary` to pin this one's sha256).
-After it: give the console account a password, log out and in again (the new group), and
-open a separate session as `lockfile` (switch user; prefer Wayland) for the console.
+The commands below are written as on a host. In Docker they run in throwaway containers:
 
-`/proc` must hide other accounts' processes, or consoles refuse to start and plans are
-refused with `proc_not_hidden` (`E_PROC_NOT_HIDDEN`); `lockfile install` does not change it:
+| Commands | `docker run` prefix |
+|---|---|
+| console account: `profile`, `plugin`, `marketplace`, `audit`, `doctor` | `docker run --rm --user lockfile -v lockfile-home:/home/lockfile lockfile …` (`-it` when it asks something) |
+| the console | see [Run the console](docker.md#run-the-console) (`-it`, the seccomp profile, both volumes, the `local` mounts) |
+| agent side: `status`, `sources`, `plugins`, `plan`, `run`, `answers`, `release`, `mcp` | `docker run --rm -v lockfile-run:/run/lockfile lockfile …` (`-i` for `mcp`) |
 
-```sh
-sudo mount -o remount,hidepid=invisible,gid=<admin group> /proc
-# /etc/fstab, to keep it after a reboot:
-proc /proc proc defaults,hidepid=invisible,gid=<admin group> 0 0
-```
+The console refuses to run plugins without Landlock and seccomp (the container runs under the
+shipped `seccomp.json`), and when other accounts could read the plugins' processes in `/proc`:
+plans are then refused with `proc_not_hidden` (`E_PROC_NOT_HIDDEN`). In Docker the image's
+container declaration stands in for `hidepid=invisible`; see
+[docker.md](docker.md#what-docker-does-and-does-not-separate) for its conditions.
 
-Members of `gid=` still see every process (monitoring tools, admins).
-
-From the console account, `lockfile doctor` also checks the work directory (mode 0700, parents
-other accounts cannot traverse, not under a world-writable directory such as `/tmp`, not on a
-network filesystem), every `local` source directory (not reachable by other accounts or by the
-clients group) and the socket directory's owner (`lockfile:lockfile-clients`). It prints no
-path from the configuration.
+From the console account, `lockfile doctor` also checks the sandbox, `/proc`, the work
+directory (mode 0700, parents other accounts cannot traverse, not under a world-writable
+directory such as `/tmp`, not on a network filesystem), every `local` source directory (not
+reachable by other accounts or by the clients group: mount it under `/srv/lockfile`) and the
+socket directory's owner (`lockfile:lockfile-clients`). It prints no path from the
+configuration.
 
 ## Profiles (console account)
 
@@ -49,7 +44,7 @@ lockfile profile add docs --source s3 --bucket documents --region eu-west-1 --pr
   --credentials vault --vault-path secret/data/lockfile/docs --production
 lockfile profile add partner --source sftp --host sftp.example.org --user reader --auth key \
   --key ~/.ssh/partner_ed25519 --known-hosts ~/.ssh/known_hosts --base-dir /outgoing
-lockfile profile add samples --source local --path /srv/samples
+lockfile profile add samples --source local --path /srv/lockfile/samples   # mounted read-only, docker.md
 ```
 
 ```toml
@@ -59,7 +54,7 @@ bucket = "documents"
 region = "eu-west-1"
 endpoint = ""                 # S3-compatible server; https:// (http:// only for localhost)
 prefix = "invoices/"          # keys outside the prefix are refused
-credentials = "vault"         # ask | keychain | vault (none: local, or an unencrypted sftp key)
+credentials = "vault"         # ask | vault (none: local, or an unencrypted sftp key); keychain: not in Docker
 vault_path = "secret/data/lockfile/docs"   # username = access key id, password = secret key
 production = true             # the profile name is typed for every approval
 max_object_bytes = "50MiB"    # larger objects are not fetched
@@ -80,7 +75,8 @@ SFTP `auth = "password"` takes user + password; `auth = "key"` reads the private
 A leading `~/` in `key` and `known_hosts` is the lockfile account's home.
 On SFTP a key whose path below `base_dir` goes through a symbolic link on the server, or that
 the server resolves outside `base_dir`, is not fetched (`fetch_failed`).
-`lockfile forget --profile P` deletes a keychain secret.
+The container has no OS keychain: use `ask` (typed in the console at each start) or `vault`
+(the image's `vault` target, [docker.md](docker.md#credentials-from-vault)).
 
 ## Plugins and marketplaces (console account)
 
@@ -117,8 +113,9 @@ it applies it only after `:review` in the console.
 lockfile console --profile docs [--auto]
 ```
 
-It checks the isolation (separate account and session), asks for the secret, connects, and
-serves the profile's socket in `/run/lockfile`. Every plan shows an approval screen: the key as
+Run in its container ([docker.md](docker.md#run-the-console)), it checks the isolation (the
+console account, its own terminal), the sandbox and `/proc`, asks for the secret, connects,
+and serves the profile's socket in `/run/lockfile` (the `lockfile-run` volume). Every plan shows an approval screen: the key as
 the agent typed it, each plugin with its question and the meaning of 1 and 0, how many answers
 the plan reveals, and a red line per unofficial plugin. `y` approves (the profile name on
 production), `n <reason>` denies. Keys: `:review`, `:status`, `:mode`/Shift+Tab (auto mode, never
@@ -160,26 +157,23 @@ There is no listing or stat: the agent asks the user for the exact key.
 
 ## Wiring an agent
 
+The agent starts `lockfile mcp` in a throwaway container with the socket volume
+([docker.md](docker.md#wire-the-agent)):
+
 ```sh
-lockfile init claude|codex|cursor|gemini          # this project
-lockfile init claude --user                       # every project of this account
-lockfile doctor --fix                             # wires the installed agents not wired yet
+claude mcp add --scope user lockfile -- docker run -i --rm -v lockfile-run:/run/lockfile lockfile mcp
 ```
 
-Claude Code may call `lockfile_status`, `lockfile_sources` and `lockfile_plugins` without a
-prompt; plans and runs always go through Claude Code's permission prompt and the console.
+`lockfile init claude|codex|cursor|gemini`, run as you in a throwaway container from the project
+root, writes the skill or rules file and an MCP entry to replace by the one above. Claude Code
+may call `lockfile_status`, `lockfile_sources` and `lockfile_plugins` without a prompt; plans
+and runs always go through Claude Code's permission prompt and the console.
 
 ## Updates
 
-```sh
-lockfile update [--check] [--yes] [--allow-downgrade]
-```
-
-checks `checksums.txt` against the signature of lockfile's release workflow run on the
-release's own tag (cosign), then the archive against it, then replaces the binary (with sudo
-from a pinned copy when root owns it). A release older than the running one is refused
-unless `--allow-downgrade`; `scripts/install.sh` likewise refuses to replace a newer
-installed binary unless `LOCKFILE_ALLOW_DOWNGRADE=1`.
+Rebuild the image (`docker build -t lockfile .` from an updated clone, or with
+`--build-arg VERSION=…` on a tag) and restart the console; the volumes keep the console's
+state. The agent's containers start from the new image on their next run.
 
 A marketplace index older than the last one verified for that marketplace is refused (a
 replayed index could lift a yank); the last `generated` time of each marketplace is kept next

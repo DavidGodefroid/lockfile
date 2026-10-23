@@ -169,6 +169,16 @@ func (b *Backend) run(ctx context.Context, req ipc.Request, env console.Env) ipc
 	if pol == nil || config.Fingerprint(pol) != pl.policyFP || !b.pinsInstalled(pl.pins) {
 		return console.ErrResp(req.ID, ipc.CodeNoSuchPlan, msgNoSuchPlan)
 	}
+	// Checked again at run time: an approval can wait minutes, during which
+	// the sandbox may go or another account's process join /proc.
+	if _, _, err := b.o.Probe(); err != nil {
+		env.Println("plan " + pl.id + ": refused " + string(answers.CodeSandboxUnavailable))
+		return product.Refuse(req.ID, answers.CodeSandboxUnavailable)
+	}
+	if err := b.o.ProcHidden(); err != nil {
+		env.Println("plan " + pl.id + ": refused " + string(answers.CodeProcNotHidden))
+		return product.Refuse(req.ID, answers.CodeProcNotHidden)
+	}
 	if _, err := env.Session(ctx); err != nil {
 		return console.ErrResp(req.ID, ipc.CodeConnLost, msgConnLost)
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/DavidGodefroid/lockkit/sysconf"
 
 	"github.com/DavidGodefroid/lockfile/internal/plugin"
+	"github.com/DavidGodefroid/lockfile/internal/procmount"
 	"github.com/DavidGodefroid/lockfile/internal/product"
 )
 
@@ -156,6 +157,45 @@ func TestDoctorProcHidepid(t *testing.T) {
 	h.mounts = func() ([]byte, error) { return []byte(hiddenProc), nil }
 	if _, out, _ := runArgs(t, "", "doctor"); !strings.Contains(out, "hidepid=invisible: other accounts") {
 		t.Fatalf("hidden /proc:\n%s", out)
+	}
+}
+
+// In a declared container, doctor reports the stand-in for hidepid, and
+// fails with the failed condition when one does not hold.
+func TestDoctorProcContainer(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("/proc is Linux only")
+	}
+	h := doctorEnv(t, "/nonexistent")
+	h.mounts = func() ([]byte, error) { return []byte(openProc), nil }
+	dir := t.TempDir()
+	decl := filepath.Join(dir, "container.toml")
+	if err := os.WriteFile(decl, []byte("pid_namespace = \"private\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	proc := filepath.Join(dir, "proc")
+	for _, d := range []string{"42/ns"} {
+		if err := os.MkdirAll(filepath.Join(proc, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink("42", filepath.Join(proc, "self")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("pid:[4026532481]", filepath.Join(proc, "42", "ns", "pid")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(proc, "42", "status"), []byte("Uid:\t10001\t10001\t10001\t10001\nSeccomp:\t2\n"), 0o444); err != nil {
+		t.Fatal(err)
+	}
+	c := procmount.Container{File: decl, Proc: proc, PID: 42, UID: 10001, Owner: func(fs.FileInfo) (int, bool) { return 0, true }}
+	h.container = func() procmount.Container { return c }
+	if _, out, _ := runArgs(t, "", "doctor"); !strings.Contains(out, "container: private pid namespace") || strings.Contains(out, "FAIL  proc") {
+		t.Fatalf("passing container:\n%s", out)
+	}
+	c.Owner = func(fs.FileInfo) (int, bool) { return 10001, true }
+	if code, out, _ := runArgs(t, "", "doctor"); code != product.ExitError || !strings.Contains(out, "root-owned directory") {
+		t.Fatalf("declaration not root-owned: exit %d:\n%s", code, out)
 	}
 }
 
