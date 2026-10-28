@@ -65,12 +65,12 @@
   <thead><tr><th scope="col">Boundary</th><th scope="col">Enforced by</th></tr></thead>
   <tbody>
   <tr><td>The agent cannot read the file, the credentials, the plugins or the audit</td><td>a separate OS account <code>lockfile</code> (home <code>0700</code>); <code>lockfile doctor</code> checks from the agent’s side that opening it fails</td></tr>
-  <tr><td>The agent cannot drive the console</td><td>lockkit’s isolation checks: the console runs in its own login session (or a desktop terminal of its own account, Wayland only), refuses X11 on production, refuses relays</td></tr>
+  <tr><td>The agent cannot drive the console</td><td>lockkit’s isolation checks: the console runs in a container of its own, as its own account, on the terminal you started <code>lockfile console</code> in; X11 refused, relays refused. Residual: whoever runs <code>docker</code> commands can attach or exec into it (<a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/docker.md#what-docker-does-and-does-not-separate">what Docker does and does not separate</a>)</td></tr>
   <tr><td>Only the clients group reaches the console</td><td>socket directory <code>/run/lockfile</code> (<code>2750</code>, setgid group <code>lockfile-clients</code>), socket <code>0660</code>, kernel peer credentials checked on every connection</td></tr>
-  <tr><td>The agent cannot replace the binary the console runs</td><td><code>/usr/local/bin/lockfile</code> owned by root; <code>install</code> refuses a user-writable source unless its sha256 is pinned</td></tr>
+  <tr><td>The agent cannot replace what the console runs</td><td>the console runs the release image by its cosign-verified digest; the launcher <code>/usr/local/bin/lockfile</code> and its seccomp profile are owned by root</td></tr>
   <tr><td>A plugin cannot read anything but its input, nor talk to the network</td><td>Landlock (execute and read its own binary only; TCP denied with ABI ≥ 4), seccomp (no sockets, <code>ptrace</code>, <code>mount</code>, <code>bpf</code>, <code>keyctl</code>, second <code>execve</code>), rlimits, empty environment, input as a read-only fd 3, stdout capped at 3 bytes, stderr discarded; see the <a href="#upcoming">hardening coming in v0.2.1</a></td></tr>
   <tr><td>A plugin answers only its signed question</td><td>the manifest’s question and meanings of 1 and 0 are signed with the binary; marketplace review; a changed question is a loosening the human types to accept</td></tr>
-  <tr><td>Plugins and releases are what their publisher built</td><td>cosign keyless signatures checked through lockkit (index, manifest, binary, lockfile releases); no unsigned mode; a missing cosign refuses</td></tr>
+  <tr><td>Plugins and releases are what their publisher built</td><td>cosign keyless signatures checked through lockkit (index, manifest, binary, lockfile releases and images); no unsigned mode; a missing cosign refuses</td></tr>
   <tr><td>The agent cannot widen the policy</td><td>no socket method installs, trusts or loosens anything; a change request only queues text for the human</td></tr>
   </tbody>
   </table>

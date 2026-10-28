@@ -123,32 +123,28 @@ A run's result leaves the console only at the next multiple of
 
 With Docker on Linux (a kernel with Landlock). The console runs in one
 container, your agent's commands in others; they share only the socket volume.
-Full guide: [docs/docker.md](docs/docker.md). Other deployment modes exist in
-the code but are no longer documented.
+One `lockfile` command, the launcher, runs each of them in the signed release
+image. Full guide: [docs/docker.md](docs/docker.md).
 
 ```sh
-# 1. The image, and the seccomp profile the console runs under (never seccomp=unconfined).
-git clone https://github.com/DavidGodefroid/lockfile.git && cd lockfile
-docker build -t lockfile .
+# 1. The launcher and the seccomp profile the console runs under (cosign checks the
+#    release and its image; never seccomp=unconfined).
+V=vX.Y.Z
+curl -fsSLO "https://raw.githubusercontent.com/DavidGodefroid/lockfile/$V/scripts/install.sh"
+less install.sh && LOCKFILE_VERSION=$V sh install.sh
 
 # 2. The console account's setup, in its home volume: a profile on a directory
 #    mounted read-only, and the plugins (signatures checked with cosign, in the image).
-docker run --rm --user lockfile -v lockfile-home:/home/lockfile lockfile \
-  profile add samples --source local --path /srv/lockfile/samples --prefix invoices/
-docker run --rm --user lockfile -v lockfile-home:/home/lockfile lockfile plugin install file.non-empty@1.0.0
-docker run --rm --user lockfile -v lockfile-home:/home/lockfile lockfile plugin install format.is-pdf@1.0.0
+lockfile profile add samples --source local --path /srv/lockfile/samples --prefix invoices/
+lockfile plugin install file.non-empty@1.0.0
+lockfile plugin install format.is-pdf@1.0.0
 
 # 3. The console, in a terminal you keep in view.
-docker run -it --rm --name lockfile-console --user lockfile \
-  --security-opt seccomp="$PWD/seccomp.json" --cap-drop=ALL --security-opt no-new-privileges \
-  -v lockfile-run:/run/lockfile -v lockfile-home:/home/lockfile \
-  -v /data/samples:/srv/lockfile/samples:ro \
-  lockfile console --profile samples
+LOCKFILE_DOCKER_ARGS="-v /data/samples:/srv/lockfile/samples:ro" lockfile console --profile samples
 
-# 4. Your agent: wire it, then ask.
-claude mcp add --scope user lockfile -- docker run -i --rm -v lockfile-run:/run/lockfile lockfile mcp
-docker run --rm -v lockfile-run:/run/lockfile lockfile plan \
-  --key invoices/2026/10/abc123.pdf --plugin file.non-empty --plugin format.is-pdf --run --json
+# 4. Your agent: wire it (from the project root), then ask.
+lockfile init claude
+lockfile plan --key invoices/2026/10/abc123.pdf --plugin file.non-empty --plugin format.is-pdf --run --json
 ```
 
 ```json
@@ -345,15 +341,18 @@ mode. **Writing a plugin**: see [docs/plugin-contract.md](docs/plugin-contract.m
 
 ## Install
 
-Build the image from a clone (`docker build -t lockfile .`) or from the
-repository URL; [docs/docker.md](docs/docker.md) covers the volumes, the
-seccomp profile, the `vault` target and `ALLOWED_UIDS`. The base images are
-pinned by digest, cosign and the Vault CLI by sha256; the image has no `sudo`
-and starts no shell. Every release also ships static binaries and a signed
-`checksums.txt`, for other deployment modes, which are no longer documented.
+lockfile runs in Docker. `scripts/install.sh` installs the `lockfile`
+launcher and the seccomp profile, after checking with cosign that the release
+and its image `ghcr.io/davidgodefroid/lockfile:X.Y.Z` come from lockfile's
+release workflow run on that tag; the launcher runs every command in that
+image, by its digest. [docs/docker.md](docs/docker.md) covers what runs
+where, the volumes, the seccomp profile, the `-vault` image
+(`LOCKFILE_VAULT=1`), your own build, `ALLOWED_UIDS` and migrating from a
+host install. The base images are pinned by digest, cosign and the Vault CLI
+by sha256; the image has no `sudo`.
 
-**Upgrade.** Rebuild the image and restart the console; the volumes keep its
-state.
+**Upgrade.** `lockfile update` (same checks), then restart the console; the
+volumes keep its state.
 
 ## Status
 
