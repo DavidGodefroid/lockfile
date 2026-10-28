@@ -9,17 +9,19 @@ lockfile has two sides, in two OS accounts:
 
 ## Setup
 
-lockfile runs in Docker: build the image, set up the console account's home volume, run the
-console in one container and the agent's commands in others. [docker.md](docker.md) is the
-setup guide. Other deployment modes exist in the code but are no longer documented.
+lockfile runs in Docker, through the `lockfile` launcher: it runs each command below in the
+release image, with the account and the volumes it needs ([docker.md](docker.md#what-runs-where)):
 
-The commands below are written as on a host. In Docker they run in throwaway containers:
-
-| Commands | `docker run` prefix |
+| Commands | Runs as |
 |---|---|
-| console account: `profile`, `plugin`, `marketplace`, `audit`, `doctor` | `docker run --rm --user lockfile -v lockfile-home:/home/lockfile lockfile …` (`-it` when it asks something) |
-| the console | see [Run the console](docker.md#run-the-console) (`-it`, the seccomp profile, both volumes, the `local` mounts) |
-| agent side: `status`, `sources`, `plugins`, `plan`, `run`, `answers`, `release`, `mcp` | `docker run --rm -v lockfile-run:/run/lockfile lockfile …` (`-i` for `mcp`) |
+| console account: `profile`, `plugin`, `marketplace`, `audit`, `forget`, `doctor` | `lockfile`, on the `lockfile-home` volume |
+| the console | `lockfile`, confined, under the shipped seccomp profile ([Run the console](docker.md#run-the-console)); `local` sources mounted with `LOCKFILE_DOCKER_ARGS` |
+| `init`, `doctor --fix` | you, with your home and the project |
+| agent side: `status`, `sources`, `plugins`, `plan`, `run`, `answers`, `release`, `mcp` | `agent`, with the `lockfile-run` volume only |
+
+`lockfile version` prints the launcher's version and the image's; `lockfile update [vX.Y.Z]`
+replaces the launcher and the seccomp profile with a release's (cosign signatures and checksum
+checked) and pulls its image.
 
 The console refuses to run plugins without Landlock and seccomp (the container runs under the
 shipped `seccomp.json`), and when other accounts could read the plugins' processes in `/proc`:
@@ -157,23 +159,19 @@ There is no listing or stat: the agent asks the user for the exact key.
 
 ## Wiring an agent
 
-The agent starts `lockfile mcp` in a throwaway container with the socket volume
-([docker.md](docker.md#wire-the-agent)):
-
-```sh
-claude mcp add --scope user lockfile -- docker run -i --rm -v lockfile-run:/run/lockfile lockfile mcp
-```
-
-`lockfile init claude|codex|cursor|gemini`, run as you in a throwaway container from the project
-root, writes the skill or rules file and an MCP entry to replace by the one above. Claude Code
+`lockfile init claude|codex|cursor|gemini`, run from the project root, writes the skill or
+rules file and `lockfile mcp` as the MCP command: the launcher starts the MCP server in a
+throwaway container with the socket volume only ([docker.md](docker.md#wire-the-agent)). For
+every project instead: `claude mcp add --scope user lockfile -- lockfile mcp`. Claude Code
 may call `lockfile_status`, `lockfile_sources` and `lockfile_plugins` without a prompt; plans
 and runs always go through Claude Code's permission prompt and the console.
 
 ## Updates
 
-Rebuild the image (`docker build -t lockfile .` from an updated clone, or with
-`--build-arg VERSION=…` on a tag) and restart the console; the volumes keep the console's
-state. The agent's containers start from the new image on their next run.
+`lockfile update` (or `lockfile update vX.Y.Z`) replaces the launcher and the seccomp profile,
+then pulls the release's image; restart the console, the volumes keep its state. The agent's
+containers start from the new image on their next run. With your own build, rebuild it and
+keep `LOCKFILE_IMAGE` pointing at it.
 
 A marketplace index older than the last one verified for that marketplace is refused (a
 replayed index could lift a yank); the last `generated` time of each marketplace is kept next

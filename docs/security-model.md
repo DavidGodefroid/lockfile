@@ -36,7 +36,7 @@ documented.
 | Boundary | Enforced by |
 |---|---|
 | The agent cannot read the file, the credentials, the plugins or the audit | they are in the console's container and its home volume (`lockfile-home`, home 0700, account `lockfile`); the agent's containers mount only the socket volume; local sources are mounted read-only under `/srv/lockfile` (0700, `lockfile`) in the console's container only |
-| The agent cannot drive the console | the console's terminal is the one you started `docker run -it` in; lockkit's isolation checks run inside the container (no relay, the terminal belongs to the console account, X11 refused by `system.toml`). Residual: whoever runs `docker` commands can `attach` or `exec` into it ([docker.md](docker.md#what-docker-does-and-does-not-separate)) |
+| The agent cannot drive the console | the console's terminal is the one you started `lockfile console` in (the launcher's `docker run -it`); lockkit's isolation checks run inside the container (no relay, the terminal belongs to the console account, X11 refused by `system.toml`). Residual: whoever runs `docker` commands can `attach` or `exec` into it ([docker.md](docker.md#what-docker-does-and-does-not-separate)) |
 | Only the clients group reaches the console | socket in the `lockfile-run` volume at `/run/lockfile` (2750, setgid group `lockfile-clients`), socket 0660, kernel peer credentials checked on every connection: a peer that is neither `lockfile`, nor in `lockfile-clients`, nor in `allowed_uids` (`ALLOWED_UIDS` at build time) is refused |
 | The agent cannot replace the binary the console runs | `/usr/local/bin/lockfile`, `/usr/local/bin/cosign` and `/etc/lockfile/*` owned by root in the image, which has no `sudo`; base images pinned by digest, cosign and the Vault CLI by sha256 |
 | A plugin cannot read anything but its input, nor talk to the network | Landlock (execute + read on its own binary only; TCP denied with ABI ≥ 4), seccomp (no sockets, ptrace, mount, bpf, keyctl, second execve, System V IPC, POSIX message queues, signals to other processes including through a descriptor owner, shared anonymous memory), rlimits (CPU, data and address space, a task cap relative to the account's tasks), empty environment, input as a read-only fd 3, stdout capped at 3 bytes, stderr discarded |
@@ -102,8 +102,8 @@ typed on a `typed` line whenever the two differ.
 ## Release and marketplace signers
 
 The keyless identities lockfile trusts are "the `release.yml` workflow of this repository, run
-on a tag": the lockfile repository for the binary (`update`, `scripts/install.sh`, bound to
-the exact `vX.Y.Z` tag) and the marketplace repository for its index and plugins. Whoever can
+on a tag": the lockfile repository for the launcher, its seccomp profile and its images
+(`lockfile update`, `scripts/install.sh`, bound to the exact `vX.Y.Z` tag) and the marketplace repository for its index and plugins. Whoever can
 push such a tag can therefore have an arbitrary commit, with a `release.yml` of their choice,
 signed under a trusted identity. Both repositories **must** keep these settings:
 

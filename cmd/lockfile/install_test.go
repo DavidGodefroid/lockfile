@@ -25,7 +25,7 @@ func installEnv(t *testing.T, goos string) (*installHooks, *string) {
 
 func TestInstallScriptGolden(t *testing.T) {
 	_, ran := installEnv(t, "linux")
-	code, out, errText := runArgs(t, "", "install", "--client", "agent", "--trust-binary", "--yes")
+	code, out, errText := runDirect(t, "", runInstall, "--client", "agent", "--trust-binary", "--yes")
 	if code != 0 {
 		t.Fatalf("exit %d: %s %s", code, out, errText)
 	}
@@ -52,7 +52,7 @@ func TestInstallRefusesUserOwnedBinary(t *testing.T) {
 		t.Skip("as root the binary is root-owned")
 	}
 	_, ran := installEnv(t, "linux")
-	code, _, errText := runArgs(t, "", "install", "--client", "agent", "--yes")
+	code, _, errText := runDirect(t, "", runInstall, "--client", "agent", "--yes")
 	if code != product.ExitError || !strings.Contains(errText, "--trust-binary") || *ran != "" {
 		t.Fatalf("exit %d: %s", code, errText)
 	}
@@ -76,7 +76,7 @@ func TestInstallPinsRootOwnedBinary(t *testing.T) {
 		t.Skip("no root-owned, non-writable binary on this system")
 	}
 	h.executable = root
-	code, out, errText := runArgs(t, "", "install", "--client", "agent", "--yes")
+	code, out, errText := runDirect(t, "", runInstall, "--client", "agent", "--yes")
 	if code != 0 {
 		t.Fatalf("exit %d: %s %s", code, out, errText)
 	}
@@ -93,7 +93,7 @@ func TestInstallPinsRootOwnedBinary(t *testing.T) {
 
 func TestInstallDarwinRefused(t *testing.T) {
 	_, ran := installEnv(t, "darwin")
-	code, _, errText := runArgs(t, "", "install", "--client", "agent", "--trust-binary", "--yes")
+	code, _, errText := runDirect(t, "", runInstall, "--client", "agent", "--trust-binary", "--yes")
 	if code != product.ExitError || !strings.Contains(errText, "Linux-only in v0.2") || *ran != "" {
 		t.Fatalf("exit %d: %s", code, errText)
 	}
@@ -101,17 +101,17 @@ func TestInstallDarwinRefused(t *testing.T) {
 
 func TestInstallPrintAndConfirm(t *testing.T) {
 	h, ran := installEnv(t, "linux")
-	if code, out, _ := runArgs(t, "", "install", "--client", "agent", "--trust-binary", "--print"); code != 0 || *ran != "" || !strings.Contains(out, "These commands run as root") {
+	if code, out, _ := runDirect(t, "", runInstall, "--client", "agent", "--trust-binary", "--print"); code != 0 || *ran != "" || !strings.Contains(out, "These commands run as root") {
 		t.Fatalf("print: exit %d ran %q", code, *ran)
 	}
-	if code, out, _ := runArgs(t, "n\n", "install", "--client", "agent", "--trust-binary"); code != 0 || *ran != "" || !strings.Contains(out, "nothing done") {
+	if code, out, _ := runDirect(t, "n\n", runInstall, "--client", "agent", "--trust-binary"); code != 0 || *ran != "" || !strings.Contains(out, "nothing done") {
 		t.Fatalf("no: exit %d ran %q", code, *ran)
 	}
 	h.tty = false
-	if code, _, errText := runArgs(t, "y\n", "install", "--client", "agent", "--trust-binary"); code != product.ExitUsage || *ran != "" {
+	if code, _, errText := runDirect(t, "y\n", runInstall, "--client", "agent", "--trust-binary"); code != product.ExitUsage || *ran != "" {
 		t.Fatalf("no tty: exit %d: %s", code, errText)
 	}
-	if code, _, _ := runArgs(t, "", "install", "--client", "lockfile", "--trust-binary", "--yes"); code != product.ExitUsage {
+	if code, _, _ := runDirect(t, "", runInstall, "--client", "lockfile", "--trust-binary", "--yes"); code != product.ExitUsage {
 		t.Fatalf("client = service: exit %d", code)
 	}
 }

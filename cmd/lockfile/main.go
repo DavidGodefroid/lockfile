@@ -49,6 +49,9 @@ func run(e env, args []string) int {
 	case "version", "--version":
 		fmt.Fprintln(e.stdout, "lockfile", product.Version)
 		return product.ExitOK
+	case "install", "update":
+		fmt.Fprintln(e.stderr, hostModeRefusal(args[0]))
+		return product.ExitError
 	}
 	c, ok := commands[args[0]]
 	if !ok {
@@ -58,9 +61,22 @@ func run(e env, args []string) int {
 	return c.run(e, args[1:])
 }
 
+// hostModeRefusal is printed for the commands of the former host install
+// (install, update). lockfile runs in Docker: the launcher on the host
+// (scripts/lockfile) runs every command in the image and updates itself and
+// the image. The host install code stays until a later release removes it.
+func hostModeRefusal(cmd string) string {
+	return "lockfile " + cmd + ": the host install is gone: lockfile runs in Docker. " +
+		"Install the launcher with scripts/install.sh; `lockfile update` on the host updates it and its image; " +
+		"see docs/docker.md"
+}
+
 func usage() string {
 	var human, agent []string
 	for name, c := range commands {
+		if c.help == "" {
+			continue // refused, kept for a later release to remove
+		}
 		line := fmt.Sprintf("  %-12s %s", name, c.help)
 		if c.human {
 			human = append(human, line)

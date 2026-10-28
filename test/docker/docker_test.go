@@ -325,6 +325,20 @@ func TestConsoleAndAgent(t *testing.T) {
 	}
 }
 
+// The console as scripts/lockfile starts it, confined further: a read-only
+// root with a small /tmp, bounded processes and memory. The sandbox still
+// runs the plugins.
+func TestConsoleConfinedAsTheLauncherRunsIt(t *testing.T) {
+	s := newSetup(t)
+	s.console(t, image, "--security-opt", "seccomp="+s.seccomp, "--log-driver", "none",
+		"--read-only", "--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=64m", "--pids-limit", "512", "--memory", "4g")
+	s.waitServed(t)
+	got, out, ok := s.answers(t, image, nil, "test.answer1", "test.readpasswd", "test.dial")
+	if !ok || got["test.answer1"] != "1" || got["test.readpasswd"] != "0" || got["test.dial"] != "0" {
+		t.Fatalf("answers = %v, want answer1 1, readpasswd 0, dial 0:\n%s", got, out)
+	}
+}
+
 // ALLOWED_UIDS lets the uid of an agent in its own container through, and
 // only that image.
 func TestAllowedUIDs(t *testing.T) {

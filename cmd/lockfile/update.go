@@ -28,7 +28,8 @@ import (
 )
 
 func init() {
-	commands["update"] = command{human: true, help: "install the latest signed release [--check]", run: runUpdate}
+	// The launcher's: the image refuses it (hostModeRefusal).
+	commands["update"] = command{human: true, help: "[vX.Y.Z]: update the launcher, its seccomp profile and its image (on the host)", run: runUpdate}
 }
 
 // releaseWorkflow is the signer of lockfile's releases: its release
