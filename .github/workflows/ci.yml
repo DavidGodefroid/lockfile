@@ -62,6 +62,21 @@ jobs:
           docker run --rm --security-opt seccomp="$PWD/seccomp.json" \
             --user "$(id -u):$(id -g)" -e HOME=/tmp -e CGO_ENABLED=0 -e GOCACHE=/tmp/gocache -e GOMODCACHE=/tmp/gomod \
             -v "$PWD:/src:ro" -w /src "$go_image" go test -count=1 ./sandbox/
+      - name: the launcher runs every command in the image
+        run: |
+          set -x
+          docker tag lockfile:e2e lockfile
+          sh scripts/lockfile version | grep -x 'lockfile launcher dev (image lockfile)'
+          mkdir -p "$RUNNER_TEMP/proj/.git" && cd "$RUNNER_TEMP/proj"
+          sh "$GITHUB_WORKSPACE/scripts/lockfile" init claude
+          grep -Eq '"command": ?"lockfile"' .mcp.json
+          test "$(stat -c %u .mcp.json)" = "$(id -u)"
+          sh "$GITHUB_WORKSPACE/scripts/lockfile" plugin list
+          sh "$GITHUB_WORKSPACE/scripts/lockfile" doctor | grep -q 'sandbox'
+          sh "$GITHUB_WORKSPACE/scripts/lockfile" sources | grep -q 'no lockfile console is running'
+          code=0; sh "$GITHUB_WORKSPACE/scripts/lockfile" install 2>err || code=$?
+          test "$code" = 1 && grep -q 'runs in Docker' err
+          docker volume rm lockfile-home lockfile-run
       - name: end to end (docs/docker.md)
         run: go test -count=1 -v -tags docker ./test/docker/...
 

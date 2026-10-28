@@ -1,23 +1,34 @@
 #!/bin/sh
-# Installs a released lockfile binary on Linux or macOS, without Go.
+# Installs the lockfile launcher of a release on Linux or macOS (WSL 2 on
+# Windows). lockfile runs in Docker: the launcher, installed as `lockfile`,
+# runs every command in the release's image (scripts/lockfile,
+# docs/docker.md). Besides it, only the seccomp profile of the console's
+# container lands on the host.
 #
-#   curl -fsSL https://raw.githubusercontent.com/DavidGodefroid/lockfile/main/scripts/install.sh -o install.sh
-#   less install.sh && sh install.sh
+# Download it from the tag you install, read it, then run it with that tag:
+#
+#   V=vX.Y.Z
+#   curl -fsSLO "https://raw.githubusercontent.com/DavidGodefroid/lockfile/$V/scripts/install.sh"
+#   less install.sh
+#   LOCKFILE_VERSION=$V sh install.sh
 #
 # Environment:
-#   LOCKFILE_VERSION      tag to install (default: the latest release), e.g. v0.2.0
-#   LOCKFILE_INSTALL_DIR  target directory (default: /usr/local/bin, via sudo if needed)
+#   LOCKFILE_VERSION      tag to install (default: the latest release), e.g. v0.4.0
+#   LOCKFILE_INSTALL_DIR  launcher directory (default: /usr/local/bin, via sudo if needed)
+#   LOCKFILE_SHARE_DIR    seccomp profile directory (default: /usr/local/share/lockfile)
 #   LOCKFILE_ALLOW_DOWNGRADE=1  replace an installed lockfile with an older release
 #
-# cosign is required: the keyless signature of checksums.txt is checked
-# against lockfile's release workflow run on that exact tag, then the archive against
-# checksums.txt. Without cosign nothing is installed. This script only
-# places the binary: `sudo lockfile install` sets up the separated console
-# afterwards (Linux).
+# cosign is required: the keyless signatures of checksums.txt and of the
+# release's images are checked against lockfile's release workflow run on
+# that exact tag, then the archive against checksums.txt. Without cosign
+# nothing is installed. The launcher runs the images by their verified
+# digests. `lockfile update` later replaces it the same way.
 set -eu
 
 repo="DavidGodefroid/lockfile"
 dir="${LOCKFILE_INSTALL_DIR:-/usr/local/bin}"
+share="${LOCKFILE_SHARE_DIR:-/usr/local/share/lockfile}"
+registry="ghcr.io/davidgodefroid/lockfile"
 
 say() { printf 'lockfile: %s\n' "$*" >&2; }
 die() {
@@ -75,7 +86,13 @@ older() { # older A B: A < B (X.Y.Z)
 	[ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -t. -k1,1n -k2,2n -k3,3n | head -n 1)" = "$1" ]
 }
 if [ -x "$dir/lockfile" ] && [ "${LOCKFILE_ALLOW_DOWNGRADE:-}" != 1 ]; then
-	current="$("$dir/lockfile" version 2>/dev/null | awk '{ print $2 }')"
+	# A launcher holds its version; the binary of a former host install
+	# prints it.
+	if grep -q '^launcher_version=' "$dir/lockfile" 2>/dev/null; then
+		current="$(sed -n 's/^launcher_version=//p' "$dir/lockfile" | sed -n 1p)"
+	else
+		current="$("$dir/lockfile" version 2>/dev/null | awk '{ print $2 }')"
+	fi
 	current="${current#v}"
 	case "$current" in
 	*[!0-9.]* | '') ;;
@@ -110,21 +127,52 @@ else
 fi
 [ "$want" = "$got" ] || die "checksum mismatch for $archive; nothing installed"
 
-tar -xzf "$tmp/$archive" -C "$tmp" lockfile
+tar -xzf "$tmp/$archive" -C "$tmp" scripts/lockfile seccomp.json 2>/dev/null ||
+	die "$archive holds no launcher (scripts/lockfile, seccomp.json): $tag predates the Docker launcher"
 
-# Root-owned in a system directory: `lockfile install` copies only a binary
-# that the agent's account cannot replace.
-if [ -w "$dir" ] || { [ ! -e "$dir" ] && mkdir -p "$dir" 2>/dev/null; }; then
-	install -m 0755 "$tmp/lockfile" "$dir/lockfile"
+# The launcher runs the images of its own version, by the digests whose
+# cosign signatures verify (the release workflow run on this tag, as for
+# checksums.txt).
+verified_digest() {
+	cosign verify --certificate-identity-regexp "$identity" \
+		--certificate-oidc-issuer https://token.actions.githubusercontent.com \
+		"$registry:$1" 2>/dev/null |
+		sed -n 's/.*"docker-manifest-digest":"\(sha256:[0-9a-f]\{64\}\)".*/\1/p' | sed -n 1p
+}
+digest="$(verified_digest "$version")"
+vdigest="$(verified_digest "$version-vault")"
+[ -n "$digest" ] && [ -n "$vdigest" ] && [ "$digest" != "$vdigest" ] ||
+	die "cosign: the signature of $registry:$version (and -vault) does not verify, or the image is not published yet; nothing installed"
+say "cosign: image $registry:$version verified ($digest)"
+sed -e "s/^launcher_version=dev\$/launcher_version=$version/" \
+	-e "s/^image_digest=\$/image_digest=$digest/" \
+	-e "s/^vault_image_digest=\$/vault_image_digest=$vdigest/" \
+	-e "s|^seccomp_profile=\$|seccomp_profile=$share/seccomp.json|" \
+	"$tmp/scripts/lockfile" >"$tmp/launcher"
+grep -qx "launcher_version=$version" "$tmp/launcher" || die "the launcher of $tag does not take its version"
+
+# Root-owned in system directories, so that the agent's account can replace
+# neither the launcher nor the seccomp profile. It replaces the binary of a
+# former host install.
+if { [ -w "$dir" ] || { [ ! -e "$dir" ] && mkdir -p "$dir" 2>/dev/null; }; } &&
+	{ [ -w "$share" ] || { [ ! -e "$share" ] && mkdir -p "$share" 2>/dev/null; }; }; then
+	install -m 0644 "$tmp/seccomp.json" "$share/seccomp.json"
+	install -m 0755 "$tmp/launcher" "$dir/lockfile"
 else
-	command -v sudo >/dev/null 2>&1 || die "$dir is not writable and sudo is missing; set LOCKFILE_INSTALL_DIR"
-	say "installing to $dir with sudo"
-	sudo mkdir -p "$dir"
-	sudo install -m 0755 "$tmp/lockfile" "$dir/lockfile"
+	command -v sudo >/dev/null 2>&1 || die "$dir or $share is not writable and sudo is missing; set LOCKFILE_INSTALL_DIR and LOCKFILE_SHARE_DIR"
+	say "installing to $dir and $share with sudo"
+	sudo mkdir -p "$dir" "$share"
+	sudo install -m 0644 "$tmp/seccomp.json" "$share/seccomp.json"
+	sudo install -m 0755 "$tmp/launcher" "$dir/lockfile"
 fi
 
-say "installed $("$dir/lockfile" version 2>/dev/null || echo "$tag") to $dir/lockfile"
+say "installed the lockfile launcher $tag to $dir/lockfile (image $registry@$digest, seccomp profile $share/seccomp.json)"
 case ":$PATH:" in
 *":$dir:"*) ;;
 *) say "$dir is not on your PATH" ;;
 esac
+command -v docker >/dev/null 2>&1 || say "docker is not installed: the launcher needs it (docs/docker.md)"
+# A former host install (sudo lockfile install) left its system file behind.
+if [ -e /etc/lockfile/system.toml ]; then
+	say "a former host install remains (/etc/lockfile/system.toml): see docs/docker.md#migrating"
+fi

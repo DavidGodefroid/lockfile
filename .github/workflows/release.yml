@@ -75,3 +75,64 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # The image the launcher runs (scripts/lockfile): ghcr.io/davidgodefroid/
+  # lockfile:X.Y.Z and :X.Y.Z-vault, for amd64 and arm64, each built on a
+  # native runner, then joined in one manifest per tag and signed with
+  # cosign (keyless, by digest), by this workflow run on the tag, the only
+  # signer the launcher accepts. Publishing elsewhere changes these jobs and
+  # the registry line of scripts/lockfile only.
+  image:
+    name: image ${{ matrix.arch }}
+    needs: [on-main, test]
+    strategy:
+      matrix:
+        include:
+          - { arch: amd64, runner: ubuntu-24.04 }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write # push to ghcr.io
+    env:
+      IMAGE: ghcr.io/davidgodefroid/lockfile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: log in to ghcr.io
+        run: printf '%s' "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: build and push
+        run: |
+          v=${GITHUB_REF_NAME#v}
+          docker build --build-arg VERSION="$GITHUB_REF_NAME" -t "$IMAGE:$v-${{ matrix.arch }}" .
+          docker build --build-arg VERSION="$GITHUB_REF_NAME" --target vault -t "$IMAGE:$v-vault-${{ matrix.arch }}" .
+          docker push "$IMAGE:$v-${{ matrix.arch }}"
+          docker push "$IMAGE:$v-vault-${{ matrix.arch }}"
+
+  image-manifest:
+    name: image manifest
+    needs: [on-main, image]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # push to ghcr.io
+      id-token: write # cosign keyless signing (GitHub OIDC)
+    env:
+      IMAGE: ghcr.io/davidgodefroid/lockfile
+    steps:
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+      - name: log in to ghcr.io
+        run: printf '%s' "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: manifests, signed
+        run: |
+          v=${GITHUB_REF_NAME#v}
+          for tag in "$v" "$v-vault"; do
+            docker buildx imagetools create -t "$IMAGE:$tag" "$IMAGE:$tag-amd64" "$IMAGE:$tag-arm64"
+            digest=$(docker buildx imagetools inspect "$IMAGE:$tag" --format '{{json .Manifest.Digest}}' | tr -d '"')
+            cosign sign --yes "$IMAGE@$digest"
+          done

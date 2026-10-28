@@ -32,6 +32,8 @@ func TestReleaseWorkflowGuards(t *testing.T) {
 		`git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main`,
 		"\n    needs: on-main\n",
 		"\n    needs: [on-main, test]\n",
+		"\n  image:\n", "\n    needs: [on-main, image]\n",
+		`cosign sign --yes "$IMAGE@$digest"`,
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("release.yml lacks %q", want)

@@ -1,0 +1,349 @@
+#!/bin/sh
+# lockfile: the launcher. lockfile runs in Docker; this script, installed as
+# `lockfile` on the host by scripts/install.sh, runs every command in the
+# image, each with the account and the volumes it needs (docs/docker.md):
+#
+#   console          as the console account (lockfile), in a container of
+#                    its own per profile (lockfile-console-<n>), under the
+#                    shipped seccomp profile, confined (no capability,
+#                    read-only root, bounded processes and memory), with
+#                    the socket and home volumes
+#   profile, plugin, marketplace, audit, forget, doctor
+#                    as the console account, with its home volume (doctor
+#                    also under the seccomp profile, with the socket volume)
+#   init, doctor --fix
+#                    as you, with your home and the project: they write
+#                    your agents' files
+#   anything else    as the agent account (agent), with the socket volume
+#                    only: mcp, status, sources, plugins, plan, run, help...
+#
+# `lockfile update` updates this launcher, its seccomp profile and its
+# image; `lockfile version` prints the launcher's and the image's versions.
+#
+# Environment:
+#   LOCKFILE_IMAGE        image to run (default: the release image of this
+#                         launcher's version; `lockfile` for a launcher run
+#                         from a clone, the tag of `docker build -t lockfile .`)
+#   LOCKFILE_VAULT=1      the image with the vault CLI (credentials = "vault")
+#   LOCKFILE_DOCKER_ARGS  extra `docker run` arguments, split on spaces
+#                         (e.g. -v /data/samples:/srv/lockfile/samples:ro)
+#   LOCKFILE_CONSOLE_NAME the console's container name
+#   VAULT_ADDR, VAULT_NAMESPACE, VAULT_CACERT  passed to the console (the
+#                         file of VAULT_CACERT mounted read-only)
+set -eu
+
+# scripts/install.sh and lockfile update write the release version here,
+# the digests of its images once their cosign signatures verify (the
+# launcher then runs the image by digest, never by a tag that could move),
+# and where they installed the seccomp profile.
+launcher_version=dev
+image_digest=
+vault_image_digest=
+seccomp_profile=
+
+repo="DavidGodefroid/lockfile"
+registry="ghcr.io/davidgodefroid/lockfile"
+
+say() { printf 'lockfile: %s\n' "$*" >&2; }
+die() {
+	say "$*"
+	exit 1
+}
+
+image="${LOCKFILE_IMAGE:-}"
+if [ -z "$image" ]; then
+	if [ "$launcher_version" = dev ]; then
+		image=lockfile
+	else
+		image="$registry:$launcher_version"
+	fi
+	if [ "$launcher_version" != dev ] && [ -n "$image_digest" ]; then
+		image="$registry@$image_digest"
+		[ "${LOCKFILE_VAULT:-0}" = 1 ] && image="$registry@$vault_image_digest"
+	elif [ "${LOCKFILE_VAULT:-0}" = 1 ]; then
+		case "$image" in
+		*:*) image="$image-vault" ;;
+		*) image="$image:vault" ;;
+		esac
+	fi
+fi
+
+# The seccomp profile of the console's container: the one installed with
+# this launcher, or the clone's seccomp.json next to scripts/.
+if [ -z "$seccomp_profile" ]; then
+	seccomp_profile="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd -P)/seccomp.json"
+fi
+
+tty=-i
+if [ -t 0 ] && [ -t 1 ]; then tty=-it; fi
+
+# docker_run ARGS...: docker run, then LOCKFILE_DOCKER_ARGS, then ARGS (the
+# account, the volumes, the image and its command).
+docker_run() {
+	command -v docker >/dev/null 2>&1 || die "docker is required: lockfile runs in Docker (docs/docker.md)"
+	# LOCKFILE_DOCKER_ARGS is split on spaces, never globbed.
+	set -f
+	# shellcheck disable=SC2086 # LOCKFILE_DOCKER_ARGS is split on purpose
+	exec docker run --rm ${LOCKFILE_DOCKER_ARGS:-} "$@"
+}
+
+# mountable PATH: PATH can be a docker -v source and target, which ":"
+# separates.
+mountable() {
+	case "$1" in
+	*:*) die "$1 holds a \":\", which docker -v cannot mount: move or rename it" ;;
+	esac
+}
+
+# flag_value FLAG ARGS...: the value of FLAG V or FLAG=V in ARGS.
+flag_value() {
+	f=$1
+	shift
+	while [ $# -gt 0 ]; do
+		case "$1" in
+		"$f"=*)
+			printf '%s' "${1#*=}"
+			return
+			;;
+		"$f")
+			printf '%s' "${2:-}"
+			return
+			;;
+		esac
+		shift
+	done
+}
+
+# seccomp: the --security-opt of the console's containers. Never
+# unconfined: without the profile the launcher stops.
+seccomp() {
+	[ -f "$seccomp_profile" ] || die "no seccomp profile at $seccomp_profile: reinstall the launcher (scripts/install.sh); lockfile never runs the console seccomp=unconfined"
+}
+
+# has_flag FLAG ARGS...: whether ARGS hold FLAG or FLAG=...
+has_flag() {
+	f=$1
+	shift
+	for a in "$@"; do
+		case "$a" in "$f" | "$f"=*) return 0 ;; esac
+	done
+	return 1
+}
+
+# as_you ARGS...: run as you, with your home and the project (the nearest
+# directory up from here that holds .lockfile/ or else .git, or this
+# directory) mounted at their own paths, from this directory.
+as_you() {
+	here="$(pwd -P)"
+	project="$here"
+	d="$here"
+	while :; do
+		if [ -d "$d/.lockfile" ]; then
+			project="$d"
+			break
+		fi
+		[ "$d" = / ] && break
+		d="$(dirname "$d")"
+	done
+	if [ "$project" = "$here" ] && [ ! -d "$here/.lockfile" ]; then
+		d="$here"
+		while :; do
+			if [ -e "$d/.git" ]; then
+				project="$d"
+				break
+			fi
+			[ "$d" = / ] && break
+			d="$(dirname "$d")"
+		done
+	fi
+	mountable "$HOME"
+	mountable "$project"
+	mountable "$here"
+	docker_run "$tty" --user "$(id -u):$(id -g)" -e HOME="$HOME" -v "$HOME:$HOME" \
+		-v "$project:$project" -w "$here" "$image" "$@"
+}
+
+# release_identity TAG: the release workflow run on that very tag, as a
+# regexp with its dots escaped: a validly signed older release cannot be
+# passed off as this one.
+release_identity() {
+	printf '^https://github\\.com/DavidGodefroid/lockfile/\\.github/workflows/release\\.yml@refs/tags/%s$' "$(printf '%s' "$1" | sed 's/\./\\./g')"
+}
+
+# verified_digest TAG: the digest of the release image registry:TAG, once
+# cosign verifies its signature by the release workflow run for $identity;
+# empty when it does not verify.
+verified_digest() {
+	cosign verify --certificate-identity-regexp "$identity" \
+		--certificate-oidc-issuer https://token.actions.githubusercontent.com \
+		"$registry:$1" 2>/dev/null |
+		sed -n 's/.*"docker-manifest-digest":"\(sha256:[0-9a-f]\{64\}\)".*/\1/p' | sed -n 1p
+}
+
+# update [vX.Y.Z]: replace this launcher and its seccomp profile with a
+# release's (the cosign signature of checksums.txt and the archive's
+# checksum checked, as scripts/install.sh does), then pull that release's
+# image, by the digest its cosign signature verifies.
+update() {
+	command -v cosign >/dev/null 2>&1 ||
+		die "cosign is required to check the release signature: https://docs.sigstore.dev/cosign/system_config/installation/"
+	if command -v curl >/dev/null 2>&1; then
+		fetch() { curl -fsSL -o "$2" "$1"; }
+		latest() { curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/$repo/releases/latest"; }
+	elif command -v wget >/dev/null 2>&1; then
+		fetch() { wget -q -O "$2" "$1"; }
+		latest() { wget -q -S --spider "https://github.com/$repo/releases/latest" 2>&1 | sed -n 's/^ *[Ll]ocation: *//p' | tail -n 1 | tr -d '\r'; }
+	else
+		die "curl or wget is required"
+	fi
+	case "$(uname -s)" in
+	Linux) os=linux ;;
+	Darwin) os=darwin ;;
+	*) die "unsupported OS $(uname -s): Linux and macOS only (WSL 2 on Windows)" ;;
+	esac
+	case "$(uname -m)" in
+	x86_64 | amd64) arch=amd64 ;;
+	aarch64 | arm64) arch=arm64 ;;
+	*) die "unsupported architecture $(uname -m): amd64 and arm64 only" ;;
+	esac
+
+	tag="${1:-}"
+	if [ -z "$tag" ]; then
+		tag="$(latest)"
+		tag="${tag##*/}"
+		case "$tag" in
+		v[0-9]*) ;;
+		*) die "no published release found; name one: lockfile update vX.Y.Z" ;;
+		esac
+	fi
+	case "$tag" in v*) ;; *) tag="v$tag" ;; esac
+	version="${tag#v}"
+	# An exact vX.Y.Z: the tag goes into the signer identity.
+	case "$version" in
+	'' | *[!0-9.]* | .* | *. | *..*) die "invalid release tag $tag" ;;
+	esac
+	[ "$(printf '%s' "$version" | tr -cd . | wc -c | tr -d ' ')" = 2 ] || die "invalid release tag $tag"
+	identity="$(release_identity "$tag")"
+	if [ "$version" = "$launcher_version" ]; then
+		say "the launcher is already $tag"
+	else
+		self="$(command -v "$0" 2>/dev/null || printf '%s' "$0")"
+		archive="lockfile_${version}_${os}_${arch}.tar.gz"
+		base="https://github.com/$repo/releases/download/$tag"
+		tmp="$(mktemp -d)"
+		trap 'rm -rf "$tmp"' EXIT INT TERM
+		say "downloading $archive ($tag)"
+		fetch "$base/checksums.txt" "$tmp/checksums.txt" || die "download failed: checksums.txt"
+		fetch "$base/checksums.txt.sigstore.json" "$tmp/checksums.txt.sigstore.json" ||
+			die "download failed: checksums.txt.sigstore.json"
+		cosign verify-blob --bundle "$tmp/checksums.txt.sigstore.json" \
+			--certificate-identity-regexp "$identity" \
+			--certificate-oidc-issuer https://token.actions.githubusercontent.com \
+			"$tmp/checksums.txt" >/dev/null 2>&1 || die "cosign: checksums.txt is not signed by lockfile's release workflow; nothing updated"
+		say "cosign: checksums.txt signature verified"
+		fetch "$base/$archive" "$tmp/$archive" || die "download failed: $base/$archive"
+		want="$(awk -v f="$archive" '$2 == f { print $1 }' "$tmp/checksums.txt")"
+		[ -n "$want" ] || die "$archive is not listed in checksums.txt"
+		if command -v sha256sum >/dev/null 2>&1; then
+			got="$(sha256sum "$tmp/$archive" | awk '{ print $1 }')"
+		else
+			got="$(shasum -a 256 "$tmp/$archive" | awk '{ print $1 }')"
+		fi
+		[ "$want" = "$got" ] || die "checksum mismatch for $archive; nothing updated"
+		tar -xzf "$tmp/$archive" -C "$tmp" scripts/lockfile seccomp.json 2>/dev/null ||
+			die "$archive holds no launcher (scripts/lockfile, seccomp.json): $tag predates the Docker launcher"
+		digest="$(verified_digest "$version")"
+		vdigest="$(verified_digest "$version-vault")"
+		[ -n "$digest" ] && [ -n "$vdigest" ] && [ "$digest" != "$vdigest" ] ||
+			die "cosign: the signature of $registry:$version (and -vault) does not verify, or the image is not published yet"
+		say "cosign: image $registry:$version verified ($digest)"
+		profile="$seccomp_profile"
+		sed -e "s/^launcher_version=dev\$/launcher_version=$version/" \
+			-e "s/^image_digest=\$/image_digest=$digest/" \
+			-e "s/^vault_image_digest=\$/vault_image_digest=$vdigest/" \
+			-e "s|^seccomp_profile=\$|seccomp_profile=$profile|" \
+			"$tmp/scripts/lockfile" >"$tmp/launcher"
+		grep -qx "launcher_version=$version" "$tmp/launcher" || die "the launcher of $tag does not take its version"
+		if [ -w "$self" ] && { [ -w "$profile" ] || [ -w "$(dirname "$profile")" ]; }; then
+			install -m 0644 "$tmp/seccomp.json" "$profile"
+			install -m 0755 "$tmp/launcher" "$self"
+		else
+			command -v sudo >/dev/null 2>&1 || die "$self is not writable and sudo is missing"
+			say "replacing $self and $profile with sudo"
+			sudo install -D -m 0644 "$tmp/seccomp.json" "$profile"
+			sudo install -m 0755 "$tmp/launcher" "$self"
+		fi
+		say "launcher updated to $tag ($self)"
+		image="$registry@$digest"
+		[ "${LOCKFILE_VAULT:-0}" = 1 ] && image="$registry@$vdigest"
+		[ -n "${LOCKFILE_IMAGE:-}" ] && say "LOCKFILE_IMAGE is set ($LOCKFILE_IMAGE): it still overrides $image"
+	fi
+	command -v docker >/dev/null 2>&1 || die "docker is required: lockfile runs in Docker (docs/docker.md)"
+	say "pulling $image"
+	exec docker pull "$image"
+}
+
+cmd="${1:-}"
+case "$cmd" in
+update)
+	shift
+	update "$@"
+	;;
+version | --version)
+	printf 'lockfile launcher %s (image %s)\n' "$launcher_version" "$image"
+	docker_run "$image" version
+	;;
+console)
+	command -v docker >/dev/null 2>&1 || die "docker is required: lockfile runs in Docker (docs/docker.md)"
+	seccomp
+	# VAULT_CACERT: the file the vault CLI checks Vault's certificate
+	# against, mounted read-only at its own path.
+	cacert=
+	if [ -n "${VAULT_CACERT:-}" ]; then
+		case "$VAULT_CACERT" in /*) cacert=$VAULT_CACERT ;; *) cacert="$(pwd -P)/$VAULT_CACERT" ;; esac
+		[ -f "$cacert" ] || die "VAULT_CACERT: no file $cacert"
+		mountable "$cacert"
+	fi
+	# One console container per profile, so that two can run.
+	name="${LOCKFILE_CONSOLE_NAME:-lockfile-console-$(flag_value --profile "$@" | cksum | awk '{ print $1 }')}"
+	# A console that ended without --rm keeps the name: a stopped one is only in the way.
+	if [ "$(docker inspect -f '{{.State.Running}}' "$name" 2>/dev/null)" = false ]; then
+		docker rm "$name" >/dev/null
+	fi
+	# No log driver: with a terminal, docker's json-file log would keep every
+	# screen of the console for anyone who runs docker logs. The console
+	# holds the credentials and runs the plugins: no capability, no
+	# privilege gain (the plugin sandbox sets no_new_privs itself), a
+	# read-only root with a small /tmp (the fetched files are in its home),
+	# bounded processes and memory (a plugin may take up to 2 GB).
+	# host.docker.internal is this machine.
+	docker_run "$tty" --name "$name" --log-driver none --user lockfile \
+		--security-opt seccomp="$seccomp_profile" --cap-drop=ALL --security-opt no-new-privileges \
+		--read-only --tmpfs /tmp:rw,nosuid,nodev,noexec,size=64m --pids-limit 512 --memory 4g \
+		--add-host=host.docker.internal:host-gateway -e VAULT_ADDR -e VAULT_NAMESPACE \
+		${cacert:+-v} ${cacert:+"$cacert:$cacert:ro"} ${cacert:+-e} ${cacert:+"VAULT_CACERT=$cacert"} \
+		-v lockfile-run:/run/lockfile -v lockfile-home:/home/lockfile "$image" "$@"
+	;;
+doctor)
+	if has_flag --fix "$@"; then
+		# --fix wires your agents: it writes their files, as you.
+		as_you "$@"
+	fi
+	seccomp
+	docker_run "$tty" --user lockfile --security-opt seccomp="$seccomp_profile" \
+		-v lockfile-run:/run/lockfile -v lockfile-home:/home/lockfile "$image" "$@"
+	;;
+profile | plugin | marketplace | audit | forget)
+	docker_run "$tty" --user lockfile -v lockfile-home:/home/lockfile "$image" "$@"
+	;;
+init)
+	as_you "$@"
+	;;
+mcp)
+	# The agent speaks MCP on stdin and stdout: no terminal.
+	docker_run -i -v lockfile-run:/run/lockfile "$image" "$@"
+	;;
+*)
+	docker_run "$tty" -v lockfile-run:/run/lockfile "$image" "$@"
+	;;
+esac

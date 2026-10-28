@@ -98,13 +98,13 @@ func TestUpdateVerifiesBeforeReplace(t *testing.T) {
 	srv := releaseServer(t, []byte("new binary"), "")
 	bad, _ := fakeCosignBin(t, 1)
 	target := updateEnv(t, srv, bad)
-	code, _, errText := runArgs(t, "", "update", "--yes")
+	code, _, errText := runDirect(t, "", runUpdate, "--yes")
 	if b, _ := os.ReadFile(target); code != product.ExitError || string(b) != "old binary" || !strings.Contains(errText, "not signed by lockfile's release workflow") {
 		t.Fatalf("bad signature: exit %d, binary %q: %s", code, b, errText)
 	}
 	good, log := fakeCosignBin(t, 0)
 	testUpdateHooks.cosign = good
-	if code, out, errText := runArgs(t, "", "update", "--yes"); code != 0 {
+	if code, out, errText := runDirect(t, "", runUpdate, "--yes"); code != 0 {
 		t.Fatalf("good: exit %d: %s %s", code, out, errText)
 	}
 	if b, _ := os.ReadFile(target); string(b) != "new binary" {
@@ -124,11 +124,11 @@ func TestUpdateRefusesDowngrade(t *testing.T) {
 	old := product.Version
 	product.Version = "v10.0.0"
 	t.Cleanup(func() { product.Version = old })
-	code, _, errText := runArgs(t, "", "update", "--yes")
+	code, _, errText := runDirect(t, "", runUpdate, "--yes")
 	if b, _ := os.ReadFile(target); code != product.ExitError || string(b) != "old binary" || !strings.Contains(errText, "older than this one") {
 		t.Fatalf("downgrade: exit %d, binary %q: %s", code, b, errText)
 	}
-	if code, out, errText := runArgs(t, "", "update", "--yes", "--allow-downgrade"); code != 0 {
+	if code, out, errText := runDirect(t, "", runUpdate, "--yes", "--allow-downgrade"); code != 0 {
 		t.Fatalf("forced downgrade: exit %d: %s %s", code, out, errText)
 	}
 	if b, _ := os.ReadFile(target); string(b) != "new binary" {
@@ -194,7 +194,7 @@ func TestUpdateChecksumMismatch(t *testing.T) {
 	srv := releaseServer(t, []byte("new binary"), strings.Repeat("0", 64))
 	good, _ := fakeCosignBin(t, 0)
 	target := updateEnv(t, srv, good)
-	code, _, errText := runArgs(t, "", "update", "--yes")
+	code, _, errText := runDirect(t, "", runUpdate, "--yes")
 	if b, _ := os.ReadFile(target); code != product.ExitError || string(b) != "old binary" || !strings.Contains(errText, "does not match its signed checksum") {
 		t.Fatalf("exit %d, binary %q: %s", code, b, errText)
 	}
@@ -204,7 +204,7 @@ func TestUpdateCosignMissing(t *testing.T) {
 	srv := releaseServer(t, []byte("new binary"), "")
 	target := updateEnv(t, srv, "")
 	t.Setenv("PATH", t.TempDir())
-	code, _, errText := runArgs(t, "", "update", "--yes")
+	code, _, errText := runDirect(t, "", runUpdate, "--yes")
 	if b, _ := os.ReadFile(target); code != product.ExitError || string(b) != "old binary" || !strings.Contains(errText, "cosign") {
 		t.Fatalf("exit %d, binary %q: %s", code, b, errText)
 	}
@@ -213,7 +213,7 @@ func TestUpdateCosignMissing(t *testing.T) {
 func TestUpdateCheckOnly(t *testing.T) {
 	srv := releaseServer(t, []byte("new binary"), "")
 	target := updateEnv(t, srv, "")
-	code, out, _ := runArgs(t, "", "update", "--check")
+	code, out, _ := runDirect(t, "", runUpdate, "--check")
 	if b, _ := os.ReadFile(target); code != 0 || !strings.Contains(out, "v9.9.9 is available") || string(b) != "old binary" {
 		t.Fatalf("exit %d: %s", code, out)
 	}
