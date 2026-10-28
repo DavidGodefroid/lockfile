@@ -202,7 +202,7 @@ func (m *Manager) Create(r io.Reader, max int64) (h Handle, info Info, err error
 		}
 	}()
 	path := filepath.Join(dir, fileName)
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0o600)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL|noFollow|syscall.O_CLOEXEC, 0o600)
 	if err != nil {
 		return "", Info{}, err
 	}
@@ -277,7 +277,7 @@ func (m *Manager) OpenFile(h Handle) (*os.File, Info, error) {
 	if err != nil {
 		return nil, Info{}, err
 	}
-	f, err := os.OpenFile(e.file, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
+	f, err := os.OpenFile(e.file, os.O_RDONLY|noFollow|syscall.O_CLOEXEC, 0)
 	if err != nil {
 		return nil, Info{}, err
 	}

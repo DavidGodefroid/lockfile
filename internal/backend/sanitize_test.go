@@ -46,8 +46,8 @@ func TestSanitizerScrubsProfileValues(t *testing.T) {
 	for in, forbidden := range map[string][]string{
 		`dial tcp: lookup minio: no such host (minio:9000)`:               {"minio"},
 		`NoSuchBucket: partner-drop`:                                      {"partner-drop"},
-		`sftp dial: dial tcp fileserver:22: connection refused`:            {"fileserver"},
-		`ssh: handshake failed: user reader denied`:                        {"reader"},
+		`sftp dial: dial tcp fileserver:22: connection refused`:           {"fileserver"},
+		`ssh: handshake failed: user reader denied`:                       {"reader"},
 		`sftp lstat: outgoing/invoices: file does not exist (outgoing/x)`: {"outgoing"},
 	} {
 		got := san.Clean(in)
