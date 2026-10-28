@@ -221,7 +221,7 @@ func (s Store) Open(name string) (*os.File, Installed, error) {
 		return nil, Installed{}, fmt.Errorf("%w: %s manifest", ErrTampered, name)
 	}
 	path := filepath.Join(s.versionDir(e), binaryFile)
-	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
+	f, err := os.OpenFile(path, os.O_RDONLY|noFollow|syscall.O_CLOEXEC, 0)
 	if err != nil {
 		return nil, Installed{}, fmt.Errorf("%w: %s binary: %v", ErrTampered, name, err)
 	}
@@ -306,7 +306,7 @@ func (s Store) Remove(name string) error {
 func (s Store) RemoveAll() error { return removeAll(s.Dir) }
 
 func readNoFollow(path string) ([]byte, error) {
-	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
+	f, err := os.OpenFile(path, os.O_RDONLY|noFollow|syscall.O_CLOEXEC, 0)
 	if err != nil {
 		return nil, err
 	}

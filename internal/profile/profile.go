@@ -45,11 +45,11 @@ const (
 	DefaultAnswerQuantum       = 5 * time.Second
 	// DefaultIdleTimeout and DefaultMaxSession are lockkit's console
 	// defaults, applied here so the approved policy states them.
-	DefaultIdleTimeout = 20 * time.Minute
-	DefaultMaxSession  = 4 * time.Hour
-	MaxPluginsPerHandleCap     = 64
-	DefaultSFTPPort            = 22
-	httpsPort                  = 443
+	DefaultIdleTimeout     = 20 * time.Minute
+	DefaultMaxSession      = 4 * time.Hour
+	MaxPluginsPerHandleCap = 64
+	DefaultSFTPPort        = 22
+	httpsPort              = 443
 )
 
 // Raw is the config file as written.

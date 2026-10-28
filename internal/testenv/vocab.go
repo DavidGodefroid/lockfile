@@ -195,4 +195,3 @@ func (v Vocab) Allowed(s string) bool {
 	}
 	return false
 }
-

@@ -6,19 +6,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"syscall"
 
 	"github.com/DavidGodefroid/lockfile/internal/procmount"
 )
-
-// fileOwner returns the owner of fi from the system's stat data.
-func fileOwner(fi fs.FileInfo) (uid, gid int, ok bool) {
-	st, ok := fi.Sys().(*syscall.Stat_t)
-	if !ok {
-		return 0, 0, false
-	}
-	return int(st.Uid), int(st.Gid), true
-}
 
 // sharedFS are filesystem types whose files other machines, or other
 // clients of the share, may read.
