@@ -289,6 +289,59 @@ func TestLauncherAccountsPerCommand(t *testing.T) {
 	}
 }
 
+// The commands that mount lockfile's volumes first run migrate-ids on
+// them, as root with CAP_CHOWN and CAP_DAC_READ_SEARCH only; the agent's
+// commands and those run as you do not.
+func TestLauncherMigratesTheAccountIDs(t *testing.T) {
+	f := newLauncherFixture(t)
+	run, homeVol := []string{"-v", "lockfile-run:/run/lockfile"}, []string{"-v", "lockfile-home:/home/lockfile"}
+	confined := [][]string{{"--security-opt", "seccomp=" + f.seccomp}, {"--cap-drop=ALL", "--cap-add=CHOWN", "--cap-add=DAC_READ_SEARCH"},
+		{"--security-opt", "no-new-privileges"}, {"--read-only"}, {"--network", "none"}, {"--user", "0:0"}}
+	for _, tc := range []struct {
+		args    []string
+		volumes [][]string // nil: no migrate-ids
+	}{
+		{[]string{"console", "--profile", "p"}, [][]string{run, homeVol}},
+		{[]string{"doctor"}, [][]string{run, homeVol}},
+		{[]string{"profile", "list"}, [][]string{homeVol}},
+		{[]string{"audit"}, [][]string{homeVol}},
+		{[]string{"mcp"}, nil},
+		{[]string{"status"}, nil},
+		{[]string{"init", "claude"}, nil},
+	} {
+		out, calls, err := f.run(t, f.project, nil, tc.args...)
+		if err != nil {
+			t.Fatalf("%v: %v\n%s", tc.args, err, out)
+		}
+		var mig []string
+		for _, c := range calls {
+			if len(c) > 0 && c[0] == "run" && c[len(c)-1] == "migrate-ids" {
+				mig = c
+			}
+		}
+		if tc.volumes == nil {
+			if mig != nil {
+				t.Errorf("%v: runs migrate-ids: %q", tc.args, mig)
+			}
+			continue
+		}
+		if mig == nil {
+			t.Fatalf("%v: no migrate-ids in %q", tc.args, calls)
+		}
+		for _, seq := range append(append([][]string{}, confined...), tc.volumes...) {
+			if !hasSeq(mig, seq...) {
+				t.Errorf("%v: migrate-ids lacks %q:\n%q", tc.args, seq, mig)
+			}
+		}
+		if len(tc.volumes) == 1 && hasSeq(mig, run...) {
+			t.Errorf("%v: migrate-ids mounts the socket volume: %q", tc.args, mig)
+		}
+		if r := lastRun(t, calls); r[len(r)-1] == "migrate-ids" {
+			t.Errorf("%v: migrate-ids is the last run", tc.args)
+		}
+	}
+}
+
 // init mounts the project: the nearest directory up holding .lockfile/, or
 // else .git, or the directory itself.
 func TestLauncherInitProjectRoot(t *testing.T) {

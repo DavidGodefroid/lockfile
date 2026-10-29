@@ -87,6 +87,18 @@ docker_run() {
 	exec docker run --rm ${LOCKFILE_DOCKER_ARGS:-} "$@"
 }
 
+# migrate_ids VOLUME...: give the files of the volumes, made by a release
+# before 0.3 with locksql's account ids (10000-10002), lockfile's own
+# (10030-10032). Idempotent; root in the container with CAP_CHOWN and
+# CAP_DAC_READ_SEARCH only, no network. Stays for one release.
+migrate_ids() {
+	command -v docker >/dev/null 2>&1 || die "docker is required: lockfile runs in Docker (docs/docker.md)"
+	seccomp
+	set -- --security-opt seccomp="$seccomp_profile" --cap-drop=ALL --cap-add=CHOWN --cap-add=DAC_READ_SEARCH \
+		--security-opt no-new-privileges --read-only --network none --user 0:0 "$@"
+	docker run --rm "$@" "$image" migrate-ids || die "could not move the volumes to the account ids 10030-10032"
+}
+
 # mountable PATH: PATH can be a docker -v source and target, which ":"
 # separates.
 mountable() {
@@ -317,6 +329,7 @@ console)
 	# read-only root with a small /tmp (the fetched files are in its home),
 	# bounded processes and memory (a plugin may take up to 2 GB).
 	# host.docker.internal is this machine.
+	migrate_ids -v lockfile-run:/run/lockfile -v lockfile-home:/home/lockfile
 	docker_run "$tty" --name "$name" --log-driver none --user lockfile \
 		--security-opt seccomp="$seccomp_profile" --cap-drop=ALL --security-opt no-new-privileges \
 		--read-only --tmpfs /tmp:rw,nosuid,nodev,noexec,size=64m --pids-limit 512 --memory 4g \
@@ -330,10 +343,12 @@ doctor)
 		as_you "$@"
 	fi
 	seccomp
+	migrate_ids -v lockfile-run:/run/lockfile -v lockfile-home:/home/lockfile
 	docker_run "$tty" --user lockfile --security-opt seccomp="$seccomp_profile" \
 		-v lockfile-run:/run/lockfile -v lockfile-home:/home/lockfile "$image" "$@"
 	;;
 profile | plugin | marketplace | audit | forget)
+	migrate_ids -v lockfile-home:/home/lockfile
 	docker_run "$tty" --user lockfile -v lockfile-home:/home/lockfile "$image" "$@"
 	;;
 init)

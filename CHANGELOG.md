@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### lockfile's own account ids
+
+- The image's accounts move from locksql's ids to lockfile's own: group
+  `lockfile-clients` 10000 → 10030, console `lockfile` 10001 → 10031, `agent`
+  10002 → 10032, so that each Lock has its own.
+- The launcher runs `lockfile migrate-ids` before `console`, `doctor`, `profile`,
+  `plugin`, `marketplace`, `audit` and `forget`: in a throwaway container, as root with
+  `CAP_CHOWN` and `CAP_DAC_READ_SEARCH` only, under the seccomp profile, with no network
+  and a read-only root, it gives the files of `lockfile-run` and `lockfile-home` that
+  hold an old id the new one, and leaves the others alone (idempotent). It refuses any
+  account but root and any argument, and stays for one release.
+
+**Breaking, migration:** volumes of a previous release are migrated by the launcher.
+Without it, run `migrate-ids` once as docs/docker.md shows. An agent container that
+reached the console with gid 10000 now needs gid 10030.
 ### The host install code is gone
 
 - `cmd/lockfile/install.go`, the binary's host self-update and `internal/separate` are
