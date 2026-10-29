@@ -18,6 +18,9 @@ const (
 	CodeApprovalDenied     Code = "approval_denied"
 	CodeApprovalTimeout    Code = "approval_timeout"
 	CodeHandleExpired      Code = "handle_expired"
+	// CodeStale: the fetched bytes are not the ones the plan was approved
+	// on (their sha256 differs); no plugin ran on them.
+	CodeStale Code = "stale"
 )
 
 // Codes is the closed list.
@@ -25,7 +28,7 @@ var Codes = []Code{
 	CodePluginError, CodeFetchFailed, CodeKeyOutsidePrefix, CodeUnknownProfile, CodeTooManyPlugins,
 	CodePluginNotInstalled, CodePluginTampered, CodePluginYanked, CodeSandboxUnavailable,
 	CodeProcNotHidden,
-	CodeApprovalDenied, CodeApprovalTimeout, CodeHandleExpired,
+	CodeApprovalDenied, CodeApprovalTimeout, CodeHandleExpired, CodeStale,
 }
 
 // Valid reports whether c is in the closed list.

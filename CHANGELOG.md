@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Plans bound to a content hash (groundwork for hub mode)
+
+- A plan can carry the sha256 of the bytes it was approved on. The run spools the object
+  into the console's workspace and hashes the bytes it writes; when they differ the spool
+  is released before any plugin runs and the plan is refused `stale` (`E_STALE`, retry
+  rewrite: plan again). The plugins read only the spool, so the bytes they answer on are
+  the hashed ones. Nothing sets the hash yet: the approval hub (lockkit v0.3.0) will.
+
 ### lockfile's own account ids
 
 - The image's accounts move from locksql's ids to lockfile's own: group

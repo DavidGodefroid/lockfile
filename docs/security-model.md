@@ -60,6 +60,7 @@ whitelist (`internal/testenv`): any key, value or word outside it fails.
 | handle `f_…`, plan id `pl_…` | random, from `crypto/rand` |
 | plugin name, version, `official`, `warning: unofficial_marketplace`, question, meaning of 1/0 | plugin metadata from the signed manifest |
 | profile names and `production` flag (`sources`), `busy` | lockfile configuration; `busy` = the console did not answer the probe in time because it serves another request (a plan waiting for the human, or a run until its quantum) |
+| `stale` (`E_STALE`) | the plan was approved on a content hash (hub mode) and the fetched bytes differ; **residual**: says "this file changed since the approval", never how; no plugin ran on the new bytes, and the spool is released |
 | approval outcome (`approval_denied`, `approval_timeout`) | a human decision; the reason the human types is never forwarded |
 | refusals `key_outside_prefix`, `too_many_plugins`, `unknown_profile`, `plugin_not_installed`, `plugin_tampered`, `plugin_yanked`, `sandbox_unavailable`, `proc_not_hidden`, `handle_expired` (as `E_*` codes with a static hint) | computed from the request and the local install, before or without reading the file |
 | `status` (console up, production, auto mode, security level, idle/session timers, plugin protocol, sandbox ok, approved `answer_quantum`) | console state and configuration |

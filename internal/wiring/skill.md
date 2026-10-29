@@ -53,6 +53,7 @@ A refusal carries `refusal.code`, `refusal.retry` and `refusal.hint`:
 
 - `retry: rewrite`: `E_KEY_OUTSIDE_PREFIX` (the key is not under the profile's prefix),
   `E_TOO_MANY_PLUGINS` (ask fewer questions), `E_HANDLE_EXPIRED` (plan again with the key),
+  `E_STALE` (the file changed since the plan was approved: plan again with the key),
   `E_UNKNOWN_PROFILE` (no console serves it: the hint names the command the user runs).
 - `retry: ask_user`: `E_PLUGIN_NOT_INSTALLED`, `E_PLUGIN_YANKED`. Tell the user.
 - `retry: stop`: `E_FETCH_FAILED` (the file could not be fetched; the cause is in the human's
