@@ -1,4 +1,4 @@
-# lockfile in Docker: the separated setup of `lockfile install`, baked into
+# lockfile in Docker: the separated setup baked into
 # an image. The console runs as "lockfile" in one container; the agent's MCP
 # server runs as "agent" in another; they share the socket directory through
 # a named volume, and the kernel checks every peer as it does on a host.

@@ -17,6 +17,14 @@
 **Breaking, migration:** volumes of a previous release are migrated by the launcher.
 Without it, run `migrate-ids` once as docs/docker.md shows. An agent container that
 reached the console with gid 10000 now needs gid 10030.
+### The host install code is gone
+
+- `cmd/lockfile/install.go`, the binary's host self-update and `internal/separate` are
+  removed: the image refused them since the Docker-only launcher. `lockfile install` and
+  `lockfile update` in the image still print the hint to the launcher (`scripts/install.sh`,
+  `lockfile update` on the host, docs/docker.md).
+- `lockfile doctor`'s separation checks no longer tell you to run `sudo lockfile install`:
+  they point to the launcher and its image.
 
 ### lockkit v0.2.1
 
