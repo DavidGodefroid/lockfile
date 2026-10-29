@@ -371,6 +371,7 @@ console, public-key trust roots for unofficial marketplaces.
 | [locksql](https://github.com/DavidGodefroid/locksql) | databases: the agent writes the SQL, you hold the key |
 | [lockmq](https://github.com/DavidGodefroid/lockmq) | message queues: the agent inspects your brokers, you hold the key |
 | **lockfile** | files: the agent asks yes/no questions and gets 1s and 0s |
+| [lockhttp](https://github.com/DavidGodefroid/lockhttp) | outbound HTTP(S): the agent browses, you approve what sends data (pre-release) |
 | [lockkit](https://github.com/DavidGodefroid/lockkit) | the shared framework: separated account, socket, console, approval, audit, signed updates |
 
 ## Build
