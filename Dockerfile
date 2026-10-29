@@ -57,9 +57,9 @@ ARG ALLOWED_UIDS=""
 # every account but the console's.
 RUN case "$ALLOWED_UIDS" in *[!0-9,]*|,*|*,|*,,*) echo "ALLOWED_UIDS: comma-separated uids, got '$ALLOWED_UIDS'" >&2; exit 1;; esac \
  && apk add --no-cache ca-certificates \
- && addgroup -S -g 10000 lockfile-clients \
- && adduser -D -u 10001 -s /sbin/nologin -g "lockfile console" lockfile \
- && adduser -D -u 10002 -G lockfile-clients -s /sbin/nologin -g "lockfile agent" agent \
+ && addgroup -S -g 10030 lockfile-clients \
+ && adduser -D -u 10031 -s /sbin/nologin -g "lockfile console" lockfile \
+ && adduser -D -u 10032 -G lockfile-clients -s /sbin/nologin -g "lockfile agent" agent \
  && chmod 0700 /home/lockfile \
  && install -d -m 0755 -o root -g root /etc/lockfile \
  && printf '%s\n' \

@@ -10,10 +10,10 @@ of its own on your machine.
 The image holds the separated setup in two kinds of containers that share
 only the socket volume:
 
-- the console runs as `lockfile` (uid 10001), the only account that holds
+- the console runs as `lockfile` (uid 10031), the only account that holds
   the source credentials, the plugins, the fetched files and the audit log;
-- the agent's MCP server and CLI run as `agent` (uid 10002), a member of
-  `lockfile-clients` (gid 10000), each in a throwaway container;
+- the agent's MCP server and CLI run as `agent` (uid 10032), a member of
+  `lockfile-clients` (gid 10030), each in a throwaway container;
 - `/etc/lockfile/system.toml` (`x11 = "refuse"`), `/etc/lockfile/container.toml`
   and the binaries (`lockfile`, `cosign`) are owned by root; there is no
   `sudo` and the image starts no shell;
@@ -125,6 +125,25 @@ working, but the launcher replaces them; the `lockfile-run` and
 working; `lockfile init` writes `lockfile mcp`, which now goes through the
 launcher.
 
+From a release before 0.3: the image's accounts moved from locksql's ids
+(10000-10002) to lockfile's own, `lockfile-clients` 10030, `lockfile` 10031
+and `agent` 10032. The launcher gives the files of `lockfile-run` and
+`lockfile-home` the new ids before the console, `doctor` and the commands on
+the home volume, once (it changes only the old ids): in a throwaway container
+of the image, as root with `CAP_CHOWN` and `CAP_DAC_READ_SEARCH` only and no
+network. Without the launcher, run the same once before the console:
+
+```sh
+docker run --rm --security-opt seccomp=/usr/local/share/lockfile/seccomp.json \
+  --cap-drop=ALL --cap-add=CHOWN --cap-add=DAC_READ_SEARCH \
+  --security-opt no-new-privileges --read-only --network none --user 0:0 \
+  -v lockfile-run:/run/lockfile -v lockfile-home:/home/lockfile \
+  ghcr.io/davidgodefroid/lockfile migrate-ids
+```
+
+An agent in a container of its own that reached the console through the gid
+10000 now needs gid 10030; `ALLOWED_UIDS` is unchanged.
+
 From a host install (a release binary, then `sudo lockfile install`):
 `install.sh` replaces the binary with the launcher, and the image refuses
 `lockfile install` and `lockfile update`. What the host install created stays
@@ -165,7 +184,7 @@ Inside a container, a few things differ from a host:
 
   and start the console with
   `LOCKFILE_DOCKER_ARGS="-v /data/samples:/srv/lockfile/samples:ro"` (below).
-  The files must be readable by uid 10001.
+  The files must be readable by uid 10031.
 - **`localhost` is the container itself.** A server on your machine is
   `host.docker.internal`, which the launcher maps to your machine; a server
   in another container is reached by its name on a shared network
@@ -308,9 +327,9 @@ The agent's image needs what a client host has:
   the same version as the console's image;
 - `/etc/lockfile/system.toml`, owned by root, mode 0644, with the image's
   `service_user`, `client_group` and `socket_dir`;
-- an account `lockfile` with uid 10001: the client refuses a socket served by
+- an account `lockfile` with uid 10031: the client refuses a socket served by
   any uid but `service_user`'s;
-- a group `lockfile-clients` with gid 10000 that holds the agent's account:
+- a group `lockfile-clients` with gid 10030 that holds the agent's account:
   the socket directory is mode 2750 and the sockets 0660, group
   `lockfile-clients`.
 
