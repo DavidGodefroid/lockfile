@@ -284,9 +284,9 @@ func TestImageDefaults(t *testing.T) {
 		t.Fatalf("privilege tools in the image: %q %v", out, err)
 	}
 	// lockfile's own account ids, distinct from the other Locks'.
-	out = mustDk(t, "run", "--rm", "--entrypoint", "sh", image, "-c", "id lockfile; id agent")
-	if want := "uid=10031(lockfile) gid=10031(lockfile) groups=10031(lockfile)\nuid=10032(agent) gid=10030(lockfile-clients) groups=10030(lockfile-clients)\n"; out != want {
-		t.Errorf("accounts:\n%s\nwant:\n%s", out, want)
+	out = mustDk(t, "run", "--rm", "--entrypoint", "sh", image, "-c", "id -u lockfile; id -g lockfile; id -u agent; id -g agent; getent group lockfile-clients")
+	if want := "10031\n10031\n10032\n10030\nlockfile-clients:x:10030:agent\n"; out != want {
+		t.Errorf("accounts (uid, gid of lockfile and agent; lockfile-clients):\n%s\nwant:\n%s", out, want)
 	}
 	out = mustDk(t, "run", "--rm", "--entrypoint", "stat", image, "-c", "%n %U:%G %a",
 		"/usr/local/bin/lockfile", "/usr/local/bin/cosign", "/etc/lockfile/system.toml", "/etc/lockfile/container.toml",
