@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### lockkit v0.2.1
+
+- lockfile now builds on lockkit v0.2.1 (was v0.1.0), the version locksql and lockhttp use.
+  No API change affects lockfile: it does not show clear results, read Vault with a held
+  token or use `pii`, so its behaviour is unchanged.
+
 ### One `lockfile` command, backed by Docker
 
 Every lockfile command now runs in Docker, through one host command: the `lockfile`
