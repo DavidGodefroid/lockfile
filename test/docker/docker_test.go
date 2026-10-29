@@ -283,6 +283,11 @@ func TestImageDefaults(t *testing.T) {
 	if out, _, err := dk(t, "run", "--rm", "--entrypoint", "sh", image, "-c", "command -v sudo su-exec doas || true"); err != nil || strings.TrimSpace(out) != "" {
 		t.Fatalf("privilege tools in the image: %q %v", out, err)
 	}
+	// lockfile's own account ids, distinct from the other Locks'.
+	out = mustDk(t, "run", "--rm", "--entrypoint", "sh", image, "-c", "id lockfile; id agent")
+	if want := "uid=10031(lockfile) gid=10031(lockfile) groups=10031(lockfile)\nuid=10032(agent) gid=10030(lockfile-clients) groups=10030(lockfile-clients)\n"; out != want {
+		t.Errorf("accounts:\n%s\nwant:\n%s", out, want)
+	}
 	out = mustDk(t, "run", "--rm", "--entrypoint", "stat", image, "-c", "%n %U:%G %a",
 		"/usr/local/bin/lockfile", "/usr/local/bin/cosign", "/etc/lockfile/system.toml", "/etc/lockfile/container.toml",
 		"/run/lockfile", "/home/lockfile", "/srv/lockfile")
@@ -320,7 +325,7 @@ func TestConsoleAndAgent(t *testing.T) {
 
 	// uid 4242 reaches the socket through the group's gid, but the console
 	// checks the account: not a member of lockfile-clients, not allowed.
-	if got, out, ok := s.answers(t, image, []string{"--user", "4242:10000"}, "test.answer1"); ok {
+	if got, out, ok := s.answers(t, image, []string{"--user", "4242:10030"}, "test.answer1"); ok {
 		t.Fatalf("uid 4242 got answers %v:\n%s", got, out)
 	}
 }
@@ -348,7 +353,7 @@ func TestAllowedUIDs(t *testing.T) {
 	s := newSetup(t)
 	s.console(t, imageAllowed, "--security-opt", "seccomp="+s.seccomp)
 	s.waitServed(t)
-	if got, out, ok := s.answers(t, imageAllowed, []string{"--user", "4242:10000"}, "test.answer1"); !ok || got["test.answer1"] != "1" {
+	if got, out, ok := s.answers(t, imageAllowed, []string{"--user", "4242:10030"}, "test.answer1"); !ok || got["test.answer1"] != "1" {
 		t.Fatalf("allowed uid 4242: %v\n%s", got, out)
 	}
 }
@@ -447,5 +452,57 @@ func TestSharedPidNamespaceRefuses(t *testing.T) {
 	// The console still serves an agent in a container of its own.
 	if got, out, ok := s.answers(t, image, nil, "test.answer1"); !ok || got["test.answer1"] != "1" {
 		t.Fatalf("agent after the refusal: %v\n%s", got, out)
+	}
+}
+
+// migrateIDs runs migrate-ids as scripts/lockfile does before the commands
+// that mount the volumes, and returns its stderr.
+func (s *setup) migrateIDs(t *testing.T) string {
+	t.Helper()
+	_, errs, err := dk(t, "run", "--rm", "--security-opt", "seccomp="+s.seccomp, "--cap-drop=ALL",
+		"--cap-add=CHOWN", "--cap-add=DAC_READ_SEARCH", "--security-opt", "no-new-privileges",
+		"--read-only", "--network", "none", "--user", "0:0",
+		"-v", s.run+":/run/lockfile", "-v", s.home+":/home/lockfile", image, "migrate-ids")
+	if err != nil {
+		t.Fatalf("migrate-ids: %v\n%s", err, errs)
+	}
+	return errs
+}
+
+// Volumes made by a release before 0.3, with locksql's account ids
+// (10000-10002), stay readable: migrate-ids gives their files lockfile's
+// own ids, once, and the console and the agent work on them.
+func TestUpgradeFromTheOldAccountIDs(t *testing.T) {
+	s := newSetup(t)
+	// Back to the old ids, as the previous image left them.
+	mustDk(t, "run", "--rm", "--user", "0:0", "-v", s.run+":/run/lockfile", "-v", s.home+":/home/lockfile",
+		"--entrypoint", "sh", image, "-euc", `find /run/lockfile /home/lockfile | while read -r p; do
+u=$(stat -c %u "$p"); g=$(stat -c %g "$p")
+case $u in 10031) u=10001 ;; 10032) u=10002 ;; esac
+case $g in 10030) g=10000 ;; 10031) g=10001 ;; 10032) g=10002 ;; esac
+chown -h "$u:$g" "$p"
+done`)
+	old := mustDk(t, "run", "--rm", "--user", "0:0", "-v", s.home+":/home/lockfile", "--entrypoint", "stat", image,
+		"-c", "%u:%g", "/home/lockfile")
+	if strings.TrimSpace(old) != "10001:10001" {
+		t.Fatalf("old home owner = %q", old)
+	}
+
+	if errs := s.migrateIDs(t); !strings.Contains(errs, "moved to the account ids 10030-10032") {
+		t.Fatalf("first migrate-ids said %q", errs)
+	}
+	if errs := s.migrateIDs(t); errs != "" {
+		t.Fatalf("second migrate-ids said %q, want nothing", errs)
+	}
+	out := mustDk(t, "run", "--rm", "--user", "0:0", "-v", s.run+":/run/lockfile", "-v", s.home+":/home/lockfile",
+		"--entrypoint", "sh", image, "-c", "find /run/lockfile /home/lockfile -exec stat -c '%u:%g %n' {} + | grep -E '^1000[0-2]:|:1000[0-2] ' || true")
+	if strings.TrimSpace(out) != "" {
+		t.Fatalf("files left with an old id:\n%s", out)
+	}
+
+	s.console(t, image, "--security-opt", "seccomp="+s.seccomp)
+	s.waitServed(t)
+	if got, out, ok := s.answers(t, image, nil, "test.answer1"); !ok || got["test.answer1"] != "1" {
+		t.Fatalf("answers after the upgrade = %v:\n%s", got, out)
 	}
 }
