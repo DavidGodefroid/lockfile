@@ -2,6 +2,47 @@
 
 ## Unreleased
 
+### One `lockfile` command, backed by Docker
+
+Every lockfile command now runs in Docker, through one host command: the `lockfile`
+launcher.
+
+- `scripts/lockfile`, a POSIX shell launcher, runs each command in
+  `ghcr.io/davidgodefroid/lockfile` with the account and volumes it needs: `console` as
+  `lockfile`, one container per profile (`lockfile-console-<n>`, `LOCKFILE_CONSOLE_NAME`),
+  under the shipped seccomp profile (it refuses to start without it), with no capability,
+  `no-new-privileges`, a read-only root and a small `/tmp`, 512 processes, 4 GB, no log
+  driver, `host.docker.internal` mapped, `VAULT_ADDR`/`VAULT_NAMESPACE` passed and
+  `VAULT_CACERT`'s file mounted read-only; `profile`, `plugin`, `marketplace`, `audit`,
+  `forget` and `doctor` as `lockfile` on `lockfile-home`; `init` and `doctor --fix` as you,
+  with your home and the project; the agent's commands, `mcp` included, as `agent` with
+  `lockfile-run` only. It never mounts the Docker socket, refuses paths with `:`, and
+  splits `LOCKFILE_DOCKER_ARGS` without globbing (`local` sources are mounted with it).
+- `scripts/install.sh` installs the launcher and `seccomp.json`
+  (`/usr/local/share/lockfile`, `LOCKFILE_SHARE_DIR`), root-owned, after the cosign checks of
+  `checksums.txt` and of the images against the release workflow run on that exact tag; the
+  launcher runs the image by its verified digest (the two digests must differ). A newer
+  installed launcher is not downgraded without `LOCKFILE_ALLOW_DOWNGRADE=1`.
+- `lockfile version` prints the launcher's and the image's versions; `lockfile update
+  [vX.Y.Z]` (an exact tag only) replaces the launcher and the profile the same way, then
+  pulls the image.
+- The release workflow builds the image (and its `-vault` variant) for amd64 and arm64 after
+  the "tag is on main" guard, publishes it to ghcr.io and signs it with cosign. The archives
+  ship the launcher and `seccomp.json`.
+- The binary refuses `install` and `update` ("lockfile runs in Docker"). `lockfile init`
+  writes `lockfile mcp`, which now works as is.
+- CI drives the launcher against the built image, and `test/docker` runs the console as the
+  launcher confines it.
+
+**Breaking, migration:** `install.sh` installs the launcher in place of the binary.
+Replace the `docker run … lockfile …` commands and `docker run … lockfile mcp` agent entries
+of the former guide with `lockfile …` (the old ones keep working). A host install (`sudo
+lockfile install`) leaves the `lockfile` account and group, `/etc/lockfile/`, the socket
+directory and the console account's home behind: see
+[docs/docker.md](docs/docker.md#migrating).
+
+### Docker image
+
 Docker is the deployment of lockfile, at parity with locksql (#10).
 
 - `Dockerfile`: a console image replaces the single-container demo. Static build with

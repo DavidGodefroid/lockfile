@@ -18,7 +18,9 @@ import (
 )
 
 func init() {
-	commands["install"] = command{human: true, help: "one-time setup separating the console account from the agent (sudo, Linux)", run: runInstall}
+	// Refused by run (hostModeRefusal): the code stays until a later release
+	// removes it.
+	commands["install"] = command{human: true, help: "", run: runInstall}
 }
 
 // installHooks replace the binary, the system, the terminal and sudo in

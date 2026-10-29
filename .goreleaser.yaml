@@ -35,7 +35,15 @@ archives:
     # `lockfile update` and scripts/install.sh download this name.
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     # Explicit list: docs/ also holds local-only material that must never ship.
+    # scripts/lockfile is the host launcher and seccomp.json the profile of
+    # the console's container, which scripts/install.sh and `lockfile update`
+    # install; the binary is the one of an agent that runs in a container of
+    # its own (docs/docker.md).
     files:
+      - src: scripts/lockfile
+        info:
+          mode: 0755
+      - seccomp.json
       - LICENSE
       - README.md
       - CHANGELOG.md
@@ -50,7 +58,7 @@ checksum:
 # Keyless cosign signature of the checksum file (GitHub OIDC in CI). Verify
 # with:
 #   cosign verify-blob --bundle checksums.txt.sigstore.json \
-#     --certificate-identity-regexp '^https://github\.com/DavidGodefroid/lockfile/\.github/workflows/release\.yml@refs/tags/v[0-9]' \
+#     --certificate-identity 'https://github.com/DavidGodefroid/lockfile/.github/workflows/release.yml@refs/tags/vX.Y.Z' \
 #     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
 #     checksums.txt
 signs:

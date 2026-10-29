@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Install lockfile — signed binaries, separated setup</title>
+  <title>Install lockfile — launcher, signed Docker image</title>
   <meta name="description" content="Install lockfile from a cosign-signed release, set up the separated console account, add a source profile, install plugins and wire your AI agent.">
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
@@ -11,7 +11,7 @@
   <link rel="canonical" href="https://davidgodefroid.github.io/lockfile/install/">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="lockfile">
-  <meta property="og:title" content="Install lockfile — signed binaries, separated setup">
+  <meta property="og:title" content="Install lockfile — launcher, signed Docker image">
   <meta property="og:description" content="Install lockfile from a cosign-signed release, set up the separated console account, add a source profile, install plugins and wire your AI agent.">
   <meta property="og:url" content="https://davidgodefroid.github.io/lockfile/install/">
   <meta property="og:image" content="https://davidgodefroid.github.io/lockfile/assets/og.png">
@@ -21,7 +21,7 @@
   <meta property="og:image:alt" content="lockfile — Your AI asks about the file. It never reads it.">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Install lockfile — signed binaries, separated setup">
+  <meta name="twitter:title" content="Install lockfile — launcher, signed Docker image">
   <meta name="twitter:description" content="Install lockfile from a cosign-signed release, set up the separated console account, add a source profile, install plugins and wire your AI agent.">
   <meta name="twitter:image" content="https://davidgodefroid.github.io/lockfile/assets/og.png">
   <meta name="twitter:image:alt" content="lockfile — Your AI asks about the file. It never reads it.">
@@ -53,62 +53,30 @@
 
 <h1>Install lockfile</h1>
 <div class="prose">
-  <p class="lead">One static binary for both sides, checked against its cosign signature before it is installed.</p>
-  <p>Every release ships <code>lockfile_&lt;version&gt;_&lt;os&gt;_&lt;arch&gt;.tar.gz</code> for Linux and macOS on amd64 and arm64, a <code>checksums.txt</code> and its keyless cosign signature. No Go toolchain is needed.</p>
+  <p class="lead">lockfile runs in Docker. On your machine: Docker, one <code>lockfile</code> command (a launcher that runs every command in the signed release image, with the account it needs) and the seccomp profile of the console’s container.</p>
+  <p>The image holds the separated setup: the console as <code>lockfile</code>, the agent as <code>agent</code> in <code>lockfile-clients</code>, the socket directory shared through the <code>lockfile-run</code> volume, the console’s state in the <code>lockfile-home</code> volume. Its images are published for amd64 and arm64 and signed with cosign by lockfile’s release workflow.</p>
 </div>
 
 <section aria-labelledby="requirements">
   <h2 id="requirements">Requirements</h2>
   <ul class="prose">
-    <li><strong>The console needs Linux</strong> with Landlock and seccomp, which sandbox the plugins (Landlock also denies TCP from kernel ABI 4). <code>lockfile doctor</code> reports what the kernel offers; without them, plans are refused with <code>E_SANDBOX_UNAVAILABLE</code>.</li>
-    <li><strong>macOS gets the agent side only</strong>: the CLI and the MCP server, talking to a console on Linux.</li>
-    <li><strong><a href="https://docs.sigstore.dev/cosign/system_config/installation/">cosign</a></strong> on <code>PATH</code>, for the install script, <code>lockfile update</code> and every plugin install. Without it nothing is installed: there is no unsigned mode.</li>
-    <li><code>sudo</code> once, for <code>lockfile install</code>.</li>
+    <li><strong>Docker on Linux</strong>, on a kernel with Landlock and seccomp, which sandbox the plugins (Landlock also denies TCP from kernel ABI 4). <code>lockfile doctor</code> reports what the kernel offers; without them, plans are refused with <code>E_SANDBOX_UNAVAILABLE</code>. On Windows, WSL 2 with Docker Desktop.</li>
+    <li><strong><a href="https://docs.sigstore.dev/cosign/system_config/installation/">cosign</a></strong> on <code>PATH</code>, for the install script and <code>lockfile update</code>. Without it nothing is installed: there is no unsigned mode. The image has its own cosign for the plugins.</li>
   </ul>
 </section>
 
-<section aria-labelledby="binary">
-  <h2 id="binary">1. The binary</h2>
-  <h3 id="script">Script (Linux, macOS)</h3>
-  <p class="prose">Downloads the archive for your OS and architecture, checks the signature of <code>checksums.txt</code> against lockfile’s release workflow, then the archive against <code>checksums.txt</code>, and installs <code>/usr/local/bin/lockfile</code>, with <code>sudo</code> if needed:</p>
-  <pre tabindex="0" class="term"><code>curl -fsSL https://raw.githubusercontent.com/DavidGodefroid/lockfile/main/scripts/install.sh -o install.sh
+<section aria-labelledby="launcher">
+  <h2 id="launcher">1. The launcher</h2>
+  <pre tabindex="0" class="term"><code>V=vX.Y.Z
+curl -fsSLO "https://raw.githubusercontent.com/DavidGodefroid/lockfile/$V/scripts/install.sh"
 less install.sh                     <span class="cmt"># read it first</span>
-sh install.sh                       <span class="cmt"># LOCKFILE_VERSION=v0.2.0 to pin a version</span></code></pre>
-  <p class="prose"><code>LOCKFILE_INSTALL_DIR</code> picks another directory. Keep the default for the console: <code>lockfile install</code> refuses a binary another account could replace.</p>
-
-  <h3 id="by-hand">By hand</h3>
-  <p class="prose">Download the archive, <code>checksums.txt</code> and <code>checksums.txt.sigstore.json</code> from the <a href="https://github.com/DavidGodefroid/lockfile/releases/latest">latest release</a>, then:</p>
-  <pre tabindex="0" class="term"><code>cosign verify-blob --bundle checksums.txt.sigstore.json \
-  --certificate-identity-regexp '^https://github\.com/DavidGodefroid/lockfile/\.github/workflows/release\.yml@refs/tags/v[0-9]' \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  checksums.txt
-sha256sum --ignore-missing -c checksums.txt   <span class="cmt"># macOS: shasum -a 256 --ignore-missing -c checksums.txt</span>
-tar -xzf lockfile_&lt;version&gt;_&lt;os&gt;_&lt;arch&gt;.tar.gz lockfile
-sudo install -m 0755 lockfile /usr/local/bin/lockfile</code></pre>
-
-  <h3 id="source">From source</h3>
-  <pre tabindex="0" class="term"><code>CGO_ENABLED=0 go install github.com/DavidGodefroid/lockfile/cmd/lockfile@latest   <span class="cmt"># Go 1.26 or later</span>
-sudo "$(go env GOPATH)/bin/lockfile" install --trust-binary</code></pre>
-  <p class="prose"><code>--trust-binary</code> pins this binary’s sha256, since your account can write it.</p>
-
-  <h3 id="docker">Docker (demo)</h3>
-  <p class="prose">The repository’s <code>Dockerfile</code> builds a demo image of the separated setup, with the console account and an agent account in one container. It is for trying lockfile out, not for production: one container is one kernel, one boundary. The plugin sandbox still needs Landlock and seccomp from the host kernel.</p>
-  <pre tabindex="0" class="term"><code>docker build -t lockfile-demo https://github.com/DavidGodefroid/lockfile.git
-docker run --rm -it --security-opt seccomp=unconfined lockfile-demo</code></pre>
-</section>
-
-<section aria-labelledby="separated">
-  <h2 id="separated">2. The separated setup (Linux)</h2>
-  <pre tabindex="0" class="term"><code>sudo lockfile install
-lockfile doctor                     <span class="cmt"># from both accounts</span></code></pre>
-  <div class="prose">
-    <p><code>lockfile install</code> creates the <code>lockfile</code> account and the <code>lockfile-clients</code> group, adds your account to it, writes <code>/etc/lockfile/system.toml</code>, creates <code>/run/lockfile</code> and copies a root-owned <code>/usr/local/bin/lockfile</code>. It prints the root script before running it (<code>--print</code> only prints it, <code>--yes</code> skips the question).</p>
-    <p>Then give the console account a password, log out and in again (your account joined the group), and open a separate session as <code>lockfile</code> (switch user; prefer Wayland) for the console. The console refuses to start in your own account, where the agent runs and could read or type into its terminal.</p>
-  </div>
+LOCKFILE_VERSION=$V sh install.sh</code></pre>
+  <p class="prose">It checks the signatures of <code>checksums.txt</code> and of the images against lockfile’s release workflow run on that exact tag, then the archive against <code>checksums.txt</code>, and installs <code>/usr/local/bin/lockfile</code> and <code>/usr/local/share/lockfile/seccomp.json</code>, root-owned, with <code>sudo</code> if needed. The launcher runs the image by its verified digest. <code>lockfile version</code> prints the launcher’s and the image’s versions.</p>
+  <p class="prose">The launcher runs <code>console</code> as <code>lockfile</code>, confined under the seccomp profile; <code>profile</code>, <code>plugin</code>, <code>marketplace</code>, <code>audit</code>, <code>forget</code> and <code>doctor</code> as <code>lockfile</code> on its home volume; <code>init</code> and <code>doctor --fix</code> as you; the agent’s commands as <code>agent</code> with the socket volume only. <a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/docker.md#what-runs-where">What runs where</a>.</p>
 </section>
 
 <section aria-labelledby="profile">
-  <h2 id="profile">3. A source profile (console account)</h2>
+  <h2 id="profile">2. A source profile (console account)</h2>
   <p class="prose">Profiles live in the <code>lockfile</code> account’s <code>~/.config/lockfile/config.toml</code>; there is no per-project config. <code>lockfile profile add</code> appends one, validated:</p>
   <pre tabindex="0" class="term"><code><span class="cmt"># S3 (or an S3-compatible endpoint), credentials from Vault, production</span>
 lockfile profile add docs --source s3 --bucket documents --region eu-west-1 --prefix invoices/ \
@@ -118,8 +86,8 @@ lockfile profile add docs --source s3 --bucket documents --region eu-west-1 --pr
 lockfile profile add partner --source sftp --host sftp.example.org --user reader --auth key \
   --key ~/.ssh/partner_ed25519 --known-hosts ~/.ssh/known_hosts --base-dir /outgoing
 
-<span class="cmt"># A local directory</span>
-lockfile profile add samples --source local --path /srv/samples</code></pre>
+<span class="cmt"># A local directory, mounted read-only in the console's container</span>
+lockfile profile add samples --source local --path /srv/lockfile/samples</code></pre>
   <pre tabindex="0"><code>[profiles.docs]
 source = "s3"                 <span class="cmt"># s3 | sftp | local</span>
 bucket = "documents"
@@ -137,7 +105,7 @@ answer_quantum = "5s"         <span class="cmt"># results leave the console only
 </section>
 
 <section aria-labelledby="plugins">
-  <h2 id="plugins">4. Plugins (console account)</h2>
+  <h2 id="plugins">3. Plugins (console account)</h2>
   <pre tabindex="0" class="term"><code>lockfile plugin install file.non-empty@1.0.0     <span class="cmt"># exact versions only; signatures checked with cosign</span>
 lockfile plugin install format.is-pdf@1.0.0
 lockfile plugin install pdf.parses@1.0.0
@@ -146,29 +114,30 @@ lockfile plugin list</code></pre>
 </section>
 
 <section aria-labelledby="console">
-  <h2 id="console">5. The console</h2>
-  <pre tabindex="0" class="term"><code>lockfile console --profile samples</code></pre>
-  <p class="prose">It checks the isolation (separate account and session), asks for the secret, connects and serves the profile’s socket. Keep it in view: every plan waits for you there.</p>
+  <h2 id="console">4. The console</h2>
+  <pre tabindex="0" class="term"><code>LOCKFILE_DOCKER_ARGS="-v /data/samples:/srv/lockfile/samples:ro" lockfile console --profile samples</code></pre>
+  <p class="prose">It runs in a container of its own, under the shipped seccomp profile (never <code>seccomp=unconfined</code>), without capabilities, on a read-only root. It checks the isolation, asks for the secret, connects and serves the profile’s socket. Keep it in view: every plan waits for you there.</p>
 </section>
 
 <section aria-labelledby="wire">
-  <h2 id="wire">6. Wire your agent (your account)</h2>
+  <h2 id="wire">5. Wire your agent (your account)</h2>
   <pre tabindex="0" class="term"><code>lockfile init claude                <span class="cmt"># or codex, cursor, gemini; this project</span>
 lockfile init claude --user         <span class="cmt"># every project of this account</span>
 lockfile doctor --fix               <span class="cmt"># wires the installed agents not wired yet</span></code></pre>
-  <p class="prose">Claude Code may call <code>lockfile_status</code>, <code>lockfile_sources</code> and <code>lockfile_plugins</code> without a prompt; plans and runs always go through Claude Code’s permission prompt and the console.</p>
+  <p class="prose"><code>lockfile mcp</code>, the MCP command it writes, runs through the launcher in a throwaway container. Claude Code may call <code>lockfile_status</code>, <code>lockfile_sources</code> and <code>lockfile_plugins</code> without a prompt; plans and runs always go through Claude Code’s permission prompt and the console.</p>
 </section>
 
 <section aria-labelledby="update">
   <h2 id="update">Upgrade</h2>
-  <pre tabindex="0" class="term"><code>lockfile update [--check] [--yes]</code></pre>
-  <p class="prose">Checks <code>checksums.txt</code> against the signature of lockfile’s release workflow, then the archive against it, then replaces the binary (with <code>sudo</code> from a pinned copy when root owns it). Restart the console afterwards.</p>
+  <pre tabindex="0" class="term"><code>lockfile update [vX.Y.Z]</code></pre>
+  <p class="prose">Checks the release’s and the image’s signatures as the install script does, replaces the launcher and the seccomp profile, then pulls the image. Restart the console afterwards; the volumes keep its state.</p>
 </section>
 
 <section aria-labelledby="build">
   <h2 id="build">Build</h2>
-  <pre tabindex="0" class="term"><code>CGO_ENABLED=0 go build ./cmd/lockfile</code></pre>
-  <p class="prose">Requires Go 1.26 or later.</p>
+  <pre tabindex="0" class="term"><code>docker build -t lockfile https://github.com/DavidGodefroid/lockfile.git
+LOCKFILE_IMAGE=lockfile lockfile version</code></pre>
+  <p class="prose">Your own image; from a clone, <code>sh scripts/lockfile …</code> runs it with the clone’s <code>seccomp.json</code>.</p>
 </section>
 
     </div>

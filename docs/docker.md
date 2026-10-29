@@ -1,8 +1,11 @@
 # Running lockfile in Docker
 
-Docker is how lockfile is deployed: nothing on your machine but Docker and a
-Linux kernel with Landlock. Other deployment modes exist in the code but are
-no longer documented.
+lockfile runs in Docker, with nothing on your machine but Docker, the
+`lockfile` launcher and the seccomp profile of the console's container. The
+launcher is a short shell script ([`scripts/lockfile`](../scripts/lockfile)):
+every command you type, `lockfile console`, `lockfile plugin install`,
+`lockfile mcp` and the others, runs in the lockfile image, never in a binary
+of its own on your machine.
 
 The image holds the separated setup in two kinds of containers that share
 only the socket volume:
@@ -33,35 +36,109 @@ only the socket volume:
   `seccomp/v0.2.4`), which already allows what the plugin sandbox calls
   (Landlock's three system calls, `seccomp` with filters, `prctl`,
   `close_range`, `prlimit64`): shipping it pins that allowance whatever your
-  Docker version. Every console container runs with
-  `--security-opt seccomp=/path/to/seccomp.json`. **Never
-  `seccomp=unconfined`**: it would lift every restriction Docker puts on the
-  console itself, and the sandbox does not need it.
+  Docker version. `install.sh` installs it as
+  `/usr/local/share/lockfile/seccomp.json`, and the launcher runs every
+  console container with `--security-opt seccomp=` that file, and refuses to
+  start one without it. **Never `seccomp=unconfined`**: it would lift every
+  restriction Docker puts on the console itself, and the sandbox does not
+  need it.
 
-## Build
+## Install
 
-From a clone:
+Download the install script from the release you install, read it, then
+run it with that release:
+
+```sh
+V=vX.Y.Z
+curl -fsSLO "https://raw.githubusercontent.com/DavidGodefroid/lockfile/$V/scripts/install.sh"
+less install.sh
+LOCKFILE_VERSION=$V sh install.sh
+```
+
+cosign is required. The script checks the signatures of `checksums.txt` and
+of the release's images (`ghcr.io/davidgodefroid/lockfile:X.Y.Z` and its
+`-vault` variant) against lockfile's release workflow run on that exact tag,
+and the archive against `checksums.txt`. It then installs the launcher as
+`/usr/local/bin/lockfile` and the seccomp profile as
+`/usr/local/share/lockfile/seccomp.json` (with `sudo` when needed;
+`LOCKFILE_INSTALL_DIR` and `LOCKFILE_SHARE_DIR` choose other directories),
+root-owned, and writes the verified image digests into the launcher: it runs
+the image by digest, never by a tag that could be moved. Docker pulls it on
+first use. On Windows, install it in WSL 2 with Docker Desktop's WSL
+integration (whose kernel must have Landlock: `lockfile doctor` tells).
+
+```sh
+lockfile version    # the launcher's version and its image's
+lockfile update     # the latest release: a new launcher and profile, then docker pull
+lockfile update vX.Y.Z
+```
+
+`lockfile update` checks the signatures and the checksum as `install.sh`
+does.
+
+### What runs where
+
+| Command | Runs as | Volumes, mounts |
+|---|---|---|
+| `console` | `lockfile`, in a container of its own per profile (`lockfile-console-<n>`; `LOCKFILE_CONSOLE_NAME` names it), under the seccomp profile, with no capability, `no-new-privileges`, a read-only root with a 64 MB `/tmp`, at most 512 processes and 4 GB of memory, no log driver, `--add-host=host.docker.internal:host-gateway` | `lockfile-run`, `lockfile-home` |
+| `profile`, `plugin`, `marketplace`, `audit`, `forget` | `lockfile` | `lockfile-home` |
+| `doctor` | `lockfile`, under the seccomp profile | `lockfile-run`, `lockfile-home` |
+| `init`, `doctor --fix` | you (your uid and gid): they write your agents' files | your home, and the project (the nearest directory up holding `.lockfile/`, or else `.git`), each at its own path |
+| everything else: `mcp`, `status`, `sources`, `plugins`, `plan`, `run`, `answers`, `release`, `help` | `agent` | `lockfile-run` only |
+
+The launcher reads:
+
+- `LOCKFILE_IMAGE`: the image to run instead of the release's, for example
+  your own build (below);
+- `LOCKFILE_VAULT=1`: the image with the `vault` CLI
+  ([Credentials from Vault](#credentials-from-vault));
+- `LOCKFILE_DOCKER_ARGS`: more `docker run` arguments, split on spaces and
+  never globbed, for example the read-only mount of a `local` source:
+  `LOCKFILE_DOCKER_ARGS="-v /data/samples:/srv/lockfile/samples:ro" lockfile console --profile samples`;
+- `VAULT_ADDR`, `VAULT_NAMESPACE`: passed to the console; `VAULT_CACERT`
+  too, with its file mounted read-only at its own path.
+
+It never mounts the Docker socket, and refuses a path holding `:` (docker
+`-v` separates on it).
+
+### Your own build
+
+From a clone, or without cloning:
 
 ```sh
 docker build -t lockfile .
-```
-
-or without cloning (then fetch the profile too):
-
-```sh
 docker build -t lockfile https://github.com/DavidGodefroid/lockfile.git
-curl -fsSLO https://raw.githubusercontent.com/DavidGodefroid/lockfile/main/seccomp.json
 ```
 
-`--build-arg VERSION=v0.3.0` sets the version that `lockfile version` prints.
-The base images are pinned by digest, and cosign (and the Vault CLI, below)
-by sha256.
+then `LOCKFILE_IMAGE=lockfile lockfile ...`. The launcher of a clone
+(`sh scripts/lockfile ...`) runs the image tagged `lockfile` by default, with
+the clone's `seccomp.json`. `--build-arg VERSION=vX.Y.Z` sets the version
+that `lockfile version` prints. The base images are pinned by digest, and
+cosign (and the Vault CLI, below) by sha256.
+
+### Migrating
+
+From the former Docker guide: its `docker run ... lockfile ...` commands keep
+working, but the launcher replaces them; the `lockfile-run` and
+`lockfile-home` volumes are the same. An agent entry that runs
+`docker run -i --rm -v lockfile-run:/run/lockfile lockfile mcp` keeps
+working; `lockfile init` writes `lockfile mcp`, which now goes through the
+launcher.
+
+From a host install (a release binary, then `sudo lockfile install`):
+`install.sh` replaces the binary with the launcher, and the image refuses
+`lockfile install` and `lockfile update`. What the host install created stays
+until you remove it: the `lockfile` account and the `lockfile-clients` group,
+`/etc/lockfile/`, the socket directory (`/run/lockfile`,
+`/etc/tmpfiles.d/lockfile.conf`), and the console account's home (profiles,
+plugins, approved policies, audit log): copy what you keep into the
+`lockfile-home` volume.
 
 ## Set up the console
 
-The setup commands run as the console account in throwaway containers, on
-the `lockfile-home` volume. Docker creates the volumes on first use, with the
-image's owner and mode.
+The launcher runs the setup commands as the console account in throwaway
+containers, on the `lockfile-home` volume. Docker creates the volumes on
+first use, with the image's owner and mode.
 
 ### Profiles
 
@@ -70,8 +147,7 @@ image's owner and mode.
 for every key):
 
 ```sh
-docker run --rm --user lockfile -v lockfile-home:/home/lockfile lockfile \
-  profile add docs --source s3 --bucket documents --region eu-west-1 --prefix invoices/ \
+lockfile profile add docs --source s3 --bucket documents --region eu-west-1 --prefix invoices/ \
   --credentials vault --vault-path secret/data/lockfile/docs --production
 ```
 
@@ -84,17 +160,16 @@ Inside a container, a few things differ from a host:
   profile:
 
   ```sh
-  docker run --rm --user lockfile -v lockfile-home:/home/lockfile lockfile \
-    profile add samples --source local --path /srv/lockfile/samples
+  lockfile profile add samples --source local --path /srv/lockfile/samples
   ```
 
-  and add `-v /data/samples:/srv/lockfile/samples:ro` to the console's
-  `docker run` below. The files must be readable by uid 10001.
+  and start the console with
+  `LOCKFILE_DOCKER_ARGS="-v /data/samples:/srv/lockfile/samples:ro"` (below).
+  The files must be readable by uid 10001.
 - **`localhost` is the container itself.** A server on your machine is
-  `host.docker.internal` (on Linux add
-  `--add-host=host.docker.internal:host-gateway` to the console's
-  `docker run`); a server in another container is reached by its name on a
-  shared network (`--network NAME`).
+  `host.docker.internal`, which the launcher maps to your machine; a server
+  in another container is reached by its name on a shared network
+  (`LOCKFILE_DOCKER_ARGS="--network NAME" lockfile console ...`).
 - **No keychain.** `credentials = "keychain"` needs an OS keychain, which the
   container does not have: use `credentials = "ask"` (typed in the console at
   each start), or `"vault"` with the `vault` image below.
@@ -103,7 +178,7 @@ Inside a container, a few things differ from a host:
 
   ```sh
   docker run --rm --user lockfile -v lockfile-home:/home/lockfile -v "$PWD/keys:/keys:ro" \
-    --entrypoint sh lockfile -c 'install -d -m 0700 ~/.ssh && install -m 0600 /keys/partner_ed25519 ~/.ssh/'
+    --entrypoint sh ghcr.io/davidgodefroid/lockfile:X.Y.Z -c 'install -d -m 0700 ~/.ssh && install -m 0600 /keys/partner_ed25519 ~/.ssh/'
   ```
 
   then `--key ~/.ssh/partner_ed25519` is `/home/lockfile/.ssh/partner_ed25519`.
@@ -114,19 +189,17 @@ They are installed as the console account, in its home volume. cosign is in
 the image; signatures are checked as on a host:
 
 ```sh
-docker run --rm --user lockfile -v lockfile-home:/home/lockfile lockfile plugin install file.non-empty@1.0.0
-docker run --rm --user lockfile -v lockfile-home:/home/lockfile lockfile plugin list
-docker run -it --rm --user lockfile -v lockfile-home:/home/lockfile lockfile \
-  marketplace add acme --index https://plugins.acme.example/index.json --identity-regexp '^https://github\.com/acme/'
+lockfile plugin install file.non-empty@1.0.0
+lockfile plugin list
+lockfile marketplace add acme --index https://plugins.acme.example/index.json --identity-regexp '^https://github\.com/acme/'
 ```
 
-(`marketplace add` asks you to type the name: `-it`.)
+(`marketplace add` asks you to type the name.)
 
 ### Check
 
 ```sh
-docker run --rm --user lockfile --security-opt seccomp="$PWD/seccomp.json" \
-  -v lockfile-run:/run/lockfile -v lockfile-home:/home/lockfile lockfile doctor
+lockfile doctor
 ```
 
 `sandbox ok` means Landlock and seccomp work under the profile; `proc ok
@@ -138,95 +211,88 @@ separate](#what-docker-does-and-does-not-separate).
 In a terminal you keep in view:
 
 ```sh
-docker run -it --rm --name lockfile-console --user lockfile \
-  --security-opt seccomp="$PWD/seccomp.json" \
-  --cap-drop=ALL --security-opt no-new-privileges \
-  -v lockfile-run:/run/lockfile \
-  -v lockfile-home:/home/lockfile \
-  -v /data/samples:/srv/lockfile/samples:ro \
-  lockfile console --profile samples
+LOCKFILE_DOCKER_ARGS="-v /data/samples:/srv/lockfile/samples:ro" lockfile console --profile samples
 ```
 
-Add `--auto` after `console` as on a host. `--cap-drop=ALL` and
-`no-new-privileges` take from the container what the console never needs
-(it runs as an unprivileged account; the plugin sandbox sets
-`no_new_privs` itself). The console refuses to run any plugin, with a
-message naming the reason, when Landlock or seccomp is unavailable, when it
-runs without a seccomp filter (`seccomp=unconfined`), or when the container
-is not private (below): there is no unsandboxed run. Sandbox and container
-are checked at start, when a plan arrives and again just before it runs.
+Add `--auto` after `console` as on a host. The launcher takes from the
+container what the console never needs: every capability, privilege gain
+(the plugin sandbox sets `no_new_privs` itself), a writable root; and bounds
+its processes and memory (a plugin may take up to 2 GB). The console refuses
+to run any plugin, with a message naming the reason, when Landlock or
+seccomp is unavailable, when it runs without a seccomp filter
+(`seccomp=unconfined`), or when the container is not private (below): there
+is no unsandboxed run. Sandbox and container are checked at start, when a
+plan arrives and again just before it runs.
 
 ## Credentials from Vault
 
 `credentials = "vault"` runs the `vault` CLI in the console's container. The
-default image leaves it out (it adds some 550 MB); the `vault` target has it:
+default image leaves it out (it adds some 550 MB); the release's `-vault`
+image has it (`ghcr.io/davidgodefroid/lockfile:X.Y.Z-vault`), which
+`LOCKFILE_VAULT=1` selects. For your own build, `docker build --target vault
+-t lockfile:vault .` and `LOCKFILE_IMAGE=lockfile:vault`.
+
+The console reads `VAULT_ADDR` and `VAULT_NAMESPACE` from its environment,
+which the launcher passes on, and `VAULT_CACERT`, whose file the launcher
+mounts read-only at the same path:
 
 ```sh
-docker build --target vault -t lockfile .
+LOCKFILE_VAULT=1 VAULT_ADDR=https://vault.example.com lockfile console --profile docs
 ```
 
-The console reads `VAULT_ADDR` (and `VAULT_CACERT`, `VAULT_NAMESPACE`) from
-its environment: add `-e VAULT_ADDR=https://vault.example.com` to its
-`docker run`. Log in once as the console account; the token stays in
-`lockfile-home`, out of the agents' reach:
+Log in once as the console account; the token stays in `lockfile-home`, out
+of the agents' reach:
 
 ```sh
 docker run -it --rm --user lockfile -e VAULT_ADDR=https://vault.example.com \
-  -v lockfile-home:/home/lockfile --entrypoint vault lockfile login -method=oidc
+  -v lockfile-home:/home/lockfile --entrypoint vault \
+  ghcr.io/davidgodefroid/lockfile:X.Y.Z-vault login -method=oidc
 ```
 
 ## Wire the agent
 
-The agent starts the MCP server in a throwaway container, as `agent`, with
-only the socket volume:
+From the project root, as you:
 
 ```sh
-claude mcp add --scope user lockfile -- docker run -i --rm -v lockfile-run:/run/lockfile lockfile mcp
+lockfile init claude
 ```
 
-or for one project, in `.mcp.json`:
+writes the agent's skill or rules file and `lockfile mcp` as its MCP
+command (`.mcp.json` for Claude Code; or `codex`, `cursor`, `gemini`; `--user`
+for the whole account). `lockfile mcp` is the launcher: it starts the MCP
+server in a throwaway container, as `agent`, with only the socket volume.
 
 ```json
 {
   "mcpServers": {
     "lockfile": {
       "type": "stdio",
-      "command": "docker",
-      "args": ["run", "-i", "--rm", "-v", "lockfile-run:/run/lockfile", "lockfile", "mcp"]
+      "command": "lockfile",
+      "args": ["mcp"]
     }
   }
 }
 ```
 
-`lockfile init claude` (or `codex`, `cursor`, `gemini`) also writes the
-agent's skill or rules file; run it from the project root, as you, then
-replace the `lockfile` MCP entry it wrote (`lockfile mcp`) by the one above:
+For every project instead, `claude mcp add --scope user lockfile -- lockfile
+mcp`. Codex, Gemini CLI and Cursor take the same `command` and `args` (keep
+their tool timeout long: the console waits for your approval).
 
-```sh
-docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:$PWD" -w "$PWD" lockfile init claude
-```
-
-Codex, Gemini CLI and Cursor take the same `command` and `args` in their MCP
-configuration (keep their tool timeout long: the console waits for your
-approval).
-
-The agent's commands run the same way:
-
-```sh
-docker run --rm -v lockfile-run:/run/lockfile lockfile sources
-docker run --rm -v lockfile-run:/run/lockfile lockfile plan --key invoices/a.pdf --plugin file.non-empty --run --json
-```
+The agent's commands run the same way: `lockfile sources`,
+`lockfile plan --key invoices/a.pdf --plugin file.non-empty --run --json`.
 
 ## Agent in its own container
 
-When the agent itself runs in a container without the Docker socket, it runs
-the `lockfile` binary inside its own container as a client of the console
+When the agent itself runs in a container without the Docker socket, the
+launcher cannot start the MCP server: the agent runs the `lockfile` binary
+inside its own container as a client of the console
 container; the two share only the socket volume. The console checks every
 peer by uid against its own container's accounts, where the agent's uid has
 none: name it at build time.
 
 ```sh
 docker build -t lockfile --build-arg ALLOWED_UIDS=1000 .
+LOCKFILE_IMAGE=lockfile lockfile console --profile samples
 ```
 
 `ALLOWED_UIDS` is a comma-separated list of uids, written to `allowed_uids`
@@ -237,7 +303,9 @@ neither container remaps user namespaces). Any other peer, neither
 
 The agent's image needs what a client host has:
 
-- the `lockfile` binary, the same version as the console's;
+- the `lockfile` binary, not the launcher: the one in the release archive
+  (`lockfile_X.Y.Z_linux_ARCH.tar.gz`, checked as `install.sh` checks it),
+  the same version as the console's image;
 - `/etc/lockfile/system.toml`, owned by root, mode 0644, with the image's
   `service_user`, `client_group` and `socket_dir`;
 - an account `lockfile` with uid 10001: the client refuses a socket served by
@@ -288,8 +356,8 @@ paragraph).
 **Your own account** is another matter. Whoever can run `docker` commands can
 `docker attach` to the console and type an approval, `docker exec` into it
 and read its memory or the fetched files, or open the `lockfile-home` volume.
-An agent that runs shell commands in your account usually can: the MCP
-server above is itself a `docker run`. The console cannot see this (its
+An agent that runs shell commands in your account usually can: the launcher
+it runs for the MCP server is itself a `docker run`. The console cannot see this (its
 terminal belongs to the container), so treat this setup as keeping the
 sources' credentials and the files out of the agent's reach and the approval
 in your terminal, not as stopping an agent determined to go around it. For
