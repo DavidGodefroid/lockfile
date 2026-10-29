@@ -12,13 +12,15 @@ import (
 
 	"github.com/DavidGodefroid/lockkit/config"
 	"github.com/DavidGodefroid/lockkit/console"
+	"github.com/DavidGodefroid/lockkit/hubclient"
 
 	"github.com/DavidGodefroid/lockfile/internal/backend"
 	"github.com/DavidGodefroid/lockfile/internal/product"
 )
 
 func init() {
-	commands["console"] = command{human: true, help: "serve a profile to agents (run in the lockfile account)", run: runConsole}
+	commands["console"] = command{human: true, help: "serve a profile to agents (run in the lockfile account) [--hub URL --hub-key-file F --instance N]", run: runConsole}
+	commands["hub-key"] = command{human: true, help: "hub-key --instance NAME: print the instance key for lockhub to pin (lockfile account)", run: runHubKey}
 }
 
 // consoleHooks replace the real terminal, isolation and paths in tests.
@@ -30,6 +32,8 @@ type consoleHooks struct {
 	configPath string
 	backend    func(*backend.Options)
 	ready      func(socket string)
+	// home holds the hub instance key ("" is the account's home).
+	home string
 }
 
 var testConsoleHooks *consoleHooks
@@ -39,8 +43,10 @@ func runConsole(e env, args []string) int {
 	fs.SetOutput(io.Discard)
 	profile := fs.String("profile", "", "profile to serve")
 	auto := fs.Bool("auto", false, "approve requests without a prompt (never on production, never for unofficial plugins)")
+	var hub console.HubOptions
+	hub.Register(fs)
 	if err := fs.Parse(args); err != nil || *profile == "" || fs.NArg() != 0 {
-		fmt.Fprintln(e.stderr, "usage: lockfile console --profile NAME [--auto]")
+		fmt.Fprintln(e.stderr, "usage: lockfile console --profile NAME [--auto | --hub URL --hub-key-file FILE --instance NAME]")
 		return product.ExitUsage
 	}
 	h := consoleHooks{}
@@ -86,10 +92,39 @@ func runConsole(e env, args []string) int {
 		Quantum:   -1,
 		Sanitizer: b.Sanitizer(),
 		Isolation: h.isolation, Harden: h.harden, Ready: h.ready,
+		Hub: withHome(hub, h.home),
 	})
 	if err != nil && !errors.Is(err, context.Canceled) {
 		fmt.Fprintln(e.stderr, "lockfile console:", err)
 		return product.ExitError
+	}
+	return product.ExitOK
+}
+
+func withHome(o console.HubOptions, home string) console.HubOptions {
+	if o.Enabled() {
+		o.Home = home
+	}
+	return o
+}
+
+// runHubKey is `lockfile hub-key --instance NAME`: the instance's public
+// key, made on the first call in the account's home, for `lock up`.
+func runHubKey(e env, args []string) int {
+	home := ""
+	if testConsoleHooks != nil {
+		home = testConsoleHooks.home
+	}
+	if home == "" {
+		var err error
+		if home, err = os.UserHomeDir(); err != nil {
+			fmt.Fprintln(e.stderr, "lockfile hub-key:", err)
+			return product.ExitError
+		}
+	}
+	if err := hubclient.HubKeyCommand(e.stdout, home, args); err != nil {
+		fmt.Fprintln(e.stderr, "lockfile hub-key:", err)
+		return product.ExitUsage
 	}
 	return product.ExitOK
 }

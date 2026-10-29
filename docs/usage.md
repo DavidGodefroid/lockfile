@@ -112,7 +112,7 @@ it applies it only after `:review` in the console.
 ## The console
 
 ```sh
-lockfile console --profile docs [--auto]
+lockfile console --profile docs [--auto | --hub URL --hub-key-file FILE --instance NAME]
 ```
 
 Run in its container ([docker.md](docker.md#run-the-console)), it checks the isolation (the
@@ -128,6 +128,19 @@ on production, never for unofficial plugins), `:quit`. Results show as `plan pl_
 lockfile audit [--since 24h] [--json]           # console account only
 ```
 
+**Hub mode.** With `--hub URL --hub-key-file FILE --instance NAME` (all three, never with
+`--auto`; `lock up` writes them), plans are decided on lockhub, never on this terminal; the
+policy and `:review` stay here. `file.plan` fetches the object at once, hashes it, and asks
+the hub with a signed ticket: the screen masked (personal data in the key), the plan hash over
+the content's sha256, the key or handle, the plugins and their pins, under the policy in force.
+The agent hears `pending` with the ticket and runs it once decided (`lockfile run TICKET`,
+`lockfile_run`). The run checks the decision (pinned hub key, this instance, the ticket, still
+usable, nonce once), the policy and the plugins, fetches again, and refuses other bytes
+`stale` before any plugin. A ticket runs once, for the agent that asked (its lea token). The
+decision is audited with the ticket, the approver, the facade and the hub's signature.
+`lockfile hub-key --instance NAME` prints the instance key for `lock up` to pin (made once in
+the console account's home, `0600`).
+
 ## The agent side
 
 | Command | MCP tool | What |
@@ -136,7 +149,7 @@ lockfile audit [--since 24h] [--json]           # console account only
 | `lockfile sources` | `lockfile_sources` | profiles of the running consoles (`busy`: see below) |
 | `lockfile plugins [--profile P]` | `lockfile_plugins` | questions, meaning of 1 and 0 |
 | `lockfile plan --key K --plugin X… [--intent T] [--run]` | `lockfile_plan` | ask the human to approve |
-| `lockfile run PLAN_ID` | `lockfile_run` | run an approved plan once |
+| `lockfile run PLAN_ID` (hub mode: `TICKET`) | `lockfile_run` | run an approved plan once (hub mode: the ticket of a pending plan, once decided) |
 | `lockfile plan --handle H --plugin X… --run` | `lockfile_plan` + `lockfile_run` | follow-up on the same file |
 | `lockfile answers HANDLE` | `lockfile_answers` | answers already given |
 | `lockfile release HANDLE` | `lockfile_release` | delete the fetched file now (answers at the next `answer_quantum`) |

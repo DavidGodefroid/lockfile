@@ -7,12 +7,14 @@ package clientcmd
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/DavidGodefroid/lockkit/client"
 	"github.com/DavidGodefroid/lockkit/ipc"
 	"github.com/DavidGodefroid/lockkit/mcpkit"
 	"github.com/DavidGodefroid/lockkit/refusal"
+	"github.com/DavidGodefroid/lockkit/ticket"
 
 	"github.com/DavidGodefroid/lockfile/internal/answers"
 	"github.com/DavidGodefroid/lockfile/internal/product"
@@ -148,13 +150,35 @@ func planOK(p rpc.PlanParams, out rpc.PlanResult) bool {
 	return validPlanID(out.PlanID) && out.Answers == len(p.Plugins)
 }
 
-// Plan asks the human to approve a plan.
+// PendingError is a plan or run waiting for a decision on the approval
+// hub: run Ticket once it is decided.
+type PendingError struct{ Ticket, Lock string }
+
+func (e *PendingError) Error() string {
+	return "pending human approval: ticket " + e.Ticket + " on " + e.Lock
+}
+
+// pendingOf reads a pending answer (console.PendingResp), nil for another.
+func pendingOf(raw json.RawMessage) *PendingError {
+	var p struct{ Status, Ticket, Lock string }
+	if json.Unmarshal(raw, &p) != nil || p.Status != "pending" || !ticket.ValidID(p.Ticket) || p.Lock != product.P.Name {
+		return nil
+	}
+	return &PendingError{Ticket: p.Ticket, Lock: p.Lock}
+}
+
+// Plan asks the human to approve a plan. In hub mode it answers a
+// *PendingError: the human decides on the hub, and the ticket runs then.
 func Plan(ctx context.Context, profile string, p rpc.PlanParams) (rpc.PlanResult, error) {
-	var out rpc.PlanResult
-	if err := call(ctx, profile, rpc.MethodPlan, p, &out); err != nil {
+	var raw json.RawMessage
+	if err := call(ctx, profile, rpc.MethodPlan, p, &raw); err != nil {
 		return rpc.PlanResult{}, err
 	}
-	if !planOK(p, out) {
+	if pe := pendingOf(raw); pe != nil {
+		return rpc.PlanResult{}, pe
+	}
+	var out rpc.PlanResult
+	if json.Unmarshal(raw, &out) != nil || !planOK(p, out) {
 		return rpc.PlanResult{}, errBadResult()
 	}
 	return out, nil
@@ -167,15 +191,19 @@ func PlanAndRun(ctx context.Context, profile string, p rpc.PlanParams) (answers.
 		return answers.Result{}, closed(profile, err)
 	}
 	defer c.Close()
-	var plan rpc.PlanResult
-	if err := c.Call(ctx, rpc.MethodPlan, p, &plan); err != nil {
+	var raw json.RawMessage
+	if err := c.Call(ctx, rpc.MethodPlan, p, &raw); err != nil {
 		return answers.Result{}, closed(profile, err)
 	}
-	if !planOK(p, plan) {
+	if pe := pendingOf(raw); pe != nil {
+		return answers.Result{}, pe
+	}
+	var plan rpc.PlanResult
+	if json.Unmarshal(raw, &plan) != nil || !planOK(p, plan) {
 		return answers.Result{}, errBadResult()
 	}
 	var out answers.Result
-	if err := c.Call(ctx, rpc.MethodRun, rpc.RunParams{PlanID: plan.PlanID}, &out); err != nil {
+	if err := c.Call(ctx, rpc.MethodRun, rpc.RunParams{PlanID: plan.PlanID, Requester: p.Requester}, &out); err != nil {
 		return answers.Result{}, closed(profile, err)
 	}
 	if !validResult(out) || len(out.Answers) != len(p.Plugins) {
@@ -184,13 +212,22 @@ func PlanAndRun(ctx context.Context, profile string, p rpc.PlanParams) (answers.
 	return result(out), nil
 }
 
-// Run runs an approved plan.
-func Run(ctx context.Context, profile, planID string) (answers.Result, error) {
-	var out answers.Result
-	if err := call(ctx, profile, rpc.MethodRun, rpc.RunParams{PlanID: planID}, &out); err != nil {
+// Run runs an approved plan, or in hub mode a ticket (id is either): a
+// ticket not decided yet answers a *PendingError.
+func Run(ctx context.Context, profile, id string, who ipc.Requester) (answers.Result, error) {
+	p := rpc.RunParams{PlanID: id, Requester: who}
+	if !validPlanID(id) && ticket.ValidID(id) {
+		p = rpc.RunParams{Ticket: id, Requester: who}
+	}
+	var raw json.RawMessage
+	if err := call(ctx, profile, rpc.MethodRun, p, &raw); err != nil {
 		return answers.Result{}, err
 	}
-	if !validResult(out) {
+	if pe := pendingOf(raw); pe != nil {
+		return answers.Result{}, pe
+	}
+	var out answers.Result
+	if json.Unmarshal(raw, &out) != nil || !validResult(out) {
 		return answers.Result{}, errBadResult()
 	}
 	return result(out), nil

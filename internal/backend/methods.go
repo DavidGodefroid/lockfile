@@ -141,7 +141,11 @@ func (b *Backend) plan(ctx context.Context, req ipc.Request, env console.Env) ip
 	record := func(base audit.Base) audit.Record {
 		return Record{Base: base, PlanID: id, Key: pl.key, Handle: string(pl.handle), Plugins: pl.plugins}
 	}
-	a := env.Approve(ctx, req.ID, planScreen(pl.key, p.Key, p.Handle, shown, p.Intent, record))
+	sc := planScreen(pl.key, p.Key, p.Handle, shown, p.Intent, record)
+	if h := console.HubOf(env); h != nil {
+		return b.hubPlan(ctx, req, env, h, pol, pl, p, sc)
+	}
+	a := env.Approve(ctx, req.ID, sc)
 	if !a.Approved {
 		return product.ApprovalRefusal(req.ID, a.Refusal)
 	}
@@ -161,6 +165,9 @@ func (b *Backend) run(ctx context.Context, req ipc.Request, env console.Env) ipc
 	if r := console.Decode(req, &p); r != nil {
 		return *r
 	}
+	if h := console.HubOf(env); h != nil {
+		return b.hubRun(ctx, req, env, h, p)
+	}
 	pl, ok := b.plans.take(p.PlanID, peerUID(ctx))
 	if !ok {
 		return console.ErrResp(req.ID, ipc.CodeNoSuchPlan, msgNoSuchPlan)
@@ -169,6 +176,12 @@ func (b *Backend) run(ctx context.Context, req ipc.Request, env console.Env) ipc
 	if pol == nil || config.Fingerprint(pol) != pl.policyFP || !b.pinsInstalled(pl.pins) {
 		return console.ErrResp(req.ID, ipc.CodeNoSuchPlan, msgNoSuchPlan)
 	}
+	return b.execute(ctx, req, env, pol, pl, "")
+}
+
+// execute runs an approved plan once (sha, when set, is the sha256 the
+// fetched bytes must have) and answers at the next quantum.
+func (b *Backend) execute(ctx context.Context, req ipc.Request, env console.Env, pol *profile.Policy, pl *plan, sha string) ipc.Response {
 	// Checked again at run time: an approval can wait minutes, during which
 	// the sandbox may go or another account's process join /proc.
 	if _, _, err := b.o.Probe(); err != nil {
@@ -191,7 +204,7 @@ func (b *Backend) run(ctx context.Context, req ipc.Request, env console.Env) ipc
 	if err != nil {
 		return console.ErrResp(req.ID, ipc.CodeInternal, msgInternal)
 	}
-	res, ref, entries := answers.ExecutePlan(ctx, answers.Plan{Profile: pr.Name, Key: pl.key, Handle: pl.handle, Plugins: pl.plugins, Pins: runPins(pl.pins)},
+	res, ref, entries := answers.ExecutePlan(ctx, answers.Plan{Profile: pr.Name, Key: pl.key, Handle: pl.handle, Plugins: pl.plugins, Pins: runPins(pl.pins), SHA256: sha},
 		answers.Deps{
 			Sources:        map[string]source.Source{pr.Name: sess.src},
 			MaxObjectBytes: func(string) int64 { return pr.MaxObjectBytes },

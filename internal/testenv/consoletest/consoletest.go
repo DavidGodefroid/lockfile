@@ -159,6 +159,8 @@ type Options struct {
 	// a client, and only while Clients (nil: always) allows it.
 	Shared  bool
 	Clients func() bool
+	// Hub runs the console in hub mode.
+	Hub console.HubOptions
 }
 
 // Console is a running test console.
@@ -275,7 +277,7 @@ func Start(t testing.TB, o Options) *Console {
 		defer b.Close()
 		c.done <- console.Run(ctx, product.P, b, console.Options{
 			Profile: "samples", IO: c.IO, StateDir: state, Quantum: -1, Sanitizer: b.Sanitizer(),
-			Isolation: iso, Harden: func() error { return nil }, Ready: func(s string) { ready <- s },
+			Isolation: iso, Harden: func() error { return nil }, Ready: func(s string) { ready <- s }, Hub: o.Hub,
 		})
 	}()
 	t.Cleanup(func() {

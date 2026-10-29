@@ -6,6 +6,7 @@ package mcpserver
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -63,7 +64,7 @@ type PlanIn struct {
 
 type RunIn struct {
 	Profile string `json:"profile,omitempty" jsonschema:"profile of the console; may be left out when exactly one console runs"`
-	PlanID  string `json:"plan_id" jsonschema:"plan id returned by lockfile_plan"`
+	PlanID  string `json:"plan_id" jsonschema:"plan id returned by lockfile_plan, or the ticket of a pending plan once it is decided"`
 }
 
 type HandleIn struct {
@@ -90,6 +91,7 @@ type PlanOut struct {
 	PlanID  string        `json:"plan_id,omitempty"`
 	Answers int           `json:"answers,omitempty"`
 	Refusal *refusal.Info `json:"refusal,omitempty"`
+	pendingOut
 }
 
 // ResultOut is answers.Result plus the refusal.
@@ -97,7 +99,18 @@ type ResultOut struct {
 	Handle  string           `json:"handle,omitempty"`
 	Answers []answers.Answer `json:"answers"`
 	Refusal *refusal.Info    `json:"refusal,omitempty"`
+	pendingOut
 }
+
+// pendingOut is mcpkit.PendingResult as optional output fields: set when
+// the human decides on the approval hub.
+type pendingOut struct {
+	Status string `json:"status,omitempty" jsonschema:"pending: the human decides on the approval hub; run the ticket once decided"`
+	Ticket string `json:"ticket,omitempty"`
+	Lock   string `json:"lock,omitempty"`
+}
+
+func pendingOf(p mcpkit.PendingResult) pendingOut { return pendingOut{p.Status, p.Ticket, p.Lock} }
 
 type ReleaseOut struct {
 	Released bool          `json:"released"`
@@ -174,8 +187,14 @@ func New(pinned string) *mcp.Server {
 				return refusedOr(err, PlanOut{})
 			}
 			stop := mcpkit.Progress(ctx, req, 0, mcpkit.WaitingMessage(product.P))
-			plan, err := clientcmd.Plan(ctx, profile, rpc.PlanParams{Key: in.Key, Handle: in.Handle, Plugins: in.Plugins, Intent: in.Intent})
+			plan, err := clientcmd.Plan(ctx, profile, rpc.PlanParams{Key: in.Key, Handle: in.Handle, Plugins: in.Plugins, Intent: in.Intent,
+				Requester: mcpkit.RequesterFromEnv()})
 			stop()
+			var pe *clientcmd.PendingError
+			if errors.As(err, &pe) {
+				res, out := mcpkit.Pending(pe.Lock, pe.Ticket)
+				return res, PlanOut{pendingOut: pendingOf(out)}, nil
+			}
 			if err != nil {
 				return refusedOr(err, PlanOut{})
 			}
@@ -191,8 +210,13 @@ func New(pinned string) *mcp.Server {
 			}
 			every := clientcmd.HeartbeatEvery(clientcmd.Quantum(ctx, profile))
 			stop := mcpkit.Progress(ctx, req, every, func(time.Duration) string { return RunningMessage })
-			res, err := clientcmd.Run(ctx, profile, in.PlanID)
+			res, err := clientcmd.Run(ctx, profile, in.PlanID, mcpkit.RequesterFromEnv())
 			stop()
+			var pe *clientcmd.PendingError
+			if errors.As(err, &pe) {
+				r, out := mcpkit.Pending(pe.Lock, pe.Ticket)
+				return r, ResultOut{Answers: []answers.Answer{}, pendingOut: pendingOf(out)}, nil
+			}
 			return resultOut(res, err)
 		})
 

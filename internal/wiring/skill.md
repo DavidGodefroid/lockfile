@@ -60,6 +60,12 @@ A refusal carries `refusal.code`, `refusal.retry` and `refusal.hint`:
   audit), `E_PLUGIN_TAMPERED`, `E_SANDBOX_UNAVAILABLE`, `E_PROC_NOT_HIDDEN`. Report and stop.
 - `approval_denied`, `approval_timeout`: the user's decision. Never ask again unless they ask.
 
+## Pending (approval hub)
+
+When the user decides on the approval hub, `lockfile_plan` answers `status: pending` with a
+`ticket`: do not retry; end your turn. Once you are told it is decided, call `lockfile_run` with
+the ticket as `plan_id`, once. Still `pending`: it is not decided yet, wait again.
+
 ## Hard rules
 
 | Situation | Do |

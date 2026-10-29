@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"unicode/utf8"
 
+	"github.com/DavidGodefroid/lockkit/mcpkit"
 	"github.com/DavidGodefroid/lockkit/refusal"
 	"github.com/DavidGodefroid/lockkit/render"
 	"github.com/DavidGodefroid/lockkit/sanitize"
@@ -108,6 +109,13 @@ func cutChars(s string, n int) string {
 // fail prints err and returns its exit code. Its text is a closed code or
 // a fixed message (clientcmd); JSON output goes to stdout.
 func fail(e env, asJSON bool, err error) int {
+	// Pending on the hub is an answer, not a failure: the fixed text tells
+	// the agent to stop and wait.
+	var pe *clientcmd.PendingError
+	if errors.As(err, &pe) {
+		_, out := mcpkit.Pending(pe.Lock, pe.Ticket)
+		return emit(e, asJSON, out, func() []string { return []string{mcpkit.PendingText(pe.Lock, pe.Ticket)} })
+	}
 	var ce *clientcmd.Error
 	if !errors.As(err, &ce) {
 		ce = &clientcmd.Error{Kind: clientcmd.KindOther, Msg: rpc.MsgInternal}
@@ -248,7 +256,7 @@ func runPlan(e env, args []string) int {
 	}
 	ctx, stop := agentContext()
 	defer stop()
-	p := rpc.PlanParams{Key: *key, Handle: *handle, Plugins: plugins, Intent: *intent}
+	p := rpc.PlanParams{Key: *key, Handle: *handle, Plugins: plugins, Intent: *intent, Requester: mcpkit.RequesterFromEnv()}
 	if *andRun {
 		res, err := clientcmd.PlanAndRun(ctx, profile, p)
 		if err != nil {
@@ -306,8 +314,8 @@ func runOne(e env, args []string, name, use string, do func(ctx context.Context,
 }
 
 func runRun(e env, args []string) int {
-	return runOne(e, args, "run", "run PLAN_ID [--profile P] [--json]", func(ctx context.Context, profile, id string) (any, []string, error) {
-		r, err := clientcmd.Run(ctx, profile, id)
+	return runOne(e, args, "run", "run PLAN_ID|TICKET [--profile P] [--json]", func(ctx context.Context, profile, id string) (any, []string, error) {
+		r, err := clientcmd.Run(ctx, profile, id, mcpkit.RequesterFromEnv())
 		return r, resultLines(r), err
 	})
 }
