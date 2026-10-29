@@ -121,7 +121,7 @@ func runDoctor(e env, args []string) int {
 	case err != nil:
 		add("separation", "fail", "/etc/lockfile/system.toml is unreadable or invalid: "+err.Error())
 	case sys == nil:
-		add("separation", "fail", "no /etc/lockfile/system.toml: the console refuses to start; run sudo lockfile install")
+		add("separation", "fail", "no /etc/lockfile/system.toml: the console refuses to start; "+imageHint)
 	default:
 		service = doctorSeparation(h, sys, add)
 	}
@@ -166,23 +166,29 @@ func runDoctor(e env, args []string) int {
 	return product.ExitOK
 }
 
+// imageHint is the fix for a separation check that fails.
+const imageHint = "run lockfile through the launcher, which runs it in its image (scripts/install.sh, docs/docker.md)"
+
 // doctorSeparation checks the separated setup; it reports whether this
 // is the console account.
+//
+// The image holds the separation: a failure means doctor runs outside it,
+// or in an image or with volumes not set up as the launcher runs them.
 func doctorSeparation(h doctorHooks, sys *sysconf.Config, add func(string, string, string)) bool {
 	svcUID, err := sys.ServiceUID()
 	if err != nil {
-		add("separation", "fail", "the console account "+sys.ServiceUser+" does not exist: run sudo lockfile install")
+		add("separation", "fail", "the console account "+sys.ServiceUser+" does not exist: "+imageHint)
 		return false
 	}
 	if _, err := user.LookupGroup(sys.ClientGroup); err != nil {
-		add("separation", "fail", "the group "+sys.ClientGroup+" does not exist: run sudo lockfile install")
+		add("separation", "fail", "the group "+sys.ClientGroup+" does not exist: "+imageHint)
 	} else {
 		add("separation", "ok", fmt.Sprintf("console account %s, clients group %s", sys.ServiceUser, sys.ClientGroup))
 	}
 	if fi, err := os.Stat(sys.SocketDir); err != nil {
-		add("socket dir", "fail", sys.SocketDir+" is missing: run sudo lockfile install")
+		add("socket dir", "fail", sys.SocketDir+" is missing: "+imageHint)
 	} else if fi.Mode()&fs.ModeSetgid == 0 || fi.Mode().Perm() != 0o750 {
-		add("socket dir", "fail", fmt.Sprintf("%s has mode %04o, want 2750 (the clients group lists the running consoles): run sudo lockfile install", sys.SocketDir, fi.Mode().Perm()|setgidBits(fi)))
+		add("socket dir", "fail", fmt.Sprintf("%s has mode %04o, want 2750 (the clients group lists the running consoles): %s", sys.SocketDir, fi.Mode().Perm()|setgidBits(fi), imageHint))
 	} else {
 		add("socket dir", "ok", sys.SocketDir+" 2750")
 	}
@@ -193,7 +199,7 @@ func doctorSeparation(h doctorHooks, sys *sysconf.Config, add func(string, strin
 		case !ok || gerr != nil:
 			add("socket dir", "warn", "cannot check the owner of "+sys.SocketDir)
 		case uid != svcUID || strconv.Itoa(gid) != g.Gid:
-			add("socket dir", "fail", fmt.Sprintf("%s is owned by %d:%d, want %s:%s (another owner could list or replace the consoles' sockets): run sudo lockfile install", sys.SocketDir, uid, gid, sys.ServiceUser, sys.ClientGroup))
+			add("socket dir", "fail", fmt.Sprintf("%s is owned by %d:%d, want %s:%s (another owner could list or replace the consoles' sockets): %s", sys.SocketDir, uid, gid, sys.ServiceUser, sys.ClientGroup, imageHint))
 		default:
 			add("socket dir", "ok", "owned by "+sys.ServiceUser+":"+sys.ClientGroup)
 		}
@@ -203,7 +209,7 @@ func doctorSeparation(h doctorHooks, sys *sysconf.Config, add func(string, strin
 		return true
 	}
 	if !sys.ClientAllowed(uid) {
-		add("clients group", "fail", "this account is not in "+sys.ClientGroup+": run sudo lockfile install --client <this account>, then log in again")
+		add("clients group", "fail", "this account is not in "+sys.ClientGroup+": "+imageHint)
 	} else {
 		add("clients group", "ok", "this account may reach the consoles")
 	}
