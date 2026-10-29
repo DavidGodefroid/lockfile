@@ -104,7 +104,7 @@ func TestDoctorRefusesWithoutSandboxOrSetup(t *testing.T) {
 	h.sys = func() (*sysconf.Config, error) { return nil, nil }
 	humanEnv(t, "official")
 	code, out, _ := runArgs(t, "", "doctor", "--json")
-	if code != product.ExitError || !strings.Contains(out, `"check":"sandbox"`) || !strings.Contains(out, "sudo lockfile install") {
+	if code != product.ExitError || !strings.Contains(out, `"check":"sandbox"`) || !strings.Contains(out, "through the launcher") {
 		t.Fatalf("exit %d:\n%s", code, out)
 	}
 }

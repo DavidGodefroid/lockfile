@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### The host install code is gone
+
+- `cmd/lockfile/install.go`, the binary's host self-update and `internal/separate` are
+  removed: the image refused them since the Docker-only launcher. `lockfile install` and
+  `lockfile update` in the image still print the hint to the launcher (`scripts/install.sh`,
+  `lockfile update` on the host, docs/docker.md).
+- `lockfile doctor`'s separation checks no longer tell you to run `sudo lockfile install`:
+  they point to the launcher and its image.
+
 ### lockkit v0.2.1
 
 - lockfile now builds on lockkit v0.2.1 (was v0.1.0), the version locksql and lockhttp use.

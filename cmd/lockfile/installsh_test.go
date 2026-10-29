@@ -284,3 +284,26 @@ func hexSum(b []byte) string {
 	s := sha256.Sum256(b)
 	return hex.EncodeToString(s[:])
 }
+
+// install.sh is checked as text, never executed: its signer identity is
+// bound to the tag it installs, the tag is an exact vX.Y.Z, and it refuses
+// a downgrade of an installed binary unless asked.
+func TestInstallScriptBindsTagAndRefusesDowngrade(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "..", "scripts", "install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	for _, want := range []string{
+		`identity="^https://github\\.com/DavidGodefroid/lockfile/\\.github/workflows/release\\.yml@refs/tags/$(printf '%s' "$tag" | sed 's/\./\\./g')\$"`,
+		`*[!0-9.]* | .* | *. | *..*) die "invalid release tag $tag" ;;`,
+		`LOCKFILE_ALLOW_DOWNGRADE`,
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("install.sh lacks %s", want)
+		}
+	}
+	if strings.Contains(s, `refs/tags/v[0-9]'`) {
+		t.Error("install.sh still accepts any v[0-9] tag")
+	}
+}
