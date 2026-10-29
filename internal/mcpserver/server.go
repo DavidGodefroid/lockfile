@@ -105,12 +105,15 @@ type ResultOut struct {
 // pendingOut is mcpkit.PendingResult as optional output fields: set when
 // the human decides on the approval hub.
 type pendingOut struct {
-	Status string `json:"status,omitempty" jsonschema:"pending: the human decides on the approval hub; run the ticket once decided"`
-	Ticket string `json:"ticket,omitempty"`
-	Lock   string `json:"lock,omitempty"`
+	Status   string `json:"status,omitempty" jsonschema:"pending: the human decides on the approval hub; run the ticket once decided"`
+	Ticket   string `json:"ticket,omitempty"`
+	Lock     string `json:"lock,omitempty"`
+	Instance string `json:"instance,omitempty"`
 }
 
-func pendingOf(p mcpkit.PendingResult) pendingOut { return pendingOut{p.Status, p.Ticket, p.Lock} }
+func pendingOf(p mcpkit.PendingResult) pendingOut {
+	return pendingOut{p.Status, p.Ticket, p.Lock, p.Instance}
+}
 
 type ReleaseOut struct {
 	Released bool          `json:"released"`
@@ -192,7 +195,7 @@ func New(pinned string) *mcp.Server {
 			stop()
 			var pe *clientcmd.PendingError
 			if errors.As(err, &pe) {
-				res, out := mcpkit.Pending(pe.Lock, pe.Ticket)
+				res, out := mcpkit.PendingOn(pe.Lock, pe.Instance, pe.Ticket)
 				return res, PlanOut{pendingOut: pendingOf(out)}, nil
 			}
 			if err != nil {
@@ -214,7 +217,7 @@ func New(pinned string) *mcp.Server {
 			stop()
 			var pe *clientcmd.PendingError
 			if errors.As(err, &pe) {
-				r, out := mcpkit.Pending(pe.Lock, pe.Ticket)
+				r, out := mcpkit.PendingOn(pe.Lock, pe.Instance, pe.Ticket)
 				return r, ResultOut{Answers: []answers.Answer{}, pendingOut: pendingOf(out)}, nil
 			}
 			return resultOut(res, err)

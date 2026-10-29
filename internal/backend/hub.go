@@ -39,6 +39,11 @@ type hubBody struct {
 	SHA256  string              `json:"sha256,omitempty"`
 	Plugins []string            `json:"plugins"`
 	Pins    []profile.PluginPin `json:"pins"`
+	// Unfetched: the object could not be fetched at plan time. The plan
+	// goes to the hub all the same and its run refuses fetch_failed: the
+	// agent learns nothing about the file before an approval, as on the
+	// terminal, where the fetch comes after the human.
+	Unfetched bool `json:"unfetched,omitempty"`
 }
 
 // policyFPOf is the policy fingerprint in the ticket's form.
@@ -59,6 +64,10 @@ var screenDetectors = func() []pii.Detector {
 // pending with the ticket to run.
 func (b *Backend) hubPlan(ctx context.Context, req ipc.Request, env console.Env, h *console.Hub, pol *profile.Policy, pl *plan, p rpc.PlanParams, sc console.Screen) ipc.Response {
 	pr := pol.P
+	// The answer comes at the next answer quantum: its time says nothing
+	// about the file's size or the fetch.
+	start := b.o.Now()
+	defer func() { _ = answers.Quantize(ctx, start, pr.AnswerQuantum, b.o.Now) }()
 	body := hubBody{Profile: pr.Name, Key: pl.key, Handle: string(pl.handle), Plugins: pl.plugins, Pins: pl.pins}
 	if pl.key != "" {
 		if _, err := env.Session(ctx); err != nil {
@@ -74,15 +83,16 @@ func (b *Backend) hubPlan(ctx context.Context, req ipc.Request, env console.Env,
 		}
 		hd, info, err := source.Fetch(ctx, sess.src, pl.key, pr.MaxObjectBytes, ws)
 		if err != nil {
-			if errors.Is(err, source.ErrKeyOutsidePrefix) {
-				return product.Refuse(req.ID, answers.CodeKeyOutsidePrefix)
-			}
-			return product.Refuse(req.ID, answers.CodeFetchFailed)
+			// Not told to the agent now (the key's prefix was checked
+			// before): the human sees it, the run refuses it.
+			body.Unfetched = true
+			sc.Body = append(sc.Body, "the object could not be fetched now: an approval will answer fetch_failed")
+		} else {
+			// Only hashed here: the run fetches again and serves that copy.
+			_ = ws.Release(hd)
+			body.SHA256 = info.SHA256
+			sc.Body = append(sc.Body, fmt.Sprintf("sha256 %s · %d bytes", info.SHA256, info.Size))
 		}
-		// Only hashed here: the run fetches again and serves that copy.
-		_ = ws.Release(hd)
-		body.SHA256 = info.SHA256
-		sc.Body = append(sc.Body, fmt.Sprintf("sha256 %s · %d bytes", info.SHA256, info.Size))
 	}
 	raw, err := json.Marshal(body)
 	if err != nil {
@@ -146,11 +156,19 @@ func (b *Backend) hubRun(ctx context.Context, req ipc.Request, env console.Env, 
 		if d != nil && errors.Is(err, hubclient.ErrDenied) {
 			b.auditDecision(ctx, env, p.Ticket, nil, d, audit.EventDenied)
 		}
-		return hubRefusal(req.ID, p.Ticket, err)
+		return hubRefusal(req.ID, p.Ticket, h.Instance, err)
 	}
 	pl := &plan{id: run.ID, peerUID: caller.UID, key: body.Key, handle: workspace.Handle(body.Handle), plugins: body.Plugins, pins: body.Pins}
 	b.auditDecision(ctx, env, p.Ticket, pl, d, audit.EventApproved)
-	resp := b.execute(ctx, req, env, pol, pl, body.SHA256)
+	var resp ipc.Response
+	if body.Unfetched {
+		start := b.o.Now()
+		b.auditRun(ctx, env, pl, nil, string(answers.CodeFetchFailed))
+		_ = answers.Quantize(ctx, start, pol.P.AnswerQuantum, b.o.Now)
+		resp = product.Refuse(req.ID, answers.CodeFetchFailed)
+	} else {
+		resp = b.execute(ctx, req, env, pol, pl, body.SHA256)
+	}
 	reason := ""
 	if resp.Error != nil {
 		reason = resp.Error.Message
@@ -174,10 +192,10 @@ func (b *Backend) auditDecision(ctx context.Context, env console.Env, id string,
 }
 
 // hubRefusal answers a run whose ticket cannot run.
-func hubRefusal(id int64, tk string, err error) ipc.Response {
+func hubRefusal(id int64, tk, instance string, err error) ipc.Response {
 	switch {
 	case errors.Is(err, hubclient.ErrPending):
-		return console.PendingResp(id, product.P.Name, console.Pending{Ticket: tk})
+		return console.PendingResp(id, product.P.Name, console.Pending{Ticket: tk, Instance: instance})
 	case errors.Is(err, hubclient.ErrDenied):
 		// The outcome only, as on the terminal: the reason is audited.
 		return console.ErrResp(id, ipc.CodeDenied, string(answers.CodeApprovalDenied))

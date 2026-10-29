@@ -152,7 +152,7 @@ func planOK(p rpc.PlanParams, out rpc.PlanResult) bool {
 
 // PendingError is a plan or run waiting for a decision on the approval
 // hub: run Ticket once it is decided.
-type PendingError struct{ Ticket, Lock string }
+type PendingError struct{ Ticket, Lock, Instance string }
 
 func (e *PendingError) Error() string {
 	return "pending human approval: ticket " + e.Ticket + " on " + e.Lock
@@ -160,11 +160,11 @@ func (e *PendingError) Error() string {
 
 // pendingOf reads a pending answer (console.PendingResp), nil for another.
 func pendingOf(raw json.RawMessage) *PendingError {
-	var p struct{ Status, Ticket, Lock string }
+	var p struct{ Status, Ticket, Lock, Instance string }
 	if json.Unmarshal(raw, &p) != nil || p.Status != "pending" || !ticket.ValidID(p.Ticket) || p.Lock != product.P.Name {
 		return nil
 	}
-	return &PendingError{Ticket: p.Ticket, Lock: p.Lock}
+	return &PendingError{Ticket: p.Ticket, Lock: p.Lock, Instance: p.Instance}
 }
 
 // Plan asks the human to approve a plan. In hub mode it answers a

@@ -131,7 +131,9 @@ lockfile audit [--since 24h] [--json]           # console account only
 **Hub mode.** With `--hub URL --hub-key-file FILE --instance NAME` (all three, never with
 `--auto`; `lock up` writes them), plans are decided on lockhub, never on this terminal; the
 policy and `:review` stay here. `file.plan` fetches the object at once, hashes it, and asks
-the hub with a signed ticket: the screen masked (personal data in the key), the plan hash over
+the hub with a signed ticket (an object that cannot be fetched is not told to the agent then:
+the plan goes to the hub, the screen says so, and an approval answers `fetch_failed`; the plan
+answer waits for the profile's `answer_quantum`): the screen masked (personal data in the key), the plan hash over
 the content's sha256, the key or handle, the plugins and their pins, under the policy in force.
 The agent hears `pending` with the ticket and runs it once decided (`lockfile run TICKET`,
 `lockfile_run`). The run checks the decision (pinned hub key, this instance, the ticket, still

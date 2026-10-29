@@ -49,7 +49,8 @@ func hubConsole(t *testing.T, files map[string]string) (*consoletest.Console, *h
 func pendingTicket(t *testing.T, r ipc.Response) string {
 	t.Helper()
 	var p rpc.PlanResult
-	if r.Error != nil || json.Unmarshal(r.Result, &p) != nil || p.Status != "pending" || p.Lock != "lockfile" || !ticket.ValidID(p.Ticket) || p.PlanID != "" {
+	if r.Error != nil || json.Unmarshal(r.Result, &p) != nil || p.Status != "pending" || p.Lock != "lockfile" || p.Instance != hubInstance ||
+		!ticket.ValidID(p.Ticket) || p.PlanID != "" {
 		t.Fatalf("not pending: %+v %s", r.Error, r.Result)
 	}
 	return p.Ticket
@@ -138,5 +139,19 @@ func TestHubStaleAndDenied(t *testing.T) {
 	hub.Decide(denied, ticket.Denied, "not this one")
 	if r := runDecided(t, w, rpc.RunParams{Ticket: denied}); r.Error == nil || r.Error.Message != string(answers.CodeApprovalDenied) {
 		t.Fatalf("denied: %+v %s\n%s", r.Error, r.Result, c.IO.Output())
+	}
+}
+
+// An object that cannot be fetched is not told to the agent at plan time:
+// the plan is pending like any other, and the approval answers
+// fetch_failed, as on the terminal.
+func TestHubFetchFailureAfterApproval(t *testing.T) {
+	c, hub, _ := hubConsole(t, map[string]string{"invoices/a.pdf": "v1"})
+	w := dialWire(t, c.Socket)
+	_, r := w.call(rpc.MethodPlan, rpc.PlanParams{Key: "invoices/missing.pdf", Plugins: []string{"test.answer1"}})
+	tk := pendingTicket(t, r)
+	hub.Decide(tk, ticket.Approved, "")
+	if r := runDecided(t, w, rpc.RunParams{Ticket: tk}); r.Error == nil || r.Error.Message != string(answers.CodeFetchFailed) {
+		t.Fatalf("missing object: %+v %s", r.Error, r.Result)
 	}
 }

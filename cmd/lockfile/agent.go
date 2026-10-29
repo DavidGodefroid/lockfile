@@ -113,7 +113,7 @@ func fail(e env, asJSON bool, err error) int {
 	// the agent to stop and wait.
 	var pe *clientcmd.PendingError
 	if errors.As(err, &pe) {
-		_, out := mcpkit.Pending(pe.Lock, pe.Ticket)
+		_, out := mcpkit.PendingOn(pe.Lock, pe.Instance, pe.Ticket)
 		return emit(e, asJSON, out, func() []string { return []string{mcpkit.PendingText(pe.Lock, pe.Ticket)} })
 	}
 	var ce *clientcmd.Error

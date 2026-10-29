@@ -50,9 +50,10 @@ type PlanResult struct {
 	// In hub mode the plan waits for a decision on the hub: Status is
 	// "pending" and Ticket names the ticket to run once it is decided
 	// (console.PendingResp; no PlanID).
-	Status string `json:"status,omitempty"`
-	Ticket string `json:"ticket,omitempty"`
-	Lock   string `json:"lock,omitempty"`
+	Status   string `json:"status,omitempty"`
+	Ticket   string `json:"ticket,omitempty"`
+	Lock     string `json:"lock,omitempty"`
+	Instance string `json:"instance,omitempty"`
 }
 
 // RunParams runs an approved plan, or in hub mode the plan of a decided
