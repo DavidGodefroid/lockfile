@@ -300,7 +300,7 @@ func TestSuccessfulResultsChecked(t *testing.T) {
 	calls := map[string]func() error{
 		"plugins": func() error { _, err := Plugins(ctx, "x"); return err },
 		"plan":    func() error { _, err := Plan(ctx, "x", plan); return err },
-		"run":     func() error { _, err := Run(ctx, "x", "pl_0123456789"); return err },
+		"run":     func() error { _, err := Run(ctx, "x", "pl_0123456789", ipc.Requester{}); return err },
 		"answers": func() error { _, err := Answers(ctx, "x", "f_0123456789"); return err },
 		"status":  func() error { _, err := GetStatus(ctx, "x"); return err },
 	}

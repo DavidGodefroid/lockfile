@@ -3,9 +3,12 @@ package answers
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -122,7 +125,7 @@ func TestResultIsClosed(t *testing.T) {
 func TestCodesClosed(t *testing.T) {
 	want := []string{"plugin_error", "fetch_failed", "key_outside_prefix", "unknown_profile", "too_many_plugins",
 		"plugin_not_installed", "plugin_tampered", "plugin_yanked", "sandbox_unavailable", "proc_not_hidden", "approval_denied",
-		"approval_timeout", "handle_expired"}
+		"approval_timeout", "handle_expired", "stale"}
 	if len(Codes) != len(want) {
 		t.Fatalf("Codes = %v", Codes)
 	}
@@ -196,6 +199,55 @@ func TestRefusalCodes(t *testing.T) {
 	if _, ref, _ := ExecutePlan(ctx, Plan{Profile: "prod-docs", Key: "invoices/a.pdf", Plugins: []string{"pdf.ok"}}, big); ref == nil || ref.Code != CodeFetchFailed {
 		t.Errorf("too large: %+v", ref)
 	}
+}
+
+// A plan approved on a content hash runs only on those bytes: other bytes
+// are released before any plugin runs and the plan is stale; the same
+// bytes are answered, and the handle's spool holds exactly them.
+func TestExecutePlanContentHash(t *testing.T) {
+	f := newFixture(t, "pdf.ok")
+	r := f.runner(map[string]pluginspec.Outcome{"pdf.ok": yes()}, nil)
+	body := "synthetic input"
+	sum := sha256.Sum256([]byte(body))
+	approved := hex.EncodeToString(sum[:])
+	ctx := context.Background()
+
+	before := spools(t, f)
+	changed := deps(f, r, fakeSource{body: "changed input"})
+	_, ref, audit := ExecutePlan(ctx, Plan{Profile: "prod-docs", Key: "invoices/a.pdf", Plugins: []string{"pdf.ok"}, SHA256: approved}, changed)
+	if ref == nil || ref.Code != CodeStale || len(f.calls) != 0 {
+		t.Fatalf("changed content: refusal %+v, plugin runs %q", ref, f.calls)
+	}
+	if len(audit) != 1 || audit[0].Fetch == nil || !strings.Contains(audit[0].Fetch.Cause, "content changed") || audit[0].Fetch.SHA256 == approved {
+		t.Fatalf("audit %+v", audit)
+	}
+	if n := spools(t, f); n != before {
+		t.Fatalf("%d spools after stale, want %d", n, before)
+	}
+
+	res, ref, _ := ExecutePlan(ctx, Plan{Profile: "prod-docs", Key: "invoices/a.pdf", Plugins: []string{"pdf.ok"}, SHA256: approved}, deps(f, r, fakeSource{body: body}))
+	if ref != nil || len(f.calls) != 1 || *res.Answers[0].Result != 1 {
+		t.Fatalf("same content: %+v %+v, plugin runs %q", res, ref, f.calls)
+	}
+	file, info, err := f.ws.OpenFile(workspace.Handle(res.Handle))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	got, _ := io.ReadAll(file)
+	if string(got) != body || info.SHA256 != approved {
+		t.Fatalf("spool %q sha256 %s, want the approved bytes", got, info.SHA256)
+	}
+}
+
+// spools counts the files fetched into the workspace.
+func spools(t *testing.T, f *fixture) int {
+	t.Helper()
+	des, err := os.ReadDir(f.ws.Dir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return len(des)
 }
 
 func TestFollowUpOnHandle(t *testing.T) {

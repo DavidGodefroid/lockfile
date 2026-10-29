@@ -153,3 +153,34 @@ func TestConsoleEndToEnd(t *testing.T) {
 		t.Fatalf("console output holds file data:\n%s", out)
 	}
 }
+
+// The hub flags go together, never with --auto; hub-key prints the
+// instance key lockhub pins, made once.
+func TestConsoleHubFlagsAndHubKey(t *testing.T) {
+	cfg := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(cfg, []byte("[profiles.samples]\nsource = \"local\"\npath = \"/tmp\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	testConsoleHooks = &consoleHooks{io: consoletest.NewScriptIO(), isolation: sameUserIsolation(t), harden: func() error { return nil },
+		stateDir: t.TempDir(), configPath: cfg, home: home}
+	t.Cleanup(func() { testConsoleHooks = nil })
+	for _, args := range [][]string{
+		{"--hub", "http://lockhub:8443"},
+		{"--hub", "http://lockhub:8443", "--hub-key-file", "k", "--instance", "files", "--auto"},
+	} {
+		if code, _, errText := runArgs(t, "", append([]string{"console", "--profile", "samples"}, args...)...); code == product.ExitOK {
+			t.Errorf("%v accepted: %s", args, errText)
+		}
+	}
+	code, pub, errText := runArgs(t, "", "hub-key", "--instance", "files")
+	if code != product.ExitOK || len(strings.TrimSpace(pub)) != 44 {
+		t.Fatalf("hub-key: %d %q %s", code, pub, errText)
+	}
+	if _, again, _ := runArgs(t, "", "hub-key", "--instance", "files"); again != pub {
+		t.Fatal("hub-key changed the key")
+	}
+	if fi, err := os.Stat(filepath.Join(home, "hub", "files.key")); err != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("instance key: %v %v", fi, err)
+	}
+}

@@ -41,6 +41,8 @@ var refusals = map[answers.Code]refusalDef{
 		"other accounts can watch the plugins' processes in /proc", "tell the user to run lockfile doctor"},
 	answers.CodeHandleExpired: {"E_HANDLE_EXPIRED", refusal.RetryRewrite,
 		"the handle expired or was released", "plan again with the key"},
+	answers.CodeStale: {"E_STALE", refusal.RetryRewrite,
+		"the file changed since the plan was approved", "plan again with the key: the new content needs a new approval"},
 }
 
 func init() {

@@ -3,6 +3,8 @@
 // built from the closed list of docs/security-model.md.
 package rpc
 
+import "github.com/DavidGodefroid/lockkit/ipc"
+
 // Method names. lockkit serves hello, status, change.request and logout.
 const (
 	MethodPlugins = "file.plugins"
@@ -35,6 +37,9 @@ type PlanParams struct {
 	Handle  string   `json:"handle,omitempty"`
 	Plugins []string `json:"plugins"`
 	Intent  string   `json:"intent,omitempty"`
+	// Requester is the agent behind the request (mcpkit.RequesterFromEnv):
+	// in hub mode the plan is bound to its token.
+	Requester ipc.Requester `json:"requester,omitzero"`
 }
 
 // PlanResult names an approved plan, run once with file.run.
@@ -42,11 +47,21 @@ type PlanResult struct {
 	PlanID string `json:"plan_id"`
 	// Answers is how many answers the plan reveals at most.
 	Answers int `json:"answers"`
+	// In hub mode the plan waits for a decision on the hub: Status is
+	// "pending" and Ticket names the ticket to run once it is decided
+	// (console.PendingResp; no PlanID).
+	Status   string `json:"status,omitempty"`
+	Ticket   string `json:"ticket,omitempty"`
+	Lock     string `json:"lock,omitempty"`
+	Instance string `json:"instance,omitempty"`
 }
 
-// RunParams runs an approved plan.
+// RunParams runs an approved plan, or in hub mode the plan of a decided
+// ticket.
 type RunParams struct {
-	PlanID string `json:"plan_id"`
+	PlanID    string        `json:"plan_id,omitempty"`
+	Ticket    string        `json:"ticket,omitempty"`
+	Requester ipc.Requester `json:"requester,omitzero"`
 }
 
 // HandleParams names a fetched file.

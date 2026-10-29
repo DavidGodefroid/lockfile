@@ -52,6 +52,13 @@ type Plan struct {
 	// plugin whose opened lock entry differs (updated or reinstalled since
 	// the plan was approved) does not run and answers plugin_tampered.
 	Pins map[string]Pin
+	// SHA256, when set, is the hex sha256 of the bytes the plan was
+	// approved on. The fetch spools the object into the workspace and
+	// hashes the bytes it writes; when they differ the spool is released
+	// before any plugin runs, and the plan is refused stale. The plugins
+	// read only the spool: the bytes they answer on are the hashed ones.
+	// A follow-up on a handle is not checked: its spool does not change.
+	SHA256 string
 }
 
 type Deps struct {
@@ -146,6 +153,11 @@ func ExecutePlan(ctx context.Context, p Plan, d Deps) (res Result, ref *Refusal,
 			return Result{}, refuse(CodeFetchFailed), audit
 		}
 		fa.Size, fa.SHA256 = info.Size, info.SHA256
+		if p.SHA256 != "" && info.SHA256 != p.SHA256 {
+			fa.Cause = "content changed since the plan was approved (sha256 " + p.SHA256 + ")"
+			_ = d.WS.Release(h)
+			return Result{}, refuse(CodeStale), audit
+		}
 	}
 
 	answers, entries, err := d.Runner.AnswerPinned(ctx, h, p.Plugins, p.Pins)

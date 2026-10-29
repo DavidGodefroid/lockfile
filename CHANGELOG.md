@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### Hub mode
+
+- `lockfile console --hub URL --hub-key-file FILE --instance NAME`: plans are decided on
+  lockhub. `file.plan` fetches and hashes the content at once, stores the plan (content
+  sha256, key or handle, plugins, pins, policy) and pushes a signed ticket with a masked
+  screen; the agent hears `pending` and runs the ticket once decided (`file.run` with
+  `ticket`, `lockfile run TICKET`, `lockfile_run`). The run verifies the decision, the
+  policy and the plugins, fetches again and refuses changed bytes `stale` before any
+  plugin. Decisions are audited with the ticket, approver, facade and hub signature.
+  `lockfile hub-key --instance NAME` prints the instance key to pin. Plan and run carry the
+  agent's lea name and token (`requester`).
+- Pins lockkit at a pre-release commit (lockkit#52, hub/console-hub) until v0.3.0.
+
+### Plans bound to a content hash (groundwork for hub mode)
+
+- A plan can carry the sha256 of the bytes it was approved on. The run spools the object
+  into the console's workspace and hashes the bytes it writes; when they differ the spool
+  is released before any plugin runs and the plan is refused `stale` (`E_STALE`, retry
+  rewrite: plan again). The plugins read only the spool, so the bytes they answer on are
+  the hashed ones. Hub mode (above) sets it.
+
 ## v0.3.0
 
 Docker-only: every command runs in the image through the `lockfile` launcher, the image

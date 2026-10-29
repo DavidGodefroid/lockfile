@@ -28,6 +28,7 @@ func TestEveryCodeMapped(t *testing.T) {
 		answers.CodeSandboxUnavailable: refusal.RetryStop,
 		answers.CodeProcNotHidden:      refusal.RetryStop,
 		answers.CodeHandleExpired:      refusal.RetryRewrite,
+		answers.CodeStale:              refusal.RetryRewrite,
 	}
 	for _, c := range answers.Codes {
 		switch c {
