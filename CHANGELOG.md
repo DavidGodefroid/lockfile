@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## v0.3.0
+
+Docker-only: every command runs in the image through the `lockfile` launcher, the image
+has its own account ids, and the host install code is gone. Upgrade from v0.2.x with
+`scripts/install.sh` (it installs the launcher), then run `lockfile console` once: the
+launcher moves the existing volumes to the new ids (docs/docker.md, Migrating).
+
 ### lockfile's own account ids
 
 - The image's accounts move from locksql's ids to lockfile's own: group
