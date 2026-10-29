@@ -23,6 +23,13 @@
   rewrite: plan again). The plugins read only the spool, so the bytes they answer on are
   the hashed ones. Hub mode (above) sets it.
 
+## v0.3.0
+
+Docker-only: every command runs in the image through the `lockfile` launcher, the image
+has its own account ids, and the host install code is gone. Upgrade from v0.2.x with
+`scripts/install.sh` (it installs the launcher), then run `lockfile console` once: the
+launcher moves the existing volumes to the new ids (docs/docker.md, Migrating).
+
 ### lockfile's own account ids
 
 - The image's accounts move from locksql's ids to lockfile's own: group
@@ -38,6 +45,14 @@
 **Breaking, migration:** volumes of a previous release are migrated by the launcher.
 Without it, run `migrate-ids` once as docs/docker.md shows. An agent container that
 reached the console with gid 10000 now needs gid 10030.
+### The host install code is gone
+
+- `cmd/lockfile/install.go`, the binary's host self-update and `internal/separate` are
+  removed: the image refused them since the Docker-only launcher. `lockfile install` and
+  `lockfile update` in the image still print the hint to the launcher (`scripts/install.sh`,
+  `lockfile update` on the host, docs/docker.md).
+- `lockfile doctor`'s separation checks no longer tell you to run `sudo lockfile install`:
+  they point to the launcher and its image.
 
 ### lockkit v0.2.1
 

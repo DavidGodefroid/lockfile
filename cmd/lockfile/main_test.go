@@ -24,16 +24,6 @@ func runArgs(t *testing.T, in string, args ...string) (int, string, string) {
 	return code, out.String(), errb.String()
 }
 
-// runDirect runs one command's function with args, past the dispatch: the
-// dispatch refuses install and update (hostModeRefusal), but their code
-// stays until a later release removes it.
-func runDirect(t *testing.T, in string, fn func(env, []string) int, args ...string) (int, string, string) {
-	t.Helper()
-	var out, errb bytes.Buffer
-	code := fn(env{stdin: strings.NewReader(in), stdout: &out, stderr: &errb}, args)
-	return code, out.String(), errb.String()
-}
-
 // The host install and its update are refused: lockfile runs in Docker,
 // and the launcher on the host updates itself.
 func TestHostModeCommandsRefused(t *testing.T) {
@@ -42,7 +32,8 @@ func TestHostModeCommandsRefused(t *testing.T) {
 		if code != product.ExitError {
 			t.Errorf("%v: exit %d, want %d", args, code, product.ExitError)
 		}
-		if !strings.Contains(errText, "runs in Docker") || !strings.Contains(errText, "docs/docker.md") || out != "" {
+		if !strings.Contains(errText, "runs in Docker") || !strings.Contains(errText, "scripts/install.sh") ||
+			!strings.Contains(errText, "`lockfile update` on the host") || !strings.Contains(errText, "docs/docker.md") || out != "" {
 			t.Errorf("%v: stdout %q stderr %q", args, out, errText)
 		}
 	}
