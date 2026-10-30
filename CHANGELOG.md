@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v0.5.0
+
+Hub mode on lockkit v0.6.0: expired tickets are approved again, reveal from a local
+facade, and a console restarted without the hub withdraws its hub plans.
+
 - `lockfile console`'s usage and help list `--hub-plain-http` (the flag `lock up` passes for
   its `http://lockhub:8443`); `docs/usage.md` says when it is needed.
 - Site: the plugin sandbox hardening the site still called "coming in v0.2.1" shipped in
