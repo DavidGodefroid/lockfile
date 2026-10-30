@@ -52,7 +52,7 @@
     <div class="wrap">
 
 <section class="hero" aria-labelledby="hero-title">
-  <p class="eyebrow"><a href="install/"><span class="badge">v0.2</span> Pre-release · open source, Apache 2.0</a></p>
+  <p class="eyebrow"><a href="install/"><span class="badge">v0.x</span> Pre-release · open source, Apache 2.0</a></p>
   <h1 id="hero-title">Your AI asks about the file. <br><span class="key">It never reads it.</span></h1>
   <p class="lead">Let Claude Code, Codex, Cursor or Gemini CLI check a file it must never see: the agent only ever gets 1s and 0s.</p>
   <p class="intro">lockfile puts a <strong>human-held console</strong> between your AI agent and the files in S3, on an SFTP server or in a local directory. The agent asks fixed yes/no questions: is this file empty, does it start like a PDF, does it parse, does it have a blank page, does it look truncated? The console, running in a separate OS account, waits for <strong>your</strong> approval, fetches the file, runs signed, sandboxed plugins on it, and returns each plugin’s answer: <code>1</code>, <code>0</code>, or no answer. No byte of the file, its size, type or path ever reaches the agent.</p>
@@ -186,7 +186,7 @@ lockfile init claude</code></pre>
 <section aria-labelledby="limits">
   <h2 id="limits">Know the limits</h2>
   <div class="prose">
-    <p>The console is the enforcement point. Plugins answer one bit each, but a plugin whose code does not match its question is mitigated by review and signing, not prevented. A missing answer (<code>plugin_error</code>) and a failed fetch (<code>fetch_failed</code>) each carry one symbol that depends on the file. The v0.2.0 plugin sandbox is not yet complete: v0.2.1 adds IPC denial and requires a hidden <code>/proc</code>.</p>
+    <p>The console is the enforcement point. Plugins answer one bit each, but a plugin whose code does not match its question is mitigated by review and signing, not prevented. A missing answer (<code>plugin_error</code>) and a failed fetch (<code>fetch_failed</code>) each carry one symbol that depends on the file. Since v0.3.0 the plugin sandbox also denies System V IPC, POSIX message queues and signals to other processes, and the console runs plugins only where no other account can see their processes in <code>/proc</code> (the host’s own accounts aside: see the security page).</p>
     <p class="link-line"><a href="security/">Read the security model</a></p>
   </div>
 </section>
@@ -202,7 +202,7 @@ lockfile init claude</code></pre>
         <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/security-model.md">Security model (full)</a></li>
         <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/plugin-contract.md">Plugin contract</a></li>
       </ul>
-      <p>Pre-release (<code>v0.2.x</code>). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
+      <p>Pre-release (<code>v0.x</code>). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
       <p class="family-line">Part of the lock family: <a href="https://github.com/DavidGodefroid/locksql">locksql</a> · <a href="https://github.com/DavidGodefroid/lockmq">lockmq</a> · <a href="https://github.com/DavidGodefroid/lockfile">lockfile</a> · <a href="https://github.com/DavidGodefroid/lockhttp">lockhttp</a> · <a href="https://github.com/DavidGodefroid/lockkit">lockkit</a></p>
     </div>
   </footer>

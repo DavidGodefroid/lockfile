@@ -68,7 +68,7 @@
   <tr><td>The agent cannot drive the console</td><td>lockkit’s isolation checks: the console runs in a container of its own, as its own account, on the terminal you started <code>lockfile console</code> in; X11 refused, relays refused. Residual: whoever runs <code>docker</code> commands can attach or exec into it (<a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/docker.md#what-docker-does-and-does-not-separate">what Docker does and does not separate</a>)</td></tr>
   <tr><td>Only the clients group reaches the console</td><td>socket directory <code>/run/lockfile</code> (<code>2750</code>, setgid group <code>lockfile-clients</code>), socket <code>0660</code>, kernel peer credentials checked on every connection</td></tr>
   <tr><td>The agent cannot replace what the console runs</td><td>the console runs the release image by its cosign-verified digest; the launcher <code>/usr/local/bin/lockfile</code> and its seccomp profile are owned by root</td></tr>
-  <tr><td>A plugin cannot read anything but its input, nor talk to the network</td><td>Landlock (execute and read its own binary only; TCP denied with ABI ≥ 4), seccomp (no sockets, <code>ptrace</code>, <code>mount</code>, <code>bpf</code>, <code>keyctl</code>, second <code>execve</code>), rlimits, empty environment, input as a read-only fd 3, stdout capped at 3 bytes, stderr discarded; see the <a href="#upcoming">hardening coming in v0.2.1</a></td></tr>
+  <tr><td>A plugin cannot read anything but its input, nor talk to the network</td><td>Landlock (execute and read its own binary only; TCP denied with ABI ≥ 4), seccomp (no sockets, <code>ptrace</code>, <code>mount</code>, <code>bpf</code>, <code>keyctl</code>, <code>execveat</code> and <code>memfd_create</code> (only its own binary executes, by Landlock), System V IPC, POSIX message queues, signals to other processes including through a descriptor owner, shared anonymous memory), rlimits, empty environment, input as a read-only fd 3, stdout capped at 3 bytes, stderr discarded; no other account in the console’s pid namespace sees the plugins’ processes in <code>/proc</code> (see the <a href="#sandbox-hardening">sandbox hardening</a>)</td></tr>
   <tr><td>A plugin answers only its signed question</td><td>the manifest’s question and meanings of 1 and 0 are signed with the binary; marketplace review; a changed question is a loosening the human types to accept</td></tr>
   <tr><td>Plugins and releases are what their publisher built</td><td>cosign keyless signatures checked through lockkit (index, manifest, binary, lockfile releases and images); no unsigned mode; a missing cosign refuses</td></tr>
   <tr><td>The agent cannot widen the policy</td><td>no socket method installs, trusts or loosens anything; a change request only queues text for the human</td></tr>
@@ -92,7 +92,7 @@
   <tr><td>plugin name, version, <code>official</code>, <code>warning: unofficial_marketplace</code>, question, meaning of 1/0</td><td>plugin metadata from the signed manifest</td></tr>
   <tr><td>profile names and <code>production</code> flag, <code>busy</code></td><td>lockfile configuration; <code>busy</code> means the console is waiting for the human on another request</td></tr>
   <tr><td><code>approval_denied</code>, <code>approval_timeout</code></td><td>a human decision; the reason the human types is never forwarded</td></tr>
-  <tr><td>refusal codes (<code>E_*</code>, with a static hint)</td><td>computed from the request and the local install, before or without reading the file; <code>plugin_yanked</code> is in the list but not produced yet by v0.2.0</td></tr>
+  <tr><td>refusal codes (<code>E_*</code>, with a static hint)</td><td>computed from the request and the local install, before or without reading the file</td></tr>
   <tr><td><code>status</code>: console up, production, auto mode, security level, timers, plugin protocol, sandbox ok</td><td>console state</td></tr>
   </tbody>
   </table>
@@ -118,16 +118,16 @@
   </ul>
 </section>
 
-<section aria-labelledby="upcoming">
-  <h2 id="upcoming">Sandbox hardening coming in v0.2.1</h2>
+<section aria-labelledby="sandbox-hardening">
+  <h2 id="sandbox-hardening">Sandbox hardening (since v0.3.0)</h2>
   <div class="prose">
-    <p>“The agent only ever sees 1s and 0s” is the design goal and what the wire carries; the v0.2.0 plugin sandbox is not yet complete around it. A review found side channels a plugin could use to pass more than its bit to another process on the machine:</p>
+    <p>“The agent only ever sees 1s and 0s” is the design goal and what the wire carries. A review of the v0.2.0 sandbox found side channels a plugin could use to pass more than its bit to another process on the machine. Since v0.3.0:</p>
     <ul>
-      <li>SysV IPC and POSIX message queues are not denied to plugins;</li>
-      <li><code>/proc</code> is visible to plugins unless it is mounted with <code>hidepid</code>;</li>
-      <li>on older Landlock ABIs, signals through <code>fcntl</code> are not blocked.</li>
+      <li>System V IPC (<code>shm*</code>, <code>msg*</code>, <code>sem*</code>) and POSIX message queues (<code>mq_*</code>) are denied to plugins by seccomp;</li>
+      <li>signals to any process but the plugin itself are denied, including through a descriptor owner (<code>fcntl</code> <code>F_SETOWN</code>/<code>F_SETSIG</code>, <code>ioctl</code> <code>FIOSETOWN</code>/<code>SIOCSPGRP</code>), whatever the Landlock ABI;</li>
+      <li>a running plugin’s <code>/proc</code> entries (command line, thread names, memory counters), which it writes itself, are kept from other accounts: the console runs plugins only where no other account can see their processes in <code>/proc</code>. On a host, <code>/proc</code> mounted with <code>hidepid=invisible</code>; in the release container, which Docker cannot mount so, a pid namespace of its own, not the host’s, that lists no process of an account other than root and the console’s, under a seccomp filter. Checked at start, when a plan arrives and just before it runs; refused otherwise (<code>proc_not_hidden</code>), and reported by <code>lockfile doctor</code>.</li>
     </ul>
-    <p>v0.2.1 denies SysV IPC and message queues and requires <code>/proc</code> mounted with <code>hidepid=invisible</code>. Until then, install only plugins you trust from the official marketplace.</p>
+    <p>Residual: the host’s pid namespace lists every container’s processes, so the host’s own accounts can read a plugin’s entries unless the host’s <code>/proc</code> has <code>hidepid=invisible</code>. Whoever has Docker on the host is outside the boundary anyway.</p>
   </div>
 </section>
 
@@ -162,7 +162,7 @@
         <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/security-model.md">Security model (full)</a></li>
         <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/plugin-contract.md">Plugin contract</a></li>
       </ul>
-      <p>Pre-release (<code>v0.2.x</code>). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
+      <p>Pre-release (<code>v0.x</code>). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
       <p class="family-line">Part of the lock family: <a href="https://github.com/DavidGodefroid/locksql">locksql</a> · <a href="https://github.com/DavidGodefroid/lockmq">lockmq</a> · <a href="https://github.com/DavidGodefroid/lockfile">lockfile</a> · <a href="https://github.com/DavidGodefroid/lockhttp">lockhttp</a> · <a href="https://github.com/DavidGodefroid/lockkit">lockkit</a></p>
     </div>
   </footer>

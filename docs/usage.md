@@ -104,7 +104,7 @@ The official marketplace's signer is pinned in the binary. An unofficial marketp
 unescaped `.` or does not pin `HOST/OWNER/REPO/` (other signers would match). It needs
 its name typed when added (in a terminal: a typed name is never read from a pipe, nor the
 plugin name `plugin update` asks for), is flagged on every approval screen and in every agent result,
-and never runs in auto mode. Keyless signers only in v0.2 (`--public-key` is refused).
+and never runs in auto mode. Keyless signers only (`--public-key` is refused).
 
 A running console sees an installed plugin or an added marketplace as a policy loosening:
 it applies it only after `:review` in the console.
@@ -112,7 +112,7 @@ it applies it only after `:review` in the console.
 ## The console
 
 ```sh
-lockfile console --profile docs [--auto | --hub URL --hub-key-file FILE --instance NAME]
+lockfile console --profile docs [--auto | --hub URL [--hub-plain-http] --hub-key-file FILE --instance NAME]
 ```
 
 Run in its container ([docker.md](docker.md#run-the-console)), it checks the isolation (the
@@ -128,7 +128,7 @@ on production, never for unofficial plugins), `:quit`. Results show as `plan pl_
 lockfile audit [--since 24h] [--json]           # console account only
 ```
 
-**Hub mode.** With `--hub URL --hub-key-file FILE --instance NAME` (all three, never with
+**Hub mode.** With `--hub URL --hub-key-file FILE --instance NAME` (the three go together, never with
 `--auto`; `lock up` writes them), plans are decided on lockhub, never on this terminal; the
 policy and `:review` stay here. `file.plan` fetches the object at once, hashes it, and asks
 the hub with a signed ticket (an object that cannot be fetched is not told to the agent then:
@@ -142,6 +142,9 @@ usable, nonce once), the policy and the plugins, fetches again, and refuses othe
 decision is audited with the ticket, the approver, the facade and the hub's signature.
 `lockfile hub-key --instance NAME` prints the instance key for `lock up` to pin (made once in
 the console account's home, `0600`).
+`lock up` also passes `--hub-plain-http` for its `http://lockhub:8443` on the hub's own network:
+without it an `http://` hub URL other than loopback is refused, and with it the URL must still
+be a service name without a dot or a private address.
 
 ## The agent side
 
