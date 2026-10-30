@@ -69,6 +69,8 @@ func mustDk(t *testing.T, args ...string) string {
 type setup struct {
 	run, home, data, seccomp string
 	terms                    []*syncBuffer
+	// consoleArgs go after the console's own arguments.
+	consoleArgs []string
 }
 
 // syncBuffer is what script(1) wrote, read while it writes.
@@ -167,6 +169,7 @@ func (s *setup) console(t *testing.T, img string, opts ...string) string {
 		"-v", s.data + ":/srv/lockfile/samples:ro"}
 	args = append(args, opts...)
 	args = append(args, img, "console", "--profile", "samples", "--auto")
+	args = append(args, s.consoleArgs...)
 	ptm, pts := openPTY(t)
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = pts, pts, pts
@@ -355,6 +358,30 @@ func TestAllowedUIDs(t *testing.T) {
 	s.waitServed(t)
 	if got, out, ok := s.answers(t, imageAllowed, []string{"--user", "4242:10030"}, "test.answer1"); !ok || got["test.answer1"] != "1" {
 		t.Fatalf("allowed uid 4242: %v\n%s", got, out)
+	}
+}
+
+// --allowed-uids lets the uid of an agent in its own container through
+// with the release image as it is (no allowed_uids in it), for that
+// console only: the uid is refused without it, and no other uid is let in.
+func TestAllowedUIDsAtRunTime(t *testing.T) {
+	s := newSetup(t)
+	s.console(t, image, "--security-opt", "seccomp="+s.seccomp)
+	s.waitServed(t)
+	if got, out, ok := s.answers(t, image, []string{"--user", "4242:10030"}, "test.answer1"); ok {
+		t.Fatalf("uid 4242 served without --allowed-uids: %v\n%s", got, out)
+	}
+	// A console of its own (volumes, policy prompt) with the flag.
+	s = newSetup(t)
+	s.consoleArgs = []string{"--allowed-uids", "4242"}
+	s.console(t, image, "--security-opt", "seccomp="+s.seccomp)
+	s.waitServed(t)
+	s.waitText(t, "allowed uids besides lockfile-clients (--allowed-uids): 4242")
+	if got, out, ok := s.answers(t, image, []string{"--user", "4242:10030"}, "test.answer1"); !ok || got["test.answer1"] != "1" {
+		t.Fatalf("--allowed-uids 4242: %v\n%s", got, out)
+	}
+	if got, out, ok := s.answers(t, image, []string{"--user", "4243:10030"}, "test.answer1"); ok {
+		t.Fatalf("uid 4243 served with --allowed-uids 4242: %v\n%s", got, out)
 	}
 }
 

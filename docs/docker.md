@@ -307,15 +307,25 @@ launcher cannot start the MCP server: the agent runs the `lockfile` binary
 inside its own container as a client of the console
 container; the two share only the socket volume. The console checks every
 peer by uid against its own container's accounts, where the agent's uid has
-none: name it at build time.
+none: name it when you start the console, with the release image as it is:
+
+```sh
+lockfile console --profile samples --allowed-uids 1000
+```
+
+or at build time, in an image of your own:
 
 ```sh
 docker build -t lockfile --build-arg ALLOWED_UIDS=1000 .
 LOCKFILE_IMAGE=lockfile lockfile console --profile samples
 ```
 
-`ALLOWED_UIDS` is a comma-separated list of uids, written to `allowed_uids`
-in the image's `/etc/lockfile/system.toml`: the uid the kernel reports for
+`--allowed-uids` and `ALLOWED_UIDS` are comma-separated lists of uids: the
+build writes them to `allowed_uids` in the image's `/etc/lockfile/system.toml`,
+the flag adds them to it for that console only (the console prints them at
+start). Both refuse root (0) and the console's own uid. Only whoever starts
+the console sets them: the launcher passes the flag on, `lock up` passes a
+lock's `allowed_uids`, and no client can. It is the uid the kernel reports for
 the agent's process, as the console sees it (the agent container's uid when
 neither container remaps user namespaces). Any other peer, neither
 `lockfile`'s nor in `lockfile-clients` nor listed, is refused.
