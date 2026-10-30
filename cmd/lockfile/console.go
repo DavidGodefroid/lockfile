@@ -19,7 +19,7 @@ import (
 )
 
 func init() {
-	commands["console"] = command{human: true, help: "serve a profile to agents (run in the lockfile account) [--hub URL [--hub-plain-http] --hub-key-file F --instance N]", run: runConsole}
+	commands["console"] = command{human: true, help: "serve a profile to agents (run in the lockfile account) [--allowed-uids UID,...] [--hub URL [--hub-plain-http] --hub-key-file F --instance N]", run: runConsole}
 	commands["hub-key"] = command{human: true, help: "hub-key --instance NAME: print the instance key for lockhub to pin (lockfile account)", run: runHubKey}
 }
 
@@ -43,10 +43,17 @@ func runConsole(e env, args []string) int {
 	fs.SetOutput(io.Discard)
 	profile := fs.String("profile", "", "profile to serve")
 	auto := fs.Bool("auto", false, "approve requests without a prompt (never on production, never for unofficial plugins)")
+	var allowed onceFlag
+	fs.Var(&allowed, "allowed-uids", "uids that may connect besides lockfile-clients' members (an agent in a container of its own)")
 	var hub console.HubOptions
 	hub.Register(fs)
 	if err := fs.Parse(args); err != nil || *profile == "" || fs.NArg() != 0 {
-		fmt.Fprintln(e.stderr, "usage: lockfile console --profile NAME [--auto | --hub URL [--hub-plain-http] --hub-key-file FILE --instance NAME]")
+		fmt.Fprintln(e.stderr, "usage: lockfile console --profile NAME [--allowed-uids UID,...] [--auto | --hub URL [--hub-plain-http] --hub-key-file FILE --instance NAME]")
+		return product.ExitUsage
+	}
+	uids, err := parseAllowedUIDs(allowed.v)
+	if err != nil {
+		fmt.Fprintln(e.stderr, "lockfile console:", err)
 		return product.ExitUsage
 	}
 	h := consoleHooks{}
@@ -83,6 +90,19 @@ func runConsole(e env, args []string) int {
 		defer term.Restore()
 		cio, tty = term, os.Stdin
 	}
+	iso := h.isolation
+	if len(uids) > 0 {
+		// Set by whoever starts the console (the human, the launcher, lock
+		// up), never by a client: the agent's uid, which names no account
+		// in the console's container.
+		env := console.RealIsolationEnv(product.P, tty)
+		if iso != nil {
+			env = *iso
+		}
+		env = allowUIDs(env, uids)
+		iso = &env
+		cio.Println("allowed uids besides lockfile-clients (--allowed-uids): " + joinUIDs(uids))
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	err = console.Run(ctx, product.P, b, console.Options{
@@ -91,7 +111,7 @@ func runConsole(e env, args []string) int {
 		// the other answers say nothing about a file.
 		Quantum:   -1,
 		Sanitizer: b.Sanitizer(),
-		Isolation: h.isolation, Harden: h.harden, Ready: h.ready,
+		Isolation: iso, Harden: h.harden, Ready: h.ready,
 		Hub: withHome(hub, h.home), OnHub: b.OnHub,
 	})
 	if err != nil && !errors.Is(err, context.Canceled) {

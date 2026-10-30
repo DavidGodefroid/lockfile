@@ -112,8 +112,14 @@ it applies it only after `:review` in the console.
 ## The console
 
 ```sh
-lockfile console --profile docs [--auto | --hub URL [--hub-plain-http] --hub-key-file FILE --instance NAME]
+lockfile console --profile docs [--allowed-uids UID,...] [--auto | --hub URL [--hub-plain-http] --hub-key-file FILE --instance NAME]
 ```
+
+`--allowed-uids UID,...` lets these uids connect besides the members of `lockfile-clients`, as
+`allowed_uids` in the image's `/etc/lockfile/system.toml` does: an agent in a container of its
+own whose uid has no account in the console's image
+([docker.md](docker.md#agent-in-its-own-container)). Comma-separated decimal uids; root (0),
+65534 (nobody), leading zeros and the console's own uid are refused; the console prints them at start.
 
 Run in its container ([docker.md](docker.md#run-the-console)), it checks the isolation (the
 console account, its own terminal), the sandbox and `/proc`, asks for the secret, connects,

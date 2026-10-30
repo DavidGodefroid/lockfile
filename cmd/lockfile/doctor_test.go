@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"os/user"
@@ -359,5 +360,32 @@ func TestDoctorLocalSource(t *testing.T) {
 	}
 	if _, out, _ := runArgs(t, "", "doctor"); !strings.Contains(out, "profile docs: closed to other accounts") {
 		t.Fatalf("closed source:\n%s", out)
+	}
+}
+
+// An agent whose uid has no account here (in a container of its own) may
+// be served by a console started with --allowed-uids: a warning, not a
+// failure; an account outside the clients group still fails.
+func TestDoctorClientsGroupAgentWithoutAccount(t *testing.T) {
+	h := doctorEnv(t, t.TempDir())
+	none := 4242
+	for {
+		if _, err := user.LookupId(strconv.Itoa(none)); err != nil {
+			break
+		}
+		none++
+	}
+	h.sys = func() (*sysconf.Config, error) {
+		return &sysconf.Config{ServiceUser: "root", ClientGroup: "lockfile-no-such-group", SocketDir: t.TempDir()}, nil
+	}
+	h.uid = func() int { return none }
+	_, out, _ := runArgs(t, "", "doctor")
+	if !strings.Contains(out, fmt.Sprintf("uid %d has no account here: a console serves it only when started with --allowed-uids %d", none, none)) {
+		t.Fatalf("no account:\n%s", out)
+	}
+	h.uid = os.Getuid
+	_, out, _ = runArgs(t, "", "doctor")
+	if !strings.Contains(out, "this account is not in lockfile-no-such-group") {
+		t.Fatalf("an account outside the group:\n%s", out)
 	}
 }

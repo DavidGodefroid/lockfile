@@ -223,8 +223,8 @@ only guide the agent; the console's checks are the guarantee.
   container of its own; the agent's commands run as `agent` (group
   `lockfile-clients`) in others, which share only the socket volume. The
   socket in `/run/lockfile` checks the kernel peer credentials of every
-  connection and refuses any other account (`ALLOWED_UIDS` names an agent in
-  its own container). Whoever runs `docker` on the host stays outside this
+  connection and refuses any other account (`--allowed-uids` or `ALLOWED_UIDS` names an
+  agent in its own container). Whoever runs `docker` on the host stays outside this
   boundary: see [docs/docker.md](docs/docker.md#what-docker-does-and-does-not-separate).
 - **Human approval.** Every plan is approved in the console; no socket method
   approves, installs or loosens anything. On production you type the profile

@@ -208,9 +208,15 @@ func doctorSeparation(h doctorHooks, sys *sysconf.Config, add func(string, strin
 	if uid == svcUID {
 		return true
 	}
-	if !sys.ClientAllowed(uid) {
+	_, noAccount := user.LookupId(strconv.Itoa(uid))
+	switch {
+	case !sys.ClientAllowed(uid) && noAccount != nil:
+		// An agent in a container of its own: a console started with
+		// --allowed-uids serves it, which this side cannot see.
+		add("clients group", "warn", fmt.Sprintf("uid %d has no account here: a console serves it only when started with --allowed-uids %d (docs/docker.md#agent-in-its-own-container)", uid, uid))
+	case !sys.ClientAllowed(uid):
 		add("clients group", "fail", "this account is not in "+sys.ClientGroup+": "+imageHint)
-	} else {
+	default:
 		add("clients group", "ok", "this account may reach the consoles")
 	}
 	home, err := h.home(sys.ServiceUser)
