@@ -146,20 +146,23 @@ the console account's home, `0600`).
 without it an `http://` hub URL other than loopback is refused, and with it the URL must still
 be a service name without a dot or a private address.
 
-**Supported lockhub versions.** Which [lockhub](https://github.com/DavidGodefroid/lockhub) releases each
-lockfile release works with under `lock up`:
+**Supported lockhub versions.** Which [lockhub](https://github.com/DavidGodefroid/lockhub) releases
+(its `lock` CLI and its hub image) each lockfile release works with under `lock up`:
 
 | lockfile | lockkit | lockhub |
 |---|---|---|
-| v0.5.0 | v0.6.0 | v0.2.0 or later (tested through v0.2.2): hub mode, `devices: true` (paired phones), reveals (`reveal: true`, Ctrl-O) and renewals |
-| v0.4.0 | v0.3.1 | v0.1.1 or later: hub mode only; leave `devices` and `reveal` off |
-| v0.3.0 and older | v0.2.1 | none (no hub mode) |
+| v0.5.0 | v0.6.0 | v0.2.0 or later: hub mode, `devices: true` (paired phones), reveals (`reveal: true`, Ctrl-O) and renewals |
+| v0.4.0 | v0.3.1 | v0.2.0 or later: hub mode only; leave `devices` and `reveal` off |
+| v0.3.0 and older | older than v0.3.1, or none | none (no hub mode) |
 
-lockhub v0.1.0 is not supported: its generated command lacks `--hub-plain-http`, which these
-releases need. A lock older than a feature `lockfamily.yaml` asks of it refuses the flag and does
-not start: leave `devices`/`reveal` off for it. lockhub's
-[CHANGELOG](https://github.com/DavidGodefroid/lockhub/blob/main/CHANGELOG.md) ("Supported locks")
-is the reference; this table follows it.
+`lock up` runs these consoles from the `lock` CLI of lockhub v0.2.0 on (the console account, a
+terminal, the reviewed profile copy); the `lock up` of lockhub v0.1.x cannot run them. A console
+older than a feature `lockfamily.yaml` asks of it refuses the flag and does not start: leave
+`devices`/`reveal` off for it. A lock on lockkit older than v0.5.0 ignores the hub's reveal and
+renewal requests, which then time out. lockhub's CI does not run a lockfile image: the table
+follows each release's lockkit and lockhub's
+[CHANGELOG](https://github.com/DavidGodefroid/lockhub/blob/main/CHANGELOG.md) ("Supported locks",
+v0.2.0).
 
 ## The agent side
 
