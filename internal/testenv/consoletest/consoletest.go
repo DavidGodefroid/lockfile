@@ -309,7 +309,7 @@ func (c *Console) launch(t testing.TB, o Options) {
 		defer b.Close()
 		c.done <- console.Run(ctx, product.P, b, console.Options{
 			Profile: "samples", IO: c.IO, StateDir: c.state, Quantum: -1, Sanitizer: b.Sanitizer(),
-			Isolation: c.iso, Harden: func() error { return nil }, Ready: func(s string) { ready <- s }, Hub: o.Hub, Now: o.Now,
+			Isolation: c.iso, Harden: func() error { return nil }, Ready: func(s string) { ready <- s }, Hub: o.Hub, Now: o.Now, OnHub: b.OnHub,
 		})
 	}()
 	t.Cleanup(func() {

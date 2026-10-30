@@ -217,8 +217,11 @@ func (b *Backend) hubCheck(pol *profile.Policy, sp *plans.Plan) (hubBody, string
 }
 
 // recompute is the hub client's Recompute (decision H1): what a renewal
-// of a stored plan is re-checked against, the policy in force now (env's)
-// and the plugins installed now, as the run's recheck sees them.
+// of a stored plan is re-checked against, the policy in force now and the
+// plugins installed now, as the run's recheck sees them. The policy in
+// force is the approved one on disk: the console saves a policy before it
+// applies it (at start and at every change), and a renewal asked from the
+// hub comes with no request, hence no console.Env.
 //
 // The content's sha256 is not checked now: hashing the object again means
 // fetching it, which needs a live session and writes to the workspace,
@@ -230,41 +233,25 @@ func (b *Backend) hubCheck(pol *profile.Policy, sp *plans.Plan) (hubBody, string
 // covers is either the request itself (profile, key, handle, plugins) or
 // bound by the policy fingerprint (the pins), which lockkit refuses to
 // renew across.
-func (b *Backend) recompute(env console.Env) hubclient.Recompute {
-	return func(sp *plans.Plan) (string, string, map[string]string, error) {
-		pol := policyOf(env)
-		if pol == nil {
-			return "", "", nil, errors.New("no policy in force")
-		}
-		_, fp, hash, inputs, err := b.hubCheck(pol, sp)
-		if err != nil {
-			return "", "", nil, err
-		}
-		if _, ok := inputs["sha256"]; ok {
-			inputs["sha256"] = ticket.UncheckedInput
-		}
-		return fp, hash, inputs, nil
+func (b *Backend) recompute(sp *plans.Plan) (string, string, map[string]string, error) {
+	pol, err := b.approved()
+	if err != nil {
+		return "", "", nil, err
 	}
+	_, fp, hash, inputs, err := b.hubCheck(pol, sp)
+	if err != nil {
+		return "", "", nil, err
+	}
+	if _, ok := inputs["sha256"]; ok {
+		inputs["sha256"] = ticket.UncheckedInput
+	}
+	return fp, hash, inputs, nil
 }
 
-// hubOf is console.HubOf, registering the recompute on the hub client the
-// first time this backend sees that hub. The console has no start hook
-// for products: until an agent's first request after a start, a renewal
-// asked from the hub is not checked (the ticket says so, and the run
-// checks the plan hash all the same).
-func (b *Backend) hubOf(env console.Env) *console.Hub {
-	h := console.HubOf(env)
-	if h == nil {
-		return nil
-	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.recomputeOn != h {
-		h.Client.SetRecompute(b.recompute(env))
-		b.recomputeOn = h
-	}
-	return h
-}
+// OnHub is console.Options.OnHub: the console's hub, before any request,
+// gets the recompute, so a renewal asked from the hub right after a start
+// is checked too.
+func (b *Backend) OnHub(h *console.Hub) { h.Client.SetRecompute(b.recompute) }
 
 // auditRenewal records the renewal of expired ticket old by the agent's
 // run: the new ticket, or that it could not be asked again.

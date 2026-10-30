@@ -7,9 +7,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/DavidGodefroid/lockkit/config"
 	"github.com/DavidGodefroid/lockkit/plans"
 	"github.com/DavidGodefroid/lockkit/ticket"
 
+	"github.com/DavidGodefroid/lockfile/internal/product"
 	"github.com/DavidGodefroid/lockfile/internal/profile"
 	"github.com/DavidGodefroid/lockfile/internal/testenv"
 )
@@ -46,7 +48,7 @@ func TestRecomputeIsTheRecheck(t *testing.T) {
 	h := newHarness(t, "test.answer1")
 	pol := h.env.policy
 	sp := storedPlan(t, pol, sampleBody(t, pol))
-	fp, hash, inputs, err := h.b.recompute(h.env)(sp)
+	fp, hash, inputs, err := h.b.recompute(sp)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +81,7 @@ func TestRecomputeIsTheRecheck(t *testing.T) {
 	hb := sampleBody(t, pol)
 	hb.Key, hb.Handle, hb.SHA256 = "", "h_1", ""
 	hp := storedPlan(t, pol, hb)
-	_, _, hin, err := h.b.recompute(h.env)(hp)
+	_, _, hin, err := h.b.recompute(hp)
 	if err != nil || len(ticket.DiffInputs(hp.Binding.Inputs, hin)) != 0 {
 		t.Fatalf("handle plan: %v %v", hin, err)
 	}
@@ -92,7 +94,7 @@ func TestRecomputeNamesMovedInput(t *testing.T) {
 	old := storedPlan(t, pol, sampleBody(t, pol))
 	moved := sampleBody(t, pol)
 	moved.Key = "invoices/b.pdf"
-	_, hash, inputs, err := h.b.recompute(h.env)(storedPlan(t, pol, moved))
+	_, hash, inputs, err := h.b.recompute(storedPlan(t, pol, moved))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,16 +118,21 @@ func TestRecomputeStaleAndPolicy(t *testing.T) {
 	h := newHarness(t, "test.answer1")
 	pol := h.env.policy
 	sp := storedPlan(t, pol, sampleBody(t, pol))
+	// The policy in force is the one the console saved as approved.
 	changed := *pol
 	changed.P.MaxObjectBytes = 1
-	h.env.policy = &changed
-	fp, _, _, err := h.b.recompute(h.env)(sp)
+	if err := config.SaveApproved(product.P, h.state, config.ApprovedKey("", "samples"), &changed); err != nil {
+		t.Fatal(err)
+	}
+	fp, _, _, err := h.b.recompute(sp)
 	if err != nil || fp == sp.Binding.PolicyFP {
 		t.Fatalf("changed policy: fingerprint %s %v", fp, err)
 	}
-	h.env.policy = pol
+	if err := config.SaveApproved(product.P, h.state, config.ApprovedKey("", "samples"), pol); err != nil {
+		t.Fatal(err)
+	}
 	testenv.Install(t, h.store, "test.answer1", testenv.BuildPlugin(t, "answer0"), "Is it test.answer1?", 2)
-	if _, _, _, err := h.b.recompute(h.env)(sp); !errors.Is(err, plans.ErrStale) {
+	if _, _, _, err := h.b.recompute(sp); !errors.Is(err, plans.ErrStale) {
 		t.Fatalf("replaced plugin: %v", err)
 	}
 }

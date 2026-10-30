@@ -142,7 +142,7 @@ func (b *Backend) plan(ctx context.Context, req ipc.Request, env console.Env) ip
 		return Record{Base: base, PlanID: id, Key: pl.key, Handle: string(pl.handle), Plugins: pl.plugins}
 	}
 	sc := planScreen(pl.key, p.Key, p.Handle, shown, p.Intent, record)
-	if h := b.hubOf(env); h != nil {
+	if h := console.HubOf(env); h != nil {
 		return b.hubPlan(ctx, req, env, h, pol, pl, p, sc)
 	}
 	a := env.Approve(ctx, req.ID, sc)
@@ -165,7 +165,7 @@ func (b *Backend) run(ctx context.Context, req ipc.Request, env console.Env) ipc
 	if r := console.Decode(req, &p); r != nil {
 		return *r
 	}
-	if h := b.hubOf(env); h != nil {
+	if h := console.HubOf(env); h != nil {
 		return b.hubRun(ctx, req, env, h, p)
 	}
 	pl, ok := b.plans.take(p.PlanID, peerUID(ctx))

@@ -92,7 +92,7 @@ func runConsole(e env, args []string) int {
 		Quantum:   -1,
 		Sanitizer: b.Sanitizer(),
 		Isolation: h.isolation, Harden: h.harden, Ready: h.ready,
-		Hub: withHome(hub, h.home),
+		Hub: withHome(hub, h.home), OnHub: b.OnHub,
 	})
 	if err != nil && !errors.Is(err, context.Canceled) {
 		fmt.Fprintln(e.stderr, "lockfile console:", err)

@@ -309,3 +309,65 @@ func TestHubRollbackWithdraws(t *testing.T) {
 		t.Fatalf("a withdrawn ticket ran in hub mode: %s", r.Result)
 	}
 }
+
+// A renewal the human asks from the hub right after a start, before any
+// agent request, is checked: the console hands its hub the recompute
+// before it serves (console.Options.OnHub). The approval it renews is one
+// the console's clock refuses, aged out by the hub's request itself.
+func TestHubRenewFromHubAfterStart(t *testing.T) {
+	ck := &clock{t: time.Now().UTC().Truncate(time.Millisecond)}
+	c, hub, pub, ho := hubConsoleAt(t, map[string]string{"invoices/a.pdf": "%PDF-1.7 synthetic"}, ck.now)
+	w := dialWire(t, c.Socket)
+	who := ipc.Requester{Agent: "dev-1", Token: "tok-1"}
+	_, r := w.call(rpc.MethodPlan, rpc.PlanParams{Key: "invoices/a.pdf", Plugins: []string{"test.answer1"}, Requester: who})
+	old := pendingTicket(t, r)
+
+	rc := c.Restart(t, consoletest.Options{Hub: ho, Now: ck.now})
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Log(rc.IO.Output())
+		}
+	})
+	hub.DecideWith(old, ticket.Approved, "", nil, func(d *ticket.Decision) { d.At = ck.now().Add(2 * time.Hour) })
+	// No agent request on this console: only the hub's renew request. It
+	// is asked again until the decision has reached the console.
+	rid := hub.Request(old, ticket.RequestRenew, nil, func(q *ticket.HubRequest) { q.At = ck.now() })
+	var a struct{ Ticket, Error string }
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		if ans := hub.Answer(rid); ans != nil {
+			if err := json.Unmarshal(ans, &a); err == nil && a.Ticket != "" {
+				break
+			}
+			hub.Requeue(rid)
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the renew request was never answered with a ticket: %s", hub.Answer(rid))
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	rt, err := ticket.VerifyTicket(pub, hub.Ticket(a.Ticket))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := rt.Renews; r == nil || r.Of != old || r.Reason != ticket.RenewApprovalExpired || !r.Checked ||
+		len(r.Changes) != 1 || r.Changes[0].Input != "sha256" || r.Changes[0].Change != ticket.ChangeUnchecked {
+		t.Fatalf("renewal from the hub after a start: %+v", rt.Renews)
+	}
+	if !strings.Contains(rc.AuditLog(t), `"event":"renew"`) {
+		t.Error("the hub's renew request is not audited")
+	}
+	// The agent comes back with the old ticket: the same renewal, which
+	// runs once approved.
+	rw := dialWire(t, rc.Socket)
+	_, r = rw.call(rpc.MethodRun, rpc.RunParams{Ticket: old, Requester: who})
+	if n := pendingTicket(t, r); n != a.Ticket {
+		t.Fatalf("agent run of the old ticket: %s, renewal %s", n, a.Ticket)
+	}
+	hub.DecideWith(a.Ticket, ticket.Approved, "", nil, func(d *ticket.Decision) { d.At = ck.now() })
+	r = runDecided(t, rw, rpc.RunParams{Ticket: a.Ticket, Requester: who})
+	var res answers.Result
+	if r.Error != nil || json.Unmarshal(r.Result, &res) != nil || len(res.Answers) != 1 {
+		t.Fatalf("run: %+v %s", r.Error, r.Result)
+	}
+}
