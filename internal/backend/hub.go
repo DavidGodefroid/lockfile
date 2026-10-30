@@ -277,11 +277,11 @@ func (b *Backend) auditRenewal(ctx context.Context, env console.Env, old, n stri
 		}
 		code := hubclient.AnswerCode(err)
 		rec.Decision, rec.Reason, rec.Error = "refused", code, err.Error()
-		env.Println("ticket " + old + " expired and could not be asked again (" + code + "): " + env.Safe(err.Error()))
+		env.Println(console.Paint.Warn("ticket " + env.Safe(old) + " expired and could not be asked again (" + code + "): " + env.Safe(err.Error())))
 	case err != nil:
 		rec.Reason = "renewed by ticket " + n + ", not sent to the hub yet"
 		rec.Error = err.Error()
-		env.Println("ticket " + old + " expired: asked again as ticket " + n + ", not sent to the hub yet: " + env.Safe(err.Error()))
+		env.Println(console.Paint.Warn("ticket " + env.Safe(old) + " expired: asked again as ticket " + env.Safe(n) + ", not sent to the hub yet: " + env.Safe(err.Error())))
 	default:
 		rec.Reason = "renewed by ticket " + n
 	}

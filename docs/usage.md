@@ -182,7 +182,8 @@ plan again); the content cannot be checked without fetching it, so the renewal n
 it fetches again, as for any ticket; so is a plan whose object could not be fetched (its
 approval answers `fetch_failed`). A ticket that cannot be asked again answers a
 timeout ("ticket expired, and could not be asked again: plan the request again"); the console prints and audits why
-(`policy_changed`, `recheck_failed` for a plugin that changed, `not_renewable`). A console
+(`hubclient.AnswerCode`: e.g. `policy_changed`, `recheck_failed` for a plugin that changed,
+`not_renewable`). A console
 restarted without `--hub` withdraws the plans its hub mode left pending (it says so at start)
 and refuses a run of their ticket `withdrawn`: plan again. The next start with `--hub` tells the
 hub. The other hub flags `lock up` writes (`--devices-file`, `--require-device`,

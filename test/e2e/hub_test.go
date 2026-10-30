@@ -438,8 +438,23 @@ func TestHubRenewalThenContentChangedIsStale(t *testing.T) {
 	if r := runDecided(t, w, rpc.RunParams{Ticket: renewed, Requester: who}); r.Error == nil || r.Error.Message != string(answers.CodeStale) {
 		t.Fatalf("renewal run on changed content: %+v %s", r.Error, r.Result)
 	}
-	if after := strings.TrimPrefix(c.AuditLog(t), before); strings.Contains(after, `"event":"run","decision":"ok"`) {
-		t.Fatalf("a plugin ran on other bytes:\n%s", after)
+	// The run is refused before any plugin: its head record says stale,
+	// no plugin record follows.
+	refused := false
+	for _, l := range strings.Split(strings.TrimSpace(strings.TrimPrefix(c.AuditLog(t), before)), "\n") {
+		var rec struct{ Event, Decision, Code string }
+		if json.Unmarshal([]byte(l), &rec) != nil || rec.Event != "run" {
+			continue
+		}
+		switch rec.Decision {
+		case "plugin", "answered":
+			t.Fatalf("a plugin ran on other bytes: %s", l)
+		case "refused":
+			refused = refused || rec.Code == string(answers.CodeStale)
+		}
+	}
+	if !refused {
+		t.Fatalf("no refused stale run audited:\n%s", c.AuditLog(t))
 	}
 }
 
