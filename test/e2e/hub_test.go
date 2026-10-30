@@ -371,3 +371,131 @@ func TestHubRenewFromHubAfterStart(t *testing.T) {
 		t.Fatalf("run: %+v %s", r.Error, r.Result)
 	}
 }
+
+// expireAndRenew has the hub approve ticket old at a time the console's
+// clock is not at yet (unusable: lockfile's read_pii tickets expire this
+// way only), and runs it: the agent hears pending with its renewal.
+func expireAndRenew(t *testing.T, w *wire, hub *hubtest.Hub, ck *clock, old string, who ipc.Requester) string {
+	t.Helper()
+	hub.DecideWith(old, ticket.Approved, "", nil, func(d *ticket.Decision) { d.At = ck.now().Add(2 * time.Hour) })
+	n := pendingTicket(t, runUntil(t, w, rpc.RunParams{Ticket: old, Requester: who}, old))
+	if n == old {
+		t.Fatal("the same ticket")
+	}
+	return n
+}
+
+// A plan whose object could not be fetched has no sha256 input: its
+// renewal names the content unchecked all the same (never one click), and
+// approved, it answers fetch_failed.
+func TestHubRenewUnfetchedIsUnchecked(t *testing.T) {
+	ck := &clock{t: time.Now().UTC().Truncate(time.Millisecond)}
+	c, hub, pub, _ := hubConsoleAt(t, map[string]string{"invoices/a.pdf": "v1"}, ck.now)
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Log(c.IO.Output())
+		}
+	})
+	w := dialWire(t, c.Socket)
+	who := ipc.Requester{Agent: "dev-1", Token: "tok-1"}
+	_, r := w.call(rpc.MethodPlan, rpc.PlanParams{Key: "invoices/missing.pdf", Plugins: []string{"test.answer1"}, Requester: who})
+	old := pendingTicket(t, r)
+	renewed := expireAndRenew(t, w, hub, ck, old, who)
+	rt, err := ticket.VerifyTicket(pub, hub.Ticket(renewed))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := rt.Renews; r == nil || r.Of != old || !r.Checked || r.Unchanged() ||
+		len(r.Changes) != 1 || r.Changes[0].Input != "sha256" || r.Changes[0].Change != ticket.ChangeUnchecked {
+		t.Fatalf("renewal of an unfetched plan: %+v", rt.Renews)
+	}
+	hub.DecideWith(renewed, ticket.Approved, "", nil, func(d *ticket.Decision) { d.At = ck.now() })
+	if r := runDecided(t, w, rpc.RunParams{Ticket: renewed, Requester: who}); r.Error == nil || r.Error.Message != string(answers.CodeFetchFailed) {
+		t.Fatalf("run of the renewal: %+v %s", r.Error, r.Result)
+	}
+}
+
+// The content changes after a renewal was asked (its sha256 unchecked):
+// approved, the renewal's run fetches again and refuses the other bytes
+// stale before any plugin.
+func TestHubRenewalThenContentChangedIsStale(t *testing.T) {
+	ck := &clock{t: time.Now().UTC().Truncate(time.Millisecond)}
+	c, hub, _, _ := hubConsoleAt(t, map[string]string{"invoices/a.pdf": "v1"}, ck.now)
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Log(c.IO.Output())
+		}
+	})
+	w := dialWire(t, c.Socket)
+	who := ipc.Requester{Agent: "dev-1", Token: "tok-1"}
+	_, r := w.call(rpc.MethodPlan, rpc.PlanParams{Key: "invoices/a.pdf", Plugins: []string{"test.answer1"}, Requester: who})
+	renewed := expireAndRenew(t, w, hub, ck, pendingTicket(t, r), who)
+	if err := os.WriteFile(filepath.Join(c.Root, "invoices", "a.pdf"), []byte("v2, another file"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	before := c.AuditLog(t)
+	hub.DecideWith(renewed, ticket.Approved, "", nil, func(d *ticket.Decision) { d.At = ck.now() })
+	if r := runDecided(t, w, rpc.RunParams{Ticket: renewed, Requester: who}); r.Error == nil || r.Error.Message != string(answers.CodeStale) {
+		t.Fatalf("renewal run on changed content: %+v %s", r.Error, r.Result)
+	}
+	// The run is refused before any plugin: its head record says stale,
+	// no plugin record follows.
+	refused := false
+	for _, l := range strings.Split(strings.TrimSpace(strings.TrimPrefix(c.AuditLog(t), before)), "\n") {
+		var rec struct{ Event, Decision, Code string }
+		if json.Unmarshal([]byte(l), &rec) != nil || rec.Event != "run" {
+			continue
+		}
+		switch rec.Decision {
+		case "plugin", "answered":
+			t.Fatalf("a plugin ran on other bytes: %s", l)
+		case "refused":
+			refused = refused || rec.Code == string(answers.CodeStale)
+		}
+	}
+	if !refused {
+		t.Fatalf("no refused stale run audited:\n%s", c.AuditLog(t))
+	}
+}
+
+// A policy tightened on disk (approved at a restart) between the plan and
+// its expiry: the renewal is refused policy_changed (plan again). The
+// agent hears the outcome only; the console prints the cause and audits
+// it.
+func TestHubRenewPolicyChanged(t *testing.T) {
+	ck := &clock{t: time.Now().UTC().Truncate(time.Millisecond)}
+	c, hub, _, ho := hubConsoleAt(t, map[string]string{"invoices/a.pdf": "v1"}, ck.now)
+	w := dialWire(t, c.Socket)
+	who := ipc.Requester{Agent: "dev-1", Token: "tok-1"}
+	_, r := w.call(rpc.MethodPlan, rpc.PlanParams{Key: "invoices/a.pdf", Plugins: []string{"test.answer1"}, Requester: who})
+	old := pendingTicket(t, r)
+
+	f, err := os.OpenFile(c.ConfigPath(), os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString("max_object_bytes = \"1KiB\"\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	rc := c.Restart(t, consoletest.Options{Answers: []string{"y"}, Hub: ho, Now: ck.now})
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Log(rc.IO.Output())
+		}
+	})
+	rw := dialWire(t, rc.Socket)
+	hub.DecideWith(old, ticket.Approved, "", nil, func(d *ticket.Decision) { d.At = ck.now().Add(2 * time.Hour) })
+	r = runUntil(t, rw, rpc.RunParams{Ticket: old, Requester: who}, old)
+	if r.Error == nil || r.Error.Code != ipc.CodeTimeout || strings.Contains(r.Error.Message, "policy") {
+		t.Fatalf("renewal across a policy change: %+v %s", r.Error, r.Result)
+	}
+	if out := rc.IO.Output(); !strings.Contains(out, "could not be asked again (policy_changed)") {
+		t.Fatalf("the cause is not printed:\n%s", out)
+	}
+	if log := rc.AuditLog(t); !strings.Contains(log, `"reason":"policy_changed"`) {
+		t.Fatalf("the cause is not audited:\n%s", log)
+	}
+}

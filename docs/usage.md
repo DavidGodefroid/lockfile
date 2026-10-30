@@ -175,11 +175,15 @@ use (lockkit reports it expired; lockfile's `read_pii` tickets have no TTL, so t
 decision the console's clock refuses) is not a timeout: `lockfile run TICKET` and
 `lockfile_run` answer `pending` with a new ticket for the same plan, which the human approves
 again on lockhub, shown which plan inputs moved (by name: `profile`, `key`, `handle`,
-`sha256`, `plugins`, `pins`; never values). Run the new ticket once decided. The console
+`sha256`, `plugins`, `pins`, `unfetched`; never values). Run the new ticket once decided. The console
 re-checks the policy and the plugins before it asks again (a changed policy is not renewed:
 plan again); the content cannot be checked without fetching it, so the renewal names
 `sha256` `unchecked` (never shown as unchanged, never one click) and the run checks it when
-it fetches again, as for any ticket. A console
+it fetches again, as for any ticket; so is a plan whose object could not be fetched (its
+approval answers `fetch_failed`). A ticket that cannot be asked again answers a
+timeout ("ticket expired, and could not be asked again: plan the request again"); the console prints and audits why
+(`hubclient.AnswerCode`: e.g. `policy_changed`, `recheck_failed` for a plugin that changed,
+`not_renewable`). A console
 restarted without `--hub` withdraws the plans its hub mode left pending (it says so at start)
 and refuses a run of their ticket `withdrawn`: plan again. The next start with `--hub` tells the
 hub. The other hub flags `lock up` writes (`--devices-file`, `--require-device`,

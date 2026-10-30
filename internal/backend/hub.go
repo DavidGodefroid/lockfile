@@ -155,9 +155,16 @@ func (b *Backend) hubRun(ctx context.Context, req ipc.Request, env console.Env, 
 			// Decision H1: the ticket (pending past its TTL, or approved
 			// but the approval aged) is asked again, re-checked through
 			// the recompute, and the agent hears pending with the new one.
-			resp := h.RenewResp(ctx, req.ID, p.Ticket, caller)
-			b.auditRenewal(ctx, env, p.Ticket, resp)
-			return resp
+			n, rerr := h.Client.Renew(ctx, h.Store, p.Ticket, caller)
+			b.auditRenewal(ctx, env, p.Ticket, n, rerr)
+			if n == "" {
+				// The agent hears the outcome only; the cause is audited
+				// and printed here.
+				return console.ErrResp(req.ID, ipc.CodeTimeout, "ticket expired, and could not be asked again: plan the request again")
+			}
+			// Pushed or not (hub down), the renewal is pending: it goes
+			// out later.
+			return console.PendingResp(req.ID, product.P.Name, console.Pending{Ticket: n, Instance: h.Instance})
 		}
 		return hubRefusal(req.ID, p.Ticket, h.Instance, err)
 	}
@@ -238,11 +245,14 @@ func (b *Backend) recompute(sp *plans.Plan) (string, string, map[string]string, 
 	if err != nil {
 		return "", "", nil, err
 	}
-	_, fp, hash, inputs, err := b.hubCheck(pol, sp)
+	body, fp, hash, inputs, err := b.hubCheck(pol, sp)
 	if err != nil {
 		return "", "", nil, err
 	}
-	if _, ok := inputs["sha256"]; ok {
+	// A plan whose object could not be fetched has no sha256 input: it is
+	// named unchecked all the same (its run answers fetch_failed, or would
+	// hash content nobody saw), never one click.
+	if _, ok := inputs["sha256"]; ok || body.Unfetched {
 		inputs["sha256"] = ticket.UncheckedInput
 	}
 	return fp, hash, inputs, nil
@@ -254,18 +264,26 @@ func (b *Backend) recompute(sp *plans.Plan) (string, string, map[string]string, 
 func (b *Backend) OnHub(h *console.Hub) { h.Client.SetRecompute(b.recompute) }
 
 // auditRenewal records the renewal of expired ticket old by the agent's
-// run: the new ticket, or that it could not be asked again.
-func (b *Backend) auditRenewal(ctx context.Context, env console.Env, old string, resp ipc.Response) {
+// run: the new ticket n, or why it could not be asked again (err: the
+// policy or a plugin changed, or the ticket is not renewable), which the
+// console prints too.
+func (b *Backend) auditRenewal(ctx context.Context, env console.Env, old, n string, err error) {
 	rec := Record{Base: stamp(ctx, b.o.Profile, audit.EventRenew, "renewed")}
 	rec.Approval, rec.Ticket = "hub", old
-	var pr rpc.PlanResult
-	if resp.Error != nil || json.Unmarshal(resp.Result, &pr) != nil || pr.Ticket == "" {
-		rec.Decision = "refused"
-		if resp.Error != nil {
-			rec.Error = resp.Error.Message
+	switch {
+	case n == "":
+		if err == nil {
+			err = errors.New("no renewal")
 		}
-	} else {
-		rec.Reason = "renewed by ticket " + pr.Ticket
+		code := hubclient.AnswerCode(err)
+		rec.Decision, rec.Reason, rec.Error = "refused", code, err.Error()
+		env.Println(console.Paint.Warn("ticket " + env.Safe(old) + " expired and could not be asked again (" + code + "): " + env.Safe(err.Error())))
+	case err != nil:
+		rec.Reason = "renewed by ticket " + n + ", not sent to the hub yet"
+		rec.Error = err.Error()
+		env.Println(console.Paint.Warn("ticket " + env.Safe(old) + " expired: asked again as ticket " + env.Safe(n) + ", not sent to the hub yet: " + env.Safe(err.Error())))
+	default:
+		rec.Reason = "renewed by ticket " + n
 	}
 	env.Audit(rec)
 }
