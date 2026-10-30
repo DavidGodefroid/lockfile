@@ -330,6 +330,10 @@ func (c *Console) launch(t testing.TB, o Options) {
 	}
 }
 
+// ConfigPath is the console's config file (a test changes the policy on
+// disk, then restarts).
+func (c *Console) ConfigPath() string { return c.cfg }
+
 // AuditLog is the console's audit log as it is on disk.
 func (c *Console) AuditLog(t testing.TB) string {
 	t.Helper()

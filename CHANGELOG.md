@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Hub mode, renewals (#31): a plan whose object could not be fetched (`unfetched`, no
+  `sha256` input) is renewed with `sha256` `unchecked` too, never shown checked and
+  unchanged. A run whose expired ticket cannot be asked again prints and audits the cause
+  (`reason`, lockkit's `hubclient.AnswerCode`: e.g. `policy_changed`, `recheck_failed`,
+  `not_renewable`; the agent still hears the
+  outcome only); a renewal stored but not sent to the hub yet says so. `docs/usage.md` lists
+  `unfetched` among the plan inputs. New end-to-end tests: an unfetched plan's renewal, a
+  renewal whose content changes before its approval (`stale`), a policy tightened on disk
+  (`policy_changed`).
 - `lockfile console`'s usage and help list `--hub-plain-http` (the flag `lock up` passes for
   its `http://lockhub:8443`); `docs/usage.md` says when it is needed.
 - Site: the plugin sandbox hardening the site still called "coming in v0.2.1" shipped in
