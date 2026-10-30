@@ -54,6 +54,11 @@ jobs:
         run: |
           docker build -t lockfile:e2e --build-arg VERSION=ci .
           docker build -t lockfile:e2e-allowed --build-arg VERSION=ci --build-arg ALLOWED_UIDS=4242 .
+      - name: ALLOWED_UIDS refuses root, the console account, nobody, bad lists
+        run: |
+          for bad in '1,,2' '0' '1000,0' '10031' '007' '65534' 'x'; do
+            if docker build --build-arg ALLOWED_UIDS="$bad" . >/dev/null 2>&1; then echo "ALLOWED_UIDS=$bad accepted" >&2; exit 1; fi
+          done
       - name: sandbox tests in a container under seccomp.json
         # The build stage's image: the same Go, the same kernel interfaces
         # the console's container gets.

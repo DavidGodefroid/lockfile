@@ -188,11 +188,14 @@ func TestConsoleHubFlagsAndHubKey(t *testing.T) {
 // --allowed-uids is checked before anything starts, and reaches the
 // isolation checks: without a separated setup it is refused there.
 func TestConsoleAllowedUIDs(t *testing.T) {
-	for _, bad := range []string{"0", "007", "1,,2", "x"} {
+	for _, bad := range []string{"0", "007", "1,,2", "x", "65534"} {
 		code, _, errText := runArgs(t, "", "console", "--profile", "samples", "--allowed-uids", bad)
 		if code != product.ExitUsage || !strings.Contains(errText, "--allowed-uids") {
 			t.Errorf("--allowed-uids %q: exit %d: %s", bad, code, errText)
 		}
+	}
+	if code, _, errText := runArgs(t, "", "console", "--profile", "samples", "--allowed-uids", "1000", "--allowed-uids", "1001"); code != product.ExitUsage {
+		t.Errorf("--allowed-uids twice: exit %d: %s", code, errText)
 	}
 	cfg := filepath.Join(t.TempDir(), "config.toml")
 	if err := os.WriteFile(cfg, []byte("[profiles.samples]\nsource = \"local\"\npath = \"/tmp\"\n"), 0o600); err != nil {

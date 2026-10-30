@@ -22,7 +22,7 @@ func TestParseAllowedUIDs(t *testing.T) {
 		"1000":           {1000},
 		"1000,1001":      {1000, 1001},
 		"1001,1001":      {1001},
-		"4294967294":     {4294967294},
+		"2147483647":     {2147483647},
 		"10032,1000,999": {10032, 1000, 999},
 	} {
 		got, err := parseAllowedUIDs(in)
@@ -30,7 +30,7 @@ func TestParseAllowedUIDs(t *testing.T) {
 			t.Errorf("parseAllowedUIDs(%q) = %v, %v; want %v", in, got, err, want)
 		}
 	}
-	for _, bad := range []string{"0", "007", "1000,0", "1,,2", ",1", "1,", "-1", "+1", " 1", "1 ", "a", "4294967295", "99999999999999999999"} {
+	for _, bad := range []string{"0", "007", "1000,0", "1,,2", ",1", "1,", "-1", "+1", " 1", "1 ", "a", "65534", "4294967295", "99999999999999999999"} {
 		if got, err := parseAllowedUIDs(bad); err == nil {
 			t.Errorf("parseAllowedUIDs(%q) = %v, want an error", bad, got)
 		}

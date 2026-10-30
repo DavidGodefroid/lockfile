@@ -56,6 +56,9 @@ ARG ALLOWED_UIDS=""
 # /srv/lockfile holds the read-only mounts of local sources: closed to
 # every account but the console's.
 RUN case "$ALLOWED_UIDS" in *[!0-9,]*|,*|*,|*,,*) echo "ALLOWED_UIDS: comma-separated uids, got '$ALLOWED_UIDS'" >&2; exit 1;; esac \
+ && for u in $(echo "$ALLOWED_UIDS" | tr ',' ' '); do \
+      case "$u" in 0*|10031|65534) echo "ALLOWED_UIDS: $u is root, the console account, nobody (or has a leading zero)" >&2; exit 1;; esac; \
+    done \
  && apk add --no-cache ca-certificates \
  && addgroup -S -g 10030 lockfile-clients \
  && adduser -D -u 10031 -s /sbin/nologin -g "lockfile console" lockfile \

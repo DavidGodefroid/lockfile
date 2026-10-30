@@ -43,14 +43,15 @@ func runConsole(e env, args []string) int {
 	fs.SetOutput(io.Discard)
 	profile := fs.String("profile", "", "profile to serve")
 	auto := fs.Bool("auto", false, "approve requests without a prompt (never on production, never for unofficial plugins)")
-	allowed := fs.String("allowed-uids", "", "uids that may connect besides lockfile-clients' members (an agent in a container of its own)")
+	var allowed onceFlag
+	fs.Var(&allowed, "allowed-uids", "uids that may connect besides lockfile-clients' members (an agent in a container of its own)")
 	var hub console.HubOptions
 	hub.Register(fs)
 	if err := fs.Parse(args); err != nil || *profile == "" || fs.NArg() != 0 {
 		fmt.Fprintln(e.stderr, "usage: lockfile console --profile NAME [--allowed-uids UID,...] [--auto | --hub URL [--hub-plain-http] --hub-key-file FILE --instance NAME]")
 		return product.ExitUsage
 	}
-	uids, err := parseAllowedUIDs(*allowed)
+	uids, err := parseAllowedUIDs(allowed.v)
 	if err != nil {
 		fmt.Fprintln(e.stderr, "lockfile console:", err)
 		return product.ExitUsage

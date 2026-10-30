@@ -2,13 +2,17 @@
 
 ## Unreleased
 
+- The `ALLOWED_UIDS` build argument refuses root (0), leading zeros, the console's uid
+  (10031) and 65534 (nobody), as lockmq's does (it took `0`, which served root peers).
+- `lockfile doctor` as a uid with no account here (an agent in a container of its own)
+  warns that a console serves it only when started with `--allowed-uids`, instead of failing.
 - `lockfile console --allowed-uids UID,...` (lea#226): these uids may connect besides the
   members of `lockfile-clients`, as `allowed_uids` of the image's `system.toml` (the
   `ALLOWED_UIDS` build argument) does, for that console only, with the release image
   unchanged: an agent in a container of its own whose uid has no account in the console's
   image (lea's agents run as the host user's uid). Set only by whoever starts the console
-  (the launcher passes it on, `lock up` passes a lock's `allowed_uids`); root, leading zeros
-  and the console's own uid are refused; every isolation check sees the uids (a session or
+  (the human: the launcher passes it on, `lock up` of lockhub v0.2.4 a lock's reviewed
+  `allowed_uids`); root, leading zeros, 65534 (nobody) and the console's own uid are refused; every isolation check sees the uids (a session or
   terminal of one is the agent's), and the console prints them at start.
 
 ## v0.5.0
