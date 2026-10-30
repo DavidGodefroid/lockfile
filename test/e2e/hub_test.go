@@ -175,8 +175,6 @@ type clock struct {
 
 func (c *clock) now() time.Time { c.mu.Lock(); defer c.mu.Unlock(); return c.t }
 
-func (c *clock) add(d time.Duration) { c.mu.Lock(); c.t = c.t.Add(d); c.mu.Unlock() }
-
 // runUntil runs p until its answer is not pending on ticket tk (the
 // decision arrived, or the ticket was asked again).
 func runUntil(t *testing.T, w *wire, p rpc.RunParams, tk string) ipc.Response {
