@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/BurntSushi/toml v1.6.0
-	github.com/DavidGodefroid/lockkit v0.2.2-0.20261029232003-9ce8f35195c9 // TODO: bump to lockkit v0.3.0 once tagged
+	github.com/DavidGodefroid/lockkit v0.2.2-0.20261030000321-0383067c4a9a // TODO: bump to lockkit v0.3.0 once tagged
 	github.com/aws/aws-sdk-go-v2 v1.47.3
 	github.com/aws/aws-sdk-go-v2/credentials v1.20.9
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.3
