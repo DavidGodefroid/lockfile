@@ -13,7 +13,7 @@
   plugin. Decisions are audited with the ticket, approver, facade and hub signature.
   `lockfile hub-key --instance NAME` prints the instance key to pin. Plan and run carry the
   agent's lea name and token (`requester`).
-- Pins lockkit at a pre-release commit (lockkit#52, hub/console-hub) until v0.3.0.
+- Builds on lockkit v0.3.1 (hub support), was a pre-release commit.
 
 ### Plans bound to a content hash (groundwork for hub mode)
 
