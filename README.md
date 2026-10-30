@@ -42,7 +42,7 @@ no answer. No byte of the file, its name, size, type or path ever reaches the
 agent, and every plan is approved by the human first.
 
 > [!NOTE]
-> **Pre-release** (`v0.2.x`). Deployed with Docker; the console needs a
+> **Pre-release** (`v0.x`). Deployed with Docker; the console needs a
 > Linux kernel with Landlock. See [Status](#status).
 
 ## Why lockfile?
@@ -356,8 +356,10 @@ volumes keep its state.
 
 ## Status
 
-v0.2: console, agent CLI, MCP server and agent wiring on
-[lockkit](https://github.com/DavidGodefroid/lockkit), deployed with Docker.
+Console, agent CLI, MCP server and agent wiring on
+[lockkit](https://github.com/DavidGodefroid/lockkit), deployed with Docker; hub
+mode (plans decided on [lockhub](https://github.com/DavidGodefroid/lockhub), in
+`lock approve` or another facade) since v0.4.0.
 The console needs a Linux kernel with Landlock and seccomp (they sandbox the
 plugins).
 

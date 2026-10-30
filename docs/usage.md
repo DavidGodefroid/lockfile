@@ -104,7 +104,7 @@ The official marketplace's signer is pinned in the binary. An unofficial marketp
 unescaped `.` or does not pin `HOST/OWNER/REPO/` (other signers would match). It needs
 its name typed when added (in a terminal: a typed name is never read from a pipe, nor the
 plugin name `plugin update` asks for), is flagged on every approval screen and in every agent result,
-and never runs in auto mode. Keyless signers only in v0.2 (`--public-key` is refused).
+and never runs in auto mode. Keyless signers only (`--public-key` is refused).
 
 A running console sees an installed plugin or an added marketplace as a policy loosening:
 it applies it only after `:review` in the console.

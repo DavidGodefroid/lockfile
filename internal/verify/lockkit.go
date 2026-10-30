@@ -8,8 +8,8 @@ import (
 )
 
 // ErrPublicKeyRoot refuses a public-key trust root: lockkit's signature
-// check (update.VerifyFiles, v0.2.1) is keyless only.
-var ErrPublicKeyRoot = errors.New("verify: public-key trust roots need lockkit support (not in lockkit v0.2.1)")
+// check (update.VerifyFiles) is keyless only.
+var ErrPublicKeyRoot = errors.New("verify: public-key trust roots need lockkit support (not in lockkit yet)")
 
 // ErrCosignMissing means cosign is not installed: nothing can be verified,
 // so nothing is installed.

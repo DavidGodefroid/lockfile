@@ -100,7 +100,7 @@ lockfile plugin remove NAME</code></pre>
   --identity-regexp '^https://github\.com/acme/lockfile-plugins/\.github/workflows/release\.yml@refs/tags/'
 lockfile marketplace list
 lockfile marketplace remove acme</code></pre>
-  <p class="prose">An unofficial marketplace publishes the same index format, signed keyless by its own CI identity. It needs its name typed when added, is flagged in red on every approval screen and in every agent result (<code>warning: unofficial_marketplace</code>), and never runs in auto mode. Keyless signers only in v0.2: <code>--public-key</code> is refused.</p>
+  <p class="prose">An unofficial marketplace publishes the same index format, signed keyless by its own CI identity. It needs its name typed when added, is flagged in red on every approval screen and in every agent result (<code>warning: unofficial_marketplace</code>), and never runs in auto mode. Keyless signers only: <code>--public-key</code> is refused.</p>
 </section>
 
 <section aria-labelledby="write">
@@ -159,7 +159,7 @@ limits = { cpu_s = 20, memory = "512MiB", timeout_s = 30 }</code></pre>
         <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/security-model.md">Security model (full)</a></li>
         <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/plugin-contract.md">Plugin contract</a></li>
       </ul>
-      <p>Pre-release (<code>v0.2.x</code>). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
+      <p>Pre-release (<code>v0.x</code>). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
       <p class="family-line">Part of the lock family: <a href="https://github.com/DavidGodefroid/locksql">locksql</a> · <a href="https://github.com/DavidGodefroid/lockmq">lockmq</a> · <a href="https://github.com/DavidGodefroid/lockfile">lockfile</a> · <a href="https://github.com/DavidGodefroid/lockhttp">lockhttp</a> · <a href="https://github.com/DavidGodefroid/lockkit">lockkit</a></p>
     </div>
   </footer>

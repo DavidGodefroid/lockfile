@@ -43,7 +43,7 @@ func marketplaceAdd(e env, args []string) int {
 	index := fs.String("index", "", "https URL of the signed index.json")
 	identity := fs.String("identity-regexp", "", "certificate identity of the signing workflow, ^https://…")
 	issuer := fs.String("issuer", "https://token.actions.githubusercontent.com", "OIDC issuer of the signing certificates")
-	key := fs.String("public-key", "", "public key (refused: lockkit v0.2.1 checks keyless signatures only)")
+	key := fs.String("public-key", "", "public key (refused: lockkit checks keyless signatures only)")
 	var pos []string
 	for {
 		if err := fs.Parse(args); err != nil {
