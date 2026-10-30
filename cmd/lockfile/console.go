@@ -19,7 +19,7 @@ import (
 )
 
 func init() {
-	commands["console"] = command{human: true, help: "serve a profile to agents (run in the lockfile account) [--hub URL --hub-key-file F --instance N]", run: runConsole}
+	commands["console"] = command{human: true, help: "serve a profile to agents (run in the lockfile account) [--hub URL [--hub-plain-http] --hub-key-file F --instance N]", run: runConsole}
 	commands["hub-key"] = command{human: true, help: "hub-key --instance NAME: print the instance key for lockhub to pin (lockfile account)", run: runHubKey}
 }
 
@@ -46,7 +46,7 @@ func runConsole(e env, args []string) int {
 	var hub console.HubOptions
 	hub.Register(fs)
 	if err := fs.Parse(args); err != nil || *profile == "" || fs.NArg() != 0 {
-		fmt.Fprintln(e.stderr, "usage: lockfile console --profile NAME [--auto | --hub URL --hub-key-file FILE --instance NAME]")
+		fmt.Fprintln(e.stderr, "usage: lockfile console --profile NAME [--auto | --hub URL [--hub-plain-http] --hub-key-file FILE --instance NAME]")
 		return product.ExitUsage
 	}
 	h := consoleHooks{}

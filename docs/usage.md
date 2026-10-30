@@ -112,7 +112,7 @@ it applies it only after `:review` in the console.
 ## The console
 
 ```sh
-lockfile console --profile docs [--auto | --hub URL --hub-key-file FILE --instance NAME]
+lockfile console --profile docs [--auto | --hub URL [--hub-plain-http] --hub-key-file FILE --instance NAME]
 ```
 
 Run in its container ([docker.md](docker.md#run-the-console)), it checks the isolation (the
@@ -129,7 +129,9 @@ lockfile audit [--since 24h] [--json]           # console account only
 ```
 
 **Hub mode.** With `--hub URL --hub-key-file FILE --instance NAME` (all three, never with
-`--auto`; `lock up` writes them), plans are decided on lockhub, never on this terminal; the
+`--auto`; `lock up` writes them, with `--hub-plain-http` for its `http://lockhub:8443` on the
+hub's own network: an `http://` URL other than loopback is refused without it, and must name a
+service without a dot or a private address), plans are decided on lockhub, never on this terminal; the
 policy and `:review` stay here. `file.plan` fetches the object at once, hashes it, and asks
 the hub with a signed ticket (an object that cannot be fetched is not told to the agent then:
 the plan goes to the hub, the screen says so, and an approval answers `fetch_failed`; the plan

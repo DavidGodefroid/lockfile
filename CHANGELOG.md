@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- `lockfile console`'s usage and help list `--hub-plain-http` (the flag `lock up` passes for
+  its `http://lockhub:8443`); `docs/usage.md` says when it is needed.
+- Site: the plugin sandbox hardening the site still called "coming in v0.2.1" shipped in
+  v0.3.0 (System V IPC, POSIX message queues and signals to other processes denied; `/proc`
+  hidden or a private pid namespace required); the security page and FAQ say so.
+
 ## v0.4.0
 
 Hub mode: plans can be decided on lockhub instead of the console's own prompt.
