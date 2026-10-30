@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.4.0
+
+Hub mode: plans can be decided on lockhub instead of the console's own prompt.
+
 ### Hub mode
 
 - `lockfile console --hub URL --hub-key-file FILE --instance NAME`: plans are decided on
@@ -12,8 +16,12 @@
   policy and the plugins, fetches again and refuses changed bytes `stale` before any
   plugin. Decisions are audited with the ticket, approver, facade and hub signature.
   `lockfile hub-key --instance NAME` prints the instance key to pin. Plan and run carry the
-  agent's lea name and token (`requester`).
-- Builds on lockkit v0.3.1 (hub support), was a pre-release commit.
+  agent's lea name and the hash of its token (`requester`; the raw token stays in the
+  agent's process, lockkit#71).
+- Builds on lockkit v0.3.1 (was v0.2.1). An `http://` hub other than a
+  loopback address needs `--hub-plain-http` and must be a service name without a dot or a
+  private address; redirects from the hub are refused and the hub state file must be private
+  (lockkit#72).
 
 ### Plans bound to a content hash (groundwork for hub mode)
 
