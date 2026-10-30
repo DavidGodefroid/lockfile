@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- `lockfile console`'s usage and help list `--hub-plain-http` (the flag `lock up` passes for
+  its `http://lockhub:8443`); `docs/usage.md` says when it is needed.
+- Site: the plugin sandbox hardening the site still called "coming in v0.2.1" shipped in
+  v0.3.0 (System V IPC, POSIX message queues and signals to other processes denied; `/proc`
+  hidden from other accounts, or a private pid namespace); the security page says so, the FAQ
+  no longer lists it.
+- Docs and site: no stale version claims left (the `v0.2.x` pre-release banners and footers,
+  `plugin_yanked` "not produced yet" — it is since v0.3.0 —, "keyless signers only in v0.2",
+  "lockkit v0.2.1" in the public-key refusal messages); the README status mentions hub mode.
+  The seccomp lists name `execveat` and `memfd_create` in place of a "second `execve`" that no
+  filter denies (Landlock lets only the plugin's own binary execute).
+
 ## v0.4.0
 
 Hub mode: plans can be decided on lockhub instead of the console's own prompt.

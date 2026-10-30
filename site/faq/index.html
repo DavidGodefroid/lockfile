@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>lockfile FAQ — short answers</title>
-  <meta name="description" content="Short answers about lockfile: sources, platforms, agents, what the agent sees, plugins, timing, the audit log and what v0.2 does not do yet.">
+  <meta name="description" content="Short answers about lockfile: sources, platforms, agents, what the agent sees, plugins, timing, the audit log and what it does not do yet.">
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
@@ -12,7 +12,7 @@
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="lockfile">
   <meta property="og:title" content="lockfile FAQ — short answers">
-  <meta property="og:description" content="Short answers about lockfile: sources, platforms, agents, what the agent sees, plugins, timing, the audit log and what v0.2 does not do yet.">
+  <meta property="og:description" content="Short answers about lockfile: sources, platforms, agents, what the agent sees, plugins, timing, the audit log and what it does not do yet.">
   <meta property="og:url" content="https://davidgodefroid.github.io/lockfile/faq/">
   <meta property="og:image" content="https://davidgodefroid.github.io/lockfile/assets/og.png">
   <meta property="og:image:type" content="image/png">
@@ -22,7 +22,7 @@
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="lockfile FAQ — short answers">
-  <meta name="twitter:description" content="Short answers about lockfile: sources, platforms, agents, what the agent sees, plugins, timing, the audit log and what v0.2 does not do yet.">
+  <meta name="twitter:description" content="Short answers about lockfile: sources, platforms, agents, what the agent sees, plugins, timing, the audit log and what it does not do yet.">
   <meta name="twitter:image" content="https://davidgodefroid.github.io/lockfile/assets/og.png">
   <meta name="twitter:image:alt" content="lockfile — Your AI asks about the file. It never reads it.">
   <link rel="icon" href="../assets/logo.svg" type="image/svg+xml">
@@ -107,8 +107,8 @@
   <p>Yes: a plugin reads the file from fd 3 and writes <code>1</code> or <code>0</code>. Submit it to the official marketplace, or publish your own marketplace signed by your CI identity. <a href="../plugins/#write">Write a plugin</a>.</p>
 </section>
 <section aria-labelledby="not-yet">
-  <h2 id="not-yet">What does v0.2 not do yet?</h2>
-  <p>The plugin sandbox is not yet complete: v0.2.1 denies SysV IPC and message queues and requires <code>/proc</code> mounted with <code>hidepid=invisible</code> (<a href="../security/#upcoming">details</a>). There is no onboarding wizard (<code>setup</code>), no macOS console, and no public-key trust roots for unofficial marketplaces (keyless signers only). These are on the roadmap, not in the release.</p>
+  <h2 id="not-yet">What does lockfile not do yet?</h2>
+  <p>There is no onboarding wizard (<code>setup</code>), no macOS console, and no public-key trust roots for unofficial marketplaces (keyless signers only). These are on the roadmap, not in the release.</p>
 </section>
 <section aria-labelledby="family">
   <h2 id="family">How does it relate to locksql and lockmq?</h2>
@@ -127,7 +127,7 @@
         <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/security-model.md">Security model (full)</a></li>
         <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/plugin-contract.md">Plugin contract</a></li>
       </ul>
-      <p>Pre-release (<code>v0.2.x</code>). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
+      <p>Pre-release (<code>v0.x</code>). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
       <p class="family-line">Part of the lock family: <a href="https://github.com/DavidGodefroid/locksql">locksql</a> · <a href="https://github.com/DavidGodefroid/lockmq">lockmq</a> · <a href="https://github.com/DavidGodefroid/lockfile">lockfile</a> · <a href="https://github.com/DavidGodefroid/lockhttp">lockhttp</a> · <a href="https://github.com/DavidGodefroid/lockkit">lockkit</a></p>
     </div>
   </footer>

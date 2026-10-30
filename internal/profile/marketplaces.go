@@ -45,8 +45,8 @@ func (t Trust) Marketplace() marketplace.Marketplace {
 var marketplaceName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,39}$`)
 
 // ErrPublicKeyRoot refuses a public-key trust root: lockkit's signature
-// check is keyless only (v0.2.1).
-var ErrPublicKeyRoot = errors.New("public-key trust roots need lockkit support (not in lockkit v0.2.1): use a keyless identity_regexp and oidc_issuer")
+// check is keyless only.
+var ErrPublicKeyRoot = errors.New("public-key trust roots need lockkit support (not in lockkit yet): use a keyless identity_regexp and oidc_issuer")
 
 // CheckMarketplace validates an unofficial marketplace entry.
 func CheckMarketplace(r RawMarketplace) (Trust, error) { return parseMarketplace(r) }

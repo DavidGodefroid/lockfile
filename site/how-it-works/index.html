@@ -159,7 +159,7 @@ lockfile release f_8Kq2xR</code></pre>
   <tr><td><code>E_TOO_MANY_PLUGINS</code></td><td>rewrite</td><td>the plan would pass <code>max_plugins_per_handle</code></td></tr>
   <tr><td><code>E_HANDLE_EXPIRED</code></td><td>rewrite</td><td>the handle expired or was released; plan again with the key</td></tr>
   <tr><td><code>E_PLUGIN_NOT_INSTALLED</code></td><td>ask the user</td><td>the human must install it</td></tr>
-  <tr><td><code>E_PLUGIN_YANKED</code></td><td>ask the user</td><td>the marketplace withdrew that version (reserved: not produced yet by v0.2.0)</td></tr>
+  <tr><td><code>E_PLUGIN_YANKED</code></td><td>ask the user</td><td>the marketplace withdrew that version</td></tr>
   <tr><td><code>E_PLUGIN_TAMPERED</code></td><td>stop</td><td>an installed plugin does not match its lock entry (<code>lockfile plugin verify</code>)</td></tr>
   <tr><td><code>E_SANDBOX_UNAVAILABLE</code></td><td>stop</td><td>the plugin sandbox is unavailable (<code>lockfile doctor</code>)</td></tr>
   <tr><td><code>E_FETCH_FAILED</code></td><td>stop</td><td>the key could not be fetched (the cause is in the audit only)</td></tr>
@@ -201,7 +201,7 @@ lockfile release f_8Kq2xR</code></pre>
         <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/security-model.md">Security model (full)</a></li>
         <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/plugin-contract.md">Plugin contract</a></li>
       </ul>
-      <p>Pre-release (<code>v0.2.x</code>). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
+      <p>Pre-release (<code>v0.x</code>). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
       <p class="family-line">Part of the lock family: <a href="https://github.com/DavidGodefroid/locksql">locksql</a> · <a href="https://github.com/DavidGodefroid/lockmq">lockmq</a> · <a href="https://github.com/DavidGodefroid/lockfile">lockfile</a> · <a href="https://github.com/DavidGodefroid/lockhttp">lockhttp</a> · <a href="https://github.com/DavidGodefroid/lockkit">lockkit</a></p>
     </div>
   </footer>
