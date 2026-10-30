@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.5.1
+
+lea's agents reach the release image's console: `console --allowed-uids` (lea#226).
+
 - The `ALLOWED_UIDS` build argument refuses root (0), leading zeros, the console's uid
   (10031) and 65534 (nobody), as lockmq's does (it took `0`, which served root peers).
 - `lockfile doctor` as a uid with no account here (an agent in a container of its own)
