@@ -13,6 +13,24 @@
   "lockkit v0.2.1" in the public-key refusal messages); the README status mentions hub mode.
   The seccomp lists name `execveat` and `memfd_create` in place of a "second `execve`" that no
   filter denies (Landlock lets only the plugin's own binary execute).
+- Builds on lockkit v0.6.0 (was v0.3.1). Hub mode: a ticket lockkit reports expired
+  (`ticket.ErrExpired`: an approval the console can no longer use) is no longer answered
+  `approval_timeout`:
+  the run asks it again (`console.Hub.RenewResp`) and the agent hears `pending` with a new
+  ticket that renews the old one. Plans record their plan-hash inputs
+  (`Binding.Inputs`: `profile`, `key`, `handle`, `sha256`, `plugins`, `pins`, `unfetched`)
+  and the console recomputes them for a renewal (`SetRecompute`, the run's recheck: policy in
+  force and installed plugins; the content's sha256 is `ticket.UncheckedInput`, named
+  `unchecked` on the renewal and never one click, with the stored plan hash: the run checks it
+  when it fetches again), so the human sees which moved. The recompute is given to the hub
+  before any request (`console.Options.OnHub`) and reads the policy in force as the console
+  saved it: a renewal asked from the hub right after a start is checked too. Renewals by the agent are audited
+  (`renew`); reveals and renewals asked from the hub are audited by lockkit. lockfile's
+  tickets are `read_pii`, which lockkit never ages (no TTL): the path is reached by a decision
+  the console's clock refuses as expired.
+- Reveal (Ctrl-O on a local facade) and `--facade-keys-file` come with `lockfile console`'s hub
+  flags; a console restarted without `--hub` withdraws its pending hub plans and refuses
+  their tickets `withdrawn` (tested end to end).
 
 ## v0.4.0
 

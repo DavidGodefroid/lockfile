@@ -161,6 +161,9 @@ type Options struct {
 	Clients func() bool
 	// Hub runs the console in hub mode.
 	Hub console.HubOptions
+	// Now is the console's clock (hub mode: tickets, decisions, plans);
+	// nil is time.Now.
+	Now func() time.Time
 }
 
 // Console is a running test console.
@@ -178,6 +181,12 @@ type Console struct {
 	// (start-up: isolation, policy review, status).
 	StartLines int
 	done       chan error
+
+	// What Restart starts again on.
+	iso   *console.IsolationEnv
+	cfg   string
+	state string
+	opts  Options
 }
 
 // separated turns iso into a separated setup whose console account is a
@@ -259,10 +268,33 @@ func Start(t testing.TB, o Options) *Console {
 	if o.Shared {
 		c.SharedDir = separated(t, iso, o.Clients)
 	}
-	state := t.TempDir()
+	c.iso, c.cfg, c.state = iso, cfg, t.TempDir()
+	c.launch(t, o)
+	return c
+}
+
+// Restart stops c and starts a console again on the same config, state
+// (approved policy, audit log, hub plans), plugin store, work directory
+// and source, with o's Answers, Hub and Now (the rest of o is ignored):
+// a console restarted with or without hub mode.
+func (c *Console) Restart(t testing.TB, o Options) *Console {
+	t.Helper()
+	c.Stop(t)
+	n := &Console{IO: NewScriptIO(o.Answers...), Work: c.Work, Root: c.Root, Profile: c.Profile, SharedDir: c.SharedDir,
+		PluginDir: c.PluginDir, done: make(chan error, 1), iso: c.iso, cfg: c.cfg, state: c.state}
+	opts := c.opts
+	opts.Answers, opts.Hub, opts.Now = o.Answers, o.Hub, o.Now
+	n.launch(t, opts)
+	return n
+}
+
+// launch runs the console of c with o until the test ends.
+func (c *Console) launch(t testing.TB, o Options) {
+	t.Helper()
+	c.opts = o
 	// CI runners do not mount /proc with hidepid: the harness stands in for
 	// it, tests of the check itself replace this in o.Backend.
-	bo := backend.Options{ConfigPath: cfg, Profile: "samples", StateDir: state, PluginDir: store.Dir, WorkDir: c.Work,
+	bo := backend.Options{ConfigPath: c.cfg, Profile: "samples", StateDir: c.state, PluginDir: c.PluginDir, WorkDir: c.Work,
 		ProcHidden: func() error { return nil }}
 	if o.Backend != nil {
 		o.Backend(&bo)
@@ -276,8 +308,8 @@ func Start(t testing.TB, o Options) *Console {
 	go func() {
 		defer b.Close()
 		c.done <- console.Run(ctx, product.P, b, console.Options{
-			Profile: "samples", IO: c.IO, StateDir: state, Quantum: -1, Sanitizer: b.Sanitizer(),
-			Isolation: iso, Harden: func() error { return nil }, Ready: func(s string) { ready <- s }, Hub: o.Hub,
+			Profile: "samples", IO: c.IO, StateDir: c.state, Quantum: -1, Sanitizer: b.Sanitizer(),
+			Isolation: c.iso, Harden: func() error { return nil }, Ready: func(s string) { ready <- s }, Hub: o.Hub, Now: o.Now, OnHub: b.OnHub,
 		})
 	}()
 	t.Cleanup(func() {
@@ -296,7 +328,16 @@ func Start(t testing.TB, o Options) *Console {
 	case <-time.After(30 * time.Second):
 		t.Fatalf("no socket:\n%s", c.IO.Output())
 	}
-	return c
+}
+
+// AuditLog is the console's audit log as it is on disk.
+func (c *Console) AuditLog(t testing.TB) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(c.state, product.P.Name, "audit.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
 }
 
 // Stop logs out and waits for the console to end.
