@@ -98,13 +98,13 @@ func (b *Backend) hubPlan(ctx context.Context, req ipc.Request, env console.Env,
 	if err != nil {
 		return console.ErrResp(req.ID, ipc.CodeInternal, msgInternal)
 	}
-	hash, err := ticket.HashOf(body)
+	hash, inputs, err := body.hashes()
 	if err != nil {
 		return console.ErrResp(req.ID, ipc.CodeInternal, msgInternal)
 	}
 	caller := plans.Caller{UID: pl.peerUID, Token: p.Requester.Token}
 	stored, err := h.Store.Create(plans.Binding{UID: caller.UID, Agent: p.Requester.Agent, TokenHash: plans.HashToken(caller.Token),
-		PolicyFP: policyFPOf(pol), PlanHash: hash}, raw, hubPlanTTL)
+		PolicyFP: policyFPOf(pol), PlanHash: hash, Inputs: inputs}, raw, hubPlanTTL)
 	if err != nil {
 		return console.ErrResp(req.ID, ipc.CodeInternal, msgInternal)
 	}
@@ -142,19 +142,22 @@ func (b *Backend) hubRun(ctx context.Context, req ipc.Request, env console.Env, 
 	caller := plans.Caller{UID: peerUID(ctx), Token: p.Requester.Token}
 	var body hubBody
 	recheck := func(sp *plans.Plan) (string, string, error) {
-		if err := json.Unmarshal(sp.Body, &body); err != nil {
-			return "", "", err
-		}
-		if !b.pinsInstalled(body.Pins) {
-			return "", "", fmt.Errorf("%w: a plugin changed since the plan", plans.ErrStale)
-		}
-		hash, err := ticket.HashOf(body)
-		return policyFPOf(pol), hash, err
+		bd, fp, hash, _, err := b.hubCheck(pol, sp)
+		body = bd
+		return fp, hash, err
 	}
 	run, d, err := h.Client.Begin(h.Store, p.Ticket, caller, recheck)
 	if err != nil {
 		if d != nil && errors.Is(err, hubclient.ErrDenied) {
 			b.auditDecision(ctx, env, p.Ticket, nil, d, audit.EventDenied)
+		}
+		if errors.Is(err, ticket.ErrExpired) {
+			// Decision H1: the ticket (pending past its TTL, or approved
+			// but the approval aged) is asked again, re-checked through
+			// the recompute, and the agent hears pending with the new one.
+			resp := h.RenewResp(ctx, req.ID, p.Ticket, caller)
+			b.auditRenewal(ctx, env, p.Ticket, resp)
+			return resp
 		}
 		return hubRefusal(req.ID, p.Ticket, h.Instance, err)
 	}
@@ -179,6 +182,100 @@ func (b *Backend) hubRun(ctx context.Context, req ipc.Request, env console.Env, 
 	return resp
 }
 
+// hashes are the plan hash of body and its inputs by field name
+// (ticket.InputDigests over exactly what the hash covers): a renewal
+// names the fields that moved.
+func (body hubBody) hashes() (string, map[string]string, error) {
+	hash, err := ticket.HashOf(body)
+	if err != nil {
+		return "", nil, err
+	}
+	inputs, err := ticket.InputDigests(body)
+	if err != nil {
+		return "", nil, err
+	}
+	return hash, inputs, nil
+}
+
+// hubCheck is the recheck of stored plan sp under the policy in force:
+// its body, policy fingerprint, plan hash and plan-hash inputs. The run
+// (Begin's recheck) and the renewal (recompute) share it, so both see the
+// same hash. It has no effect: the plugins are looked up, not opened.
+func (b *Backend) hubCheck(pol *profile.Policy, sp *plans.Plan) (hubBody, string, string, map[string]string, error) {
+	var body hubBody
+	if err := json.Unmarshal(sp.Body, &body); err != nil {
+		return body, "", "", nil, err
+	}
+	if !b.pinsInstalled(body.Pins) {
+		return body, "", "", nil, fmt.Errorf("%w: a plugin changed since the plan", plans.ErrStale)
+	}
+	hash, inputs, err := body.hashes()
+	if err != nil {
+		return body, "", "", nil, err
+	}
+	return body, policyFPOf(pol), hash, inputs, nil
+}
+
+// recompute is the hub client's Recompute (decision H1): what a renewal
+// of a stored plan is re-checked against, the policy in force now (env's)
+// and the plugins installed now, as the run's recheck sees them.
+//
+// The content's sha256 is not recomputed: it is kept as the plan stored
+// it. Hashing the object again means fetching it, which needs a live
+// session and writes to the workspace, and a recompute runs nothing with
+// effects (a renewal may come from the hub, with no agent request). The
+// run fetches the object again anyway and refuses other bytes as stale
+// before any plugin, so a changed object is still caught, at the run.
+// Everything else the plan hash covers is either the request itself
+// (profile, key, handle, plugins) or bound by the policy fingerprint (the
+// pins), which lockkit refuses to renew across.
+func (b *Backend) recompute(env console.Env) hubclient.Recompute {
+	return func(sp *plans.Plan) (string, string, map[string]string, error) {
+		pol := policyOf(env)
+		if pol == nil {
+			return "", "", nil, errors.New("no policy in force")
+		}
+		_, fp, hash, inputs, err := b.hubCheck(pol, sp)
+		return fp, hash, inputs, err
+	}
+}
+
+// hubOf is console.HubOf, registering the recompute on the hub client the
+// first time this backend sees that hub. The console has no start hook
+// for products: until an agent's first request after a start, a renewal
+// asked from the hub is not checked (the ticket says so, and the run
+// checks the plan hash all the same).
+func (b *Backend) hubOf(env console.Env) *console.Hub {
+	h := console.HubOf(env)
+	if h == nil {
+		return nil
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.recomputeOn != h {
+		h.Client.SetRecompute(b.recompute(env))
+		b.recomputeOn = h
+	}
+	return h
+}
+
+// auditRenewal records the renewal of expired ticket old by the agent's
+// run: the new ticket, or that it could not be asked again.
+func (b *Backend) auditRenewal(ctx context.Context, env console.Env, old string, resp ipc.Response) {
+	rec := Record{Base: stamp(ctx, b.o.Profile, audit.EventRenew, "renewed")}
+	rec.Approval, rec.Ticket = "hub", old
+	var pr rpc.PlanResult
+	if resp.Error != nil || json.Unmarshal(resp.Result, &pr) != nil || pr.Ticket == "" {
+		rec.Decision = "refused"
+		if resp.Error != nil {
+			rec.Error = resp.Error.Message
+		}
+	} else {
+		rec.Reason = "renewed by ticket " + pr.Ticket
+	}
+	env.Audit(rec)
+}
+
 // auditDecision records the hub's decision on a ticket: who answered, on
 // which facade, and the hub's signature.
 func (b *Backend) auditDecision(ctx context.Context, env console.Env, id string, pl *plan, d *ticket.Decision, event string) {
@@ -199,8 +296,6 @@ func hubRefusal(id int64, tk, instance string, err error) ipc.Response {
 	case errors.Is(err, hubclient.ErrDenied):
 		// The outcome only, as on the terminal: the reason is audited.
 		return console.ErrResp(id, ipc.CodeDenied, string(answers.CodeApprovalDenied))
-	case errors.Is(err, ticket.ErrExpired):
-		return console.ErrResp(id, ipc.CodeTimeout, string(answers.CodeApprovalTimeout))
 	case errors.Is(err, plans.ErrStale):
 		return product.Refuse(id, answers.CodeStale)
 	case errors.Is(err, plans.ErrWrongRequester):

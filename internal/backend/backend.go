@@ -65,6 +65,8 @@ type Backend struct {
 	cur    *session // the session of the last Connect
 	// given holds the answers already returned on each handle.
 	given map[workspace.Handle][]answers.Answer
+	// recomputeOn is the hub whose client has this backend's recompute.
+	recomputeOn *console.Hub
 
 	stop chan struct{}
 	done chan struct{}

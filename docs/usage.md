@@ -167,6 +167,20 @@ because it is serving another one: a plan waiting for the human, or a run until 
 `answer_quantum`. A console whose profile name is too long for a plain socket name cannot be
 listed while it is busy; passing its profile with `--profile` still reaches it.
 
+**Hub mode, expired tickets and rollback.** A ticket whose approval the console can no longer
+use (lockkit reports it expired; lockfile's `read_pii` tickets have no TTL, so this is a
+decision the console's clock refuses) is not a timeout: `lockfile run TICKET` and
+`lockfile_run` answer `pending` with a new ticket for the same plan, which the human approves
+again on lockhub in one step, shown which plan inputs moved (by name: `profile`, `key`,
+`handle`, `sha256`, `plugins`, `pins`; never values). Run the new ticket once decided. The
+console re-checks the policy and the plugins before it asks again (a changed policy is not
+renewed: plan again); the content is checked again at the run, as for any ticket. A console
+restarted without `--hub` withdraws the plans its hub mode left pending (it says so at start)
+and refuses a run of their ticket `withdrawn`: plan again. The next start with `--hub` tells the
+hub. The other hub flags `lock up` writes (`--devices-file`, `--require-device`,
+`--seal-clear`, `--facade-keys-file` for a reveal of the clear screen on a local facade,
+Ctrl-O) come with `--hub` from lockkit; the console audits reveals and renewals.
+
 Output is capped in text and in JSON alike: a value (a text line) is cut at 512 characters, and
 output above 64 KiB is not printed (`output too large`, exit 1).
 
