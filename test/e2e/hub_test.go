@@ -196,8 +196,8 @@ func runUntil(t *testing.T, w *wire, p rpc.RunParams, tk string) ipc.Response {
 // Decision H1: an approval the console can no longer act on (its clock
 // says the approval is out of its window) is not a timeout. The run asks
 // the ticket again: pending with a new ticket that renews the old one,
-// re-checked by the lock (nothing moved: the policy, the plugins and the
-// request are the plan's; the content is checked at the run). Approved,
+// re-checked by the lock (the policy, the plugins and the request are the
+// plan's; the content, checked at the run only, is named unchecked). Approved,
 // the new ticket runs once.
 //
 // lockfile's tickets are read_pii, which lockkit never expires by age
@@ -227,7 +227,10 @@ func TestHubExpiredTicketRenewed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rt.Renews == nil || rt.Renews.Of != old || rt.Renews.Reason != ticket.RenewApprovalExpired || !rt.Renews.Unchanged() {
+	// Checked, nothing moved but the content, which only the run checks:
+	// named unchecked, never one click.
+	if r := rt.Renews; r == nil || r.Of != old || r.Reason != ticket.RenewApprovalExpired || !r.Checked || r.Unchanged() ||
+		len(r.Changes) != 1 || r.Changes[0].Input != "sha256" || r.Changes[0].Change != ticket.ChangeUnchecked {
 		t.Fatalf("renewal %+v", rt.Renews)
 	}
 	ot, err := ticket.VerifyTicket(pub, hub.Ticket(old))

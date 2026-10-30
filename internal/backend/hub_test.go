@@ -50,7 +50,10 @@ func TestRecomputeIsTheRecheck(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fp != sp.Binding.PolicyFP || hash != sp.Binding.PlanHash || !maps.Equal(inputs, sp.Binding.Inputs) {
+	// Everything but the content, which is checked at the run only.
+	stored := maps.Clone(sp.Binding.Inputs)
+	stored["sha256"] = ticket.UncheckedInput
+	if fp != sp.Binding.PolicyFP || hash != sp.Binding.PlanHash || !maps.Equal(inputs, stored) {
 		t.Fatalf("recompute %s %s %v, stored %+v", fp, hash, inputs, sp.Binding)
 	}
 	want, err := ticket.HashOf(sampleBody(t, pol))
@@ -66,8 +69,19 @@ func TestRecomputeIsTheRecheck(t *testing.T) {
 			t.Errorf("input %q missing from %v", k, inputs)
 		}
 	}
-	if len(ticket.DiffInputs(sp.Binding.Inputs, inputs)) != 0 {
-		t.Fatal("an unchanged plan shows changes")
+	// The content was not checked: the renewal says so, by name, and is
+	// never presented as unchanged.
+	ch := ticket.DiffInputs(sp.Binding.Inputs, inputs)
+	if len(ch) != 1 || ch[0].Input != "sha256" || ch[0].Change != ticket.ChangeUnchecked {
+		t.Fatalf("changes of an unchanged plan %+v", ch)
+	}
+	// A plan without content (a handle) has nothing unchecked.
+	hb := sampleBody(t, pol)
+	hb.Key, hb.Handle, hb.SHA256 = "", "h_1", ""
+	hp := storedPlan(t, pol, hb)
+	_, _, hin, err := h.b.recompute(h.env)(hp)
+	if err != nil || len(ticket.DiffInputs(hp.Binding.Inputs, hin)) != 0 {
+		t.Fatalf("handle plan: %v %v", hin, err)
 	}
 }
 
@@ -77,7 +91,7 @@ func TestRecomputeNamesMovedInput(t *testing.T) {
 	pol := h.env.policy
 	old := storedPlan(t, pol, sampleBody(t, pol))
 	moved := sampleBody(t, pol)
-	moved.SHA256 = strings.Repeat("b", 64)
+	moved.Key = "invoices/b.pdf"
 	_, hash, inputs, err := h.b.recompute(h.env)(storedPlan(t, pol, moved))
 	if err != nil {
 		t.Fatal(err)
@@ -86,10 +100,11 @@ func TestRecomputeNamesMovedInput(t *testing.T) {
 		t.Fatal("the plan hash did not move")
 	}
 	ch := ticket.DiffInputs(old.Binding.Inputs, inputs)
-	if len(ch) != 1 || ch[0].Input != "sha256" || ch[0].Change != ticket.ChangeChanged {
+	if len(ch) != 2 || ch[0].Input != "key" || ch[0].Change != ticket.ChangeChanged ||
+		ch[1].Input != "sha256" || ch[1].Change != ticket.ChangeUnchecked {
 		t.Fatalf("changes %+v", ch)
 	}
-	if b, _ := json.Marshal(ch); strings.Contains(string(b), moved.SHA256) || strings.Contains(string(b), "sha256:") {
+	if b, _ := json.Marshal(ch); strings.Contains(string(b), "b.pdf") || strings.Contains(string(b), "sha256:") {
 		t.Fatalf("a change carries a value or a digest: %s", b)
 	}
 }

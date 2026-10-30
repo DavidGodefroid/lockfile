@@ -220,15 +220,16 @@ func (b *Backend) hubCheck(pol *profile.Policy, sp *plans.Plan) (hubBody, string
 // of a stored plan is re-checked against, the policy in force now (env's)
 // and the plugins installed now, as the run's recheck sees them.
 //
-// The content's sha256 is not recomputed: it is kept as the plan stored
-// it. Hashing the object again means fetching it, which needs a live
-// session and writes to the workspace, and a recompute runs nothing with
-// effects (a renewal may come from the hub, with no agent request). The
-// run fetches the object again anyway and refuses other bytes as stale
-// before any plugin, so a changed object is still caught, at the run.
-// Everything else the plan hash covers is either the request itself
-// (profile, key, handle, plugins) or bound by the policy fingerprint (the
-// pins), which lockkit refuses to renew across.
+// The content's sha256 is not checked now: hashing the object again means
+// fetching it, which needs a live session and writes to the workspace,
+// and a recompute runs nothing with effects (a renewal may come from the
+// hub, with no agent request). Its input is ticket.UncheckedInput, so the
+// renewal names it "unchecked" and is never shown as unchanged; the plan
+// hash stays the stored one. The run fetches the object again and refuses
+// other bytes as stale before any plugin. Everything else the plan hash
+// covers is either the request itself (profile, key, handle, plugins) or
+// bound by the policy fingerprint (the pins), which lockkit refuses to
+// renew across.
 func (b *Backend) recompute(env console.Env) hubclient.Recompute {
 	return func(sp *plans.Plan) (string, string, map[string]string, error) {
 		pol := policyOf(env)
@@ -236,7 +237,13 @@ func (b *Backend) recompute(env console.Env) hubclient.Recompute {
 			return "", "", nil, errors.New("no policy in force")
 		}
 		_, fp, hash, inputs, err := b.hubCheck(pol, sp)
-		return fp, hash, inputs, err
+		if err != nil {
+			return "", "", nil, err
+		}
+		if _, ok := inputs["sha256"]; ok {
+			inputs["sha256"] = ticket.UncheckedInput
+		}
+		return fp, hash, inputs, nil
 	}
 }
 
