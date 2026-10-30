@@ -186,7 +186,7 @@ lockfile init claude</code></pre>
 <section aria-labelledby="limits">
   <h2 id="limits">Know the limits</h2>
   <div class="prose">
-    <p>The console is the enforcement point. Plugins answer one bit each, but a plugin whose code does not match its question is mitigated by review and signing, not prevented. A missing answer (<code>plugin_error</code>) and a failed fetch (<code>fetch_failed</code>) each carry one symbol that depends on the file. Since v0.3.0 the plugin sandbox also denies System V IPC, POSIX message queues and signals to other processes, and the console runs plugins only where no other account can see their processes in <code>/proc</code>.</p>
+    <p>The console is the enforcement point. Plugins answer one bit each, but a plugin whose code does not match its question is mitigated by review and signing, not prevented. A missing answer (<code>plugin_error</code>) and a failed fetch (<code>fetch_failed</code>) each carry one symbol that depends on the file. Since v0.3.0 the plugin sandbox also denies System V IPC, POSIX message queues and signals to other processes, and the console runs plugins only where no other account can see their processes in <code>/proc</code> (the host’s own accounts aside: see the security page).</p>
     <p class="link-line"><a href="security/">Read the security model</a></p>
   </div>
 </section>

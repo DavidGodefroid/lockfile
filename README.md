@@ -238,7 +238,8 @@ only guide the agent; the console's checks are the guarantee.
   end-to-end tests walk every response of every method against this list.
 - **Sandboxed plugins.** Landlock (execute and read its own binary only; TCP
   denied with ABI ≥ 4), seccomp (no sockets, `ptrace`, `mount`, `bpf`,
-  `keyctl`, second `execve`), rlimits and a wall-clock timeout, an empty
+  `keyctl`, `execveat`, `memfd_create`, System V IPC, POSIX message queues,
+  signals to other processes), rlimits and a wall-clock timeout, an empty
   environment, the file as a read-only fd 3, stdout capped at 3 bytes,
   stderr discarded.
 - **Signed everything.** Plugin binaries, manifests, the marketplace index
@@ -263,8 +264,7 @@ secure erase. Details: [docs/security-model.md](docs/security-model.md).
 > carries. Plugins' `/proc` entries are a channel to any account sharing
 > their pid namespace: the console refuses to run plugins unless no other
 > account shares it (in Docker: never `--pid=host`), and older Landlock ABIs
-> do not block `fcntl` signals (seccomp does). The `plugin_yanked` refusal is
-> listed but not produced yet.
+> do not block `fcntl` signals (seccomp does).
 
 ## Configuration
 
