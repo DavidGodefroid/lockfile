@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"maps"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/DavidGodefroid/lockkit/config"
+	"github.com/DavidGodefroid/lockkit/console"
 	"github.com/DavidGodefroid/lockkit/plans"
 	"github.com/DavidGodefroid/lockkit/ticket"
 
@@ -134,5 +136,41 @@ func TestRecomputeStaleAndPolicy(t *testing.T) {
 	testenv.Install(t, h.store, "test.answer1", testenv.BuildPlugin(t, "answer0"), "Is it test.answer1?", 2)
 	if _, _, _, err := h.b.recompute(sp); !errors.Is(err, plans.ErrStale) {
 		t.Fatalf("replaced plugin: %v", err)
+	}
+}
+
+// The content line of a hub plan (the object's sha256 and size, or that
+// it could not be fetched) is on the hub's masked screen only, never on
+// the console window the agent's account can read at desktop level 1.
+func TestHubContentNotInWindow(t *testing.T) {
+	sha := strings.Repeat("ab", 32)
+	const size = 734821
+	sc := console.Screen{Header: "file.plan", Note: "check the invoice",
+		Body: []string{"key    invoices/a.pdf", "", "test.answer1  1.0.0"}, Warnings: []string{"unofficial plugin"}}
+	for _, content := range []string{contentLine(sha, size), msgUnfetched} {
+		win, masked := hubScreens(sc, content)
+		shown := strings.Join(append(append([]string{win.Header, win.Requester, win.Note}, win.Body...), win.Warnings...), "\n")
+		for _, s := range []string{sha, "734821", "bytes", "sha256", "fetch"} {
+			if strings.Contains(shown, s) {
+				t.Errorf("console window shows %q:\n%s", s, shown)
+			}
+		}
+		if !slices.Equal(win.Body, sc.Body) {
+			t.Errorf("window body %q, want %q", win.Body, sc.Body)
+		}
+		if !masked.Valid() {
+			t.Fatal("masked screen not valid")
+		}
+		b, err := json.Marshal(masked.Screen())
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := sha
+		if content == msgUnfetched {
+			want = "could not be fetched now"
+		}
+		if !strings.Contains(string(b), want) {
+			t.Errorf("the hub's masked screen lacks %q: %s", want, b)
+		}
 	}
 }

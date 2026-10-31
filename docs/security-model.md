@@ -82,7 +82,8 @@ text with control characters, sandbox state, a status for another profile).
   Residual: a plan that takes longer than one quantum shows it took longer (one more multiple).
 - **The console window.** At desktop security level 1 the agent's account can read the console's
   window. It shows the agent's own request, the plugin metadata and the outcome codes; causes,
-  sizes and hashes go to the audit only. Error text bound for the window or the audit is scrubbed
+  sizes and hashes go to the audit only (a plan's content sha256 and size, or that it could not be
+  fetched, also go to the hub's masked screen for the human, never to the window). Error text bound for the window or the audit is scrubbed
 of URLs, paths, hosts, key ids and of the profile's own bucket, endpoint, host, user, base
 directory and paths; a few lockkit messages are not yet passed through lockfile's scrubber
 (they carry configuration, never file data). Residual: the start-up lines show the profile's

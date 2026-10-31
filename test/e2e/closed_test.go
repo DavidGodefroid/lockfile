@@ -177,26 +177,14 @@ func slicesJoin(lines [][]byte) []byte {
 
 var sha256Hex = regexp.MustCompile(`\b[0-9a-f]{64}\b`)
 
-// hubContentLine is the content line of a hub plan's screen.
-var hubContentLine = regexp.MustCompile(`sha256 [0-9a-f]{64} · \d+ bytes\x1b\[0m$|sha256 [0-9a-f]{64} · \d+ bytes$`)
-
 // TestConsoleWindowIsClosed: in desktop level 1 the agent can read the
-// console window; after start-up it shows no size, hash, path or source
-// error text, but for the hub screen's content line (hubContentLine).
+// console window; after start-up it shows no size, hash, path, fetch
+// outcome or source error text, the hub plan screens included (their
+// content line goes to the hub's masked screen only).
 func TestConsoleWindowIsClosed(t *testing.T) {
 	c, _, _ := scenarios(t)
-	var lines []string
-	for _, l := range strings.Split(c.IO.OutputFrom(c.StartLines), "\n") {
-		// The plan screen lockfile hands the hub names the content's
-		// sha256 and size, and lockkit prints that screen here too: a
-		// residual of hub mode at level 1, not checked here (to fix in
-		// lockfile or lockkit, not by this test).
-		if !hubContentLine.MatchString(l) {
-			lines = append(lines, l)
-		}
-	}
-	out := strings.Join(lines, "\n")
-	for _, s := range []string{"john", "2048", "/srv", "synthetic", c.Work, c.Root, "no such file", "1KiB", "goroutine", "permission denied"} {
+	out := c.IO.OutputFrom(c.StartLines)
+	for _, s := range []string{"john", "2048", "/srv", "synthetic", c.Work, c.Root, "no such file", "1KiB", "goroutine", "permission denied", "could not be fetched"} {
 		if strings.Contains(out, s) {
 			t.Errorf("console window shows %q", s)
 		}
