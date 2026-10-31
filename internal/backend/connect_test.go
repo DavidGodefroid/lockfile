@@ -184,3 +184,12 @@ func TestSFTPKeyFileModeRefused(t *testing.T) {
 		t.Fatal("symlinked key accepted")
 	}
 }
+
+// An unknown source kind (a pasted token in source) is not quoted back.
+func TestConnectUnknownSourceDoesNotEcho(t *testing.T) {
+	const canary = "glsa_CanarySecretToken123"
+	_, err := connect(profile.Profile{Source: canary}, console.Credentials{})
+	if err == nil || strings.Contains(err.Error(), "glsa_Canary") || !strings.Contains(err.Error(), "source") {
+		t.Fatalf("err = %v", err)
+	}
+}

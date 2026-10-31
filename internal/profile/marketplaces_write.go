@@ -193,6 +193,9 @@ func RemoveMarketplace(path, name string) error {
 		i = end
 	}
 	if !found {
+		if !ValidMarketplaceName(name) {
+			return errors.New("marketplace: invalid name (lower-case letters, digits and '-', at most 40)")
+		}
 		return fmt.Errorf("marketplace %s is not configured", name)
 	}
 	return writeConfig(path, []byte(strings.Join(out, "")), mode)

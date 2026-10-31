@@ -2,7 +2,6 @@ package backend
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -78,7 +77,7 @@ func connect(p profile.Profile, c console.Credentials) (*session, error) {
 		}
 		return &session{src: src}, nil
 	}
-	return nil, fmt.Errorf("unknown source %q", p.Source)
+	return nil, errors.New(`source must be "s3", "sftp" or "local"`)
 }
 
 // errKnownHosts is the error of a known_hosts path whose "~/" cannot be

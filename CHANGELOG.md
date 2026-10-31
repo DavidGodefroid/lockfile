@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Errors no longer quote a value typed in the config or on the command line: a pasted
+  token or a URL with one (userinfo, path, query) never reaches the terminal, a log or an
+  agent. A download error names the marketplace and the file (`marketplace acme: index:
+  download: HTTP 404`, `... connection refused`), not the URL, and keeps only the kind of a
+  transport error (its host and address are dropped); an invalid plugin name or version,
+  marketplace name (`--marketplace`, `marketplace remove`), `--since`, source kind, size, or
+  manifest name, version or media type is refused naming the key and what is allowed. A
+  plugin or marketplace name is quoted only once it is checked to be one.
+
 ## v0.5.1
 
 lea's agents reach the release image's console: `console --allowed-uids` (lea#226).

@@ -52,6 +52,15 @@ type Installed struct {
 }
 
 // Qualify returns the store name of a plugin from a marketplace.
+// ValidQualified reports whether s is a plugin name, bare (official) or
+// MARKETPLACE/name: one an error may quote.
+func ValidQualified(s string) bool {
+	if mk, bare, ok := strings.Cut(s, "/"); ok {
+		return len(mk) <= 40 && marketplaceRe.MatchString(mk) && pluginspec.ValidName(bare)
+	}
+	return pluginspec.ValidName(s)
+}
+
 func Qualify(marketplace, name string, official bool) string {
 	if official {
 		return name
@@ -72,16 +81,16 @@ func sha(b []byte) string {
 
 func checkEntry(e LockEntry, m pluginspec.Manifest) error {
 	if e.Official != (e.Marketplace == OfficialMarketplace) {
-		return fmt.Errorf("plugin: entry %q: official flag and marketplace %q disagree", e.Name, e.Marketplace)
+		return errors.New("plugin: entry: the official flag and the marketplace disagree")
 	}
 	if !e.Official && !marketplaceRe.MatchString(e.Marketplace) {
-		return fmt.Errorf("plugin: invalid marketplace name %q", e.Marketplace)
+		return errors.New("plugin: entry: invalid marketplace name")
 	}
 	if want := Qualify(e.Marketplace, m.Name, e.Official); e.Name != want {
-		return fmt.Errorf("plugin: entry name %q, want %q", e.Name, want)
+		return errors.New("plugin: entry: the name does not match the manifest's")
 	}
 	if e.Version != m.Version {
-		return fmt.Errorf("plugin: entry version %q, manifest %q", e.Version, m.Version)
+		return errors.New("plugin: entry: the version does not match the manifest's")
 	}
 	return nil
 }
@@ -202,7 +211,7 @@ func (s Store) find(name string) (LockEntry, error) {
 			return e, nil
 		}
 	}
-	return LockEntry{}, fmt.Errorf("%w: %s", ErrNotInstalled, name)
+	return LockEntry{}, notInstalled(name)
 }
 
 // Open opens an installed plugin's binary and checks, from the opened file
@@ -288,7 +297,7 @@ func (s Store) Remove(name string) error {
 		}
 	}
 	if len(gone) == 0 {
-		return fmt.Errorf("%w: %s", ErrNotInstalled, name)
+		return notInstalled(name)
 	}
 	if err := writeLock(s.lockPath(), kept); err != nil {
 		return err
@@ -323,4 +332,13 @@ func removeAll(path string) error {
 		return nil
 	})
 	return os.RemoveAll(path)
+}
+
+// notInstalled is ErrNotInstalled, quoting name only when it is a valid
+// plugin name.
+func notInstalled(name string) error {
+	if !ValidQualified(name) {
+		return fmt.Errorf("%w (invalid plugin name)", ErrNotInstalled)
+	}
+	return fmt.Errorf("%w: %s", ErrNotInstalled, name)
 }
