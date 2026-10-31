@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v0.5.3
+
+lockkit v0.8.1: the hub URL is `http(s)://host[:port]` only, and lockfile prints lockkit's
+hub errors as they are (no typed value in them).
+
 - lockkit v0.8.1 (from v0.6.0). The `--hub` URL is `http(s)://host[:port]` only: a path
   (`https://h/lockhub`, which never reached a working hub: lockhub serves `/v1/` at its
   root), query, fragment, IPv6 zone, user or password, a host that is not a DNS name or an
@@ -12,7 +17,9 @@
   URL, `--instance`, `--require-device` class or `hub-key` flag, so lockfile no longer
   replaces those values with `<value>` (the workaround of v0.5.2 is gone). The no-echo
   tests cover a token in the hub URL's userinfo, path, query, fragment, port and zone
-  without it.
+  without it. One case remains, by design: a hub host that is a valid DNS name
+  (`http://some_name`) is shown as the hub, in the plain-http refusal and on the console's
+  start line, since a host cannot be told apart from a token.
 - The hub screen's personal data (`email`, `phone`, `iban`, `card`) is also found right
   after a JSON `\n`, `\t` or `\u00XX` escape, read as the blank or delimiter it stands for
   (lockkit v0.8.0): a key such as `{"msg":"tel:\t0475123456"}` is now masked. lockfile
