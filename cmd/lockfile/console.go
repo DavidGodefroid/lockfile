@@ -115,9 +115,10 @@ func runConsole(e env, args []string) int {
 		Hub: withHome(hub, h.home), OnHub: b.OnHub,
 	})
 	if err != nil && !errors.Is(err, context.Canceled) {
-		// lockkit's hub checks quote the --hub URL (which may carry a
-		// token), the instance name and the risk classes.
-		fmt.Fprintln(e.stderr, "lockfile console:", scrub(err.Error(), hubValues(hub)...))
+		// lockkit (v0.8.1 on) never quotes a typed hub value: the --hub
+		// URL is named by scheme and host only, once it is one; the
+		// instance name only once it is valid; never a risk class.
+		fmt.Fprintln(e.stderr, "lockfile console:", err)
 		return product.ExitError
 	}
 	return product.ExitOK
@@ -145,18 +146,9 @@ func runHubKey(e env, args []string) int {
 		}
 	}
 	if err := hubclient.HubKeyCommand(e.stdout, home, args); err != nil {
-		fmt.Fprintln(e.stderr, "lockfile hub-key:", scrub(err.Error(), typedValues(args, []string{"instance"}, hubclient.ValidInstance)...))
+		// lockkit names neither an unknown flag nor an invalid instance.
+		fmt.Fprintln(e.stderr, "lockfile hub-key:", err)
 		return product.ExitUsage
 	}
 	return product.ExitOK
-}
-
-// hubValues are the typed hub flag values an error may quote: the URL, the
-// risk classes, and the instance name unless it is a valid one.
-func hubValues(h console.HubOptions) []string {
-	v := []string{h.URL, h.RequireDevice}
-	if !hubclient.ValidInstance(h.Instance) {
-		v = append(v, h.Instance)
-	}
-	return v
 }

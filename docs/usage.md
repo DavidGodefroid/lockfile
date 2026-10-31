@@ -151,6 +151,8 @@ the console account's home, `0600`).
 `lock up` also passes `--hub-plain-http` for its `http://lockhub:8443` on the hub's own network:
 without it an `http://` hub URL other than loopback is refused, and with it the URL must still
 be a service name without a dot or a private address.
+The hub URL is `http(s)://host[:port]`: no path, query, fragment, user or password (lockhub
+serves its API at the root and authenticates the lock by signature).
 
 **Supported lockhub versions.** Which [lockhub](https://github.com/DavidGodefroid/lockhub) releases
 (its `lock` CLI and its hub image) each lockfile release works with under `lock up`:
