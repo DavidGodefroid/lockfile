@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -105,10 +106,10 @@ func ParseManifest(b []byte) (Manifest, error) {
 func (m Manifest) Validate() error {
 	var errs []error
 	if !nameRe.MatchString(m.Name) {
-		errs = append(errs, fmt.Errorf("name %q must match %s", m.Name, nameRe))
+		errs = append(errs, fmt.Errorf("name must match %s", nameRe))
 	}
 	if !versionRe.MatchString(m.Version) {
-		errs = append(errs, fmt.Errorf("version %q must be X.Y.Z", m.Version))
+		errs = append(errs, errors.New("version must be X.Y.Z"))
 	}
 	if m.Protocol != ProtocolVersion {
 		errs = append(errs, fmt.Errorf("protocol %d unsupported (want %d)", m.Protocol, ProtocolVersion))
@@ -126,7 +127,8 @@ func (m Manifest) Validate() error {
 	}
 	for _, a := range m.Accepts {
 		if !MediaTypes[a] {
-			errs = append(errs, fmt.Errorf("accepts: media type %q not allowed", a))
+			errs = append(errs, fmt.Errorf("accepts: a media type is not allowed (want %s)", strings.Join(mediaTypeList(), ", ")))
+			break
 		}
 	}
 	l := m.Limits
@@ -157,7 +159,7 @@ func ParseBytes(s string) (int64, error) {
 	}
 	n, err := strconv.ParseInt(num, 10, 64)
 	if err != nil || n <= 0 || n > (1<<62)/mult {
-		return 0, fmt.Errorf("invalid size %q", s)
+		return 0, errors.New(`invalid size (want a positive number of bytes, or with KiB, MiB or GiB: "512MiB")`)
 	}
 	return n * mult, nil
 }
@@ -167,3 +169,13 @@ func ValidName(s string) bool { return nameRe.MatchString(s) }
 
 // ValidVersion reports whether s is an exact X.Y.Z version.
 func ValidVersion(s string) bool { return versionRe.MatchString(s) }
+
+// mediaTypeList is MediaTypes, sorted.
+func mediaTypeList() []string {
+	out := make([]string, 0, len(MediaTypes))
+	for t := range MediaTypes {
+		out = append(out, t)
+	}
+	slices.Sort(out)
+	return out
+}

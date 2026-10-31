@@ -54,7 +54,7 @@ func run(e env, args []string) int {
 	}
 	c, ok := commands[args[0]]
 	if !ok {
-		fmt.Fprintf(e.stderr, "lockfile: unknown command %q\n\n%s", args[0], usage())
+		fmt.Fprintf(e.stderr, "lockfile: unknown command (lockfile help lists them)\n\n%s", usage())
 		return product.ExitUsage
 	}
 	return c.run(e, args[1:])

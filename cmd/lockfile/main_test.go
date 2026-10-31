@@ -57,7 +57,7 @@ func TestUsageExit(t *testing.T) {
 	if code != product.ExitUsage {
 		t.Fatalf("exit = %d", code)
 	}
-	if out != "" || !strings.Contains(errText, `unknown command "frobnicate"`) || !strings.Contains(errText, "Usage:") {
+	if out != "" || !strings.Contains(errText, "unknown command") || !strings.Contains(errText, "Usage:") {
 		t.Fatalf("stdout %q stderr %q", out, errText)
 	}
 	if code, _, _ := runArgs(t, ""); code != product.ExitUsage {

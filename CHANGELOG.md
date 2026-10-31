@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Errors no longer quote a value typed in the config or on the command line: a pasted
+  token or a URL with one (userinfo, path, query) never reaches the terminal, a log or an
+  agent. A download error names the marketplace and the file (`marketplace acme: index:
+  download: HTTP 404`, `... connection refused`), not the URL, and keeps only the kind of a
+  transport error (its host and address are dropped); an invalid plugin name or version,
+  marketplace name (`--marketplace`, `marketplace remove`), `--since`, source kind, size, or
+  manifest name, version or media type, `--allowed-uids`, an unknown command or agent
+  (`lockfile init`), or a profile name (`profile add`, `forget --profile`, `console
+  --profile`) is refused naming the key and what is allowed. A plugin or marketplace name
+  is quoted only once it is checked to be one, and the `unknown_profile` hint names the
+  profile only when it is a valid profile name. Errors of lockkit v0.6.0 that quote a flag
+  value (`--hub URL`, `--instance`, `--require-device`, `hub-key --instance`) are printed
+  with that value replaced by `<value>`, and lockkit's `invalid profile name %q` and
+  `unknown agent %q` are not reached (lockfile checks first).
+- A marketplace `index_url` with a query or fragment is refused, as one with userinfo was:
+  a token there would be shown by `marketplace add` and `marketplace list` (and the
+  signature is fetched at `index_url` + `.sigstore.json`).
+
 ## v0.5.1
 
 lea's agents reach the release image's console: `console --allowed-uids` (lea#226).

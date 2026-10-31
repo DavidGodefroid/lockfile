@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -37,7 +38,7 @@ func sinceTime(s string, now time.Time) (time.Time, error) {
 			return t, nil
 		}
 	}
-	return time.Time{}, fmt.Errorf("--since %q: want a duration (24h) or a date (2026-10-19)", s)
+	return time.Time{}, errors.New("--since: want a duration (24h) or a date (2026-10-19)")
 }
 
 // runAudit prints the audit log: the one place for file metadata (docs/security-model.md,
@@ -132,7 +133,7 @@ func runForget(e env, args []string) int {
 	}
 	p, ok := f.Profiles[*name]
 	if !ok {
-		return failHuman(e, "forget", fmt.Errorf("no profile %q", *name))
+		return failHuman(e, "forget", profile.ErrNoProfile)
 	}
 	cp := p.Console()
 	if err := secrets.NewKeychain(product.P.KeychainService).Delete(cp.Name, cp.Host, cp.Port); err != nil {

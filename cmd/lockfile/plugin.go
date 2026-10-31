@@ -52,6 +52,10 @@ func findMarketplace(name string) (marketplace.Marketplace, error) {
 	if name == "" || name == plugin.OfficialMarketplace {
 		return officialMarketplace(), nil
 	}
+	// Checked before any error quotes it.
+	if !profile.ValidMarketplaceName(name) {
+		return marketplace.Marketplace{}, errors.New("marketplace: invalid name (lower-case letters, digits and '-', at most 40)")
+	}
 	path, err := configPath()
 	if err != nil {
 		return marketplace.Marketplace{}, err
@@ -167,6 +171,13 @@ func pluginInstall(e env, args []string, update bool) int {
 	name, version, ok := strings.Cut(pos[0], "@")
 	if !ok || name == "" || version == "" {
 		return usageErr(e, pluginUsage)
+	}
+	// Checked before any error quotes them.
+	if !plugin.ValidQualified(name) {
+		return failHuman(e, cmd, errors.New("invalid plugin name (vendor.name, or MARKETPLACE/vendor.name)"))
+	}
+	if !pluginspec.ValidVersion(version) {
+		return failHuman(e, cmd, errors.New("the version is not an exact version (X.Y.Z)"))
 	}
 	// A qualified name carries its marketplace.
 	if mk, bare, ok := strings.Cut(name, "/"); ok {
@@ -341,6 +352,9 @@ func pluginVerify(e env, args []string) int {
 		fmt.Fprintln(e.stdout, "ok "+in.Name+"@"+in.Version)
 	}
 	if len(args) == 1 && !seen {
+		if !plugin.ValidQualified(args[0]) {
+			return failHuman(e, "plugin verify", errors.New("invalid plugin name (vendor.name, or MARKETPLACE/vendor.name)"))
+		}
 		return failHuman(e, "plugin verify", fmt.Errorf("%s is not installed", args[0]))
 	}
 	if bad > 0 {

@@ -15,6 +15,8 @@ const (
 // ErrInsecureRedirect refuses a redirect away from https.
 var ErrInsecureRedirect = errors.New("refusing a redirect to a non-https URL")
 
+var errTooManyRedirects = errors.New("too many redirects")
+
 // SafeClient returns a copy of c (http.DefaultClient when nil) that follows
 // redirects to https URLs only, at most 10 of them, and gives up after
 // ClientTimeout. Integrity still comes from the signatures; this keeps a
@@ -32,7 +34,7 @@ func SafeClient(c *http.Client) *http.Client {
 			return ErrInsecureRedirect
 		}
 		if len(via) >= maxRedirects {
-			return errors.New("too many redirects")
+			return errTooManyRedirects
 		}
 		return nil
 	}

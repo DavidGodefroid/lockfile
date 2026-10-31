@@ -30,10 +30,10 @@ func TestFetchRedirectHTTPSOnly(t *testing.T) {
 	t.Cleanup(tls.Close)
 	i := Installer{HTTP: tls.Client()}
 	dir := t.TempDir()
-	if _, err := i.fetch(context.Background(), tls.URL+"/to-http", filepath.Join(dir, "a"), 1<<10); !errors.Is(err, ErrInsecureRedirect) {
+	if _, err := i.fetch(context.Background(), "test", tls.URL+"/to-http", filepath.Join(dir, "a"), 1<<10); !errors.Is(err, ErrInsecureRedirect) {
 		t.Fatalf("redirect to http: err = %v", err)
 	}
-	if b, err := i.fetch(context.Background(), tls.URL+"/to-https", filepath.Join(dir, "b"), 1<<10); err != nil || string(b) != "ok" {
+	if b, err := i.fetch(context.Background(), "test", tls.URL+"/to-https", filepath.Join(dir, "b"), 1<<10); err != nil || string(b) != "ok" {
 		t.Fatalf("redirect to https: %q %v", b, err)
 	}
 	if c := SafeClient(nil); c.Timeout <= 0 || c.Timeout > ClientTimeout || c.CheckRedirect == nil {

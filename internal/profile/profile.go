@@ -115,6 +115,11 @@ type Profile struct {
 	AnswerQuantum       time.Duration `json:"answer_quantum"`
 }
 
+// ErrNoProfile refuses a profile name the config file does not define. It
+// does not quote the name: a value typed on the command line is not a key
+// of the file, and may be anything pasted there.
+var ErrNoProfile = errors.New("config: no such profile (a [profiles.NAME] table of the config file)")
+
 // Workspace is the workspace part of the config.
 type Workspace struct {
 	Dir      string `json:"dir"` // "" = the default under the state dir

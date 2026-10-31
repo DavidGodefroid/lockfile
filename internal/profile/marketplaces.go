@@ -48,6 +48,12 @@ var marketplaceName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,39}$`)
 // check is keyless only.
 var ErrPublicKeyRoot = errors.New("public-key trust roots need lockkit support (not in lockkit yet): use a keyless identity_regexp and oidc_issuer")
 
+// ValidMarketplaceName reports whether s is a valid unofficial marketplace
+// name (safe to quote in an error).
+func ValidMarketplaceName(s string) bool {
+	return marketplaceName.MatchString(s) && s != plugin.OfficialMarketplace
+}
+
 // CheckMarketplace validates an unofficial marketplace entry.
 func CheckMarketplace(r RawMarketplace) (Trust, error) { return parseMarketplace(r) }
 
@@ -58,15 +64,17 @@ func parseMarketplace(r RawMarketplace) (Trust, error) {
 			return Trust{}, fmt.Errorf("marketplace: %w", err)
 		}
 	}
-	if !marketplaceName.MatchString(r.Name) || r.Name == plugin.OfficialMarketplace {
-		return Trust{}, fmt.Errorf("marketplace: invalid name %q (lower-case letters, digits and '-'; not %q)", r.Name, plugin.OfficialMarketplace)
+	if !ValidMarketplaceName(r.Name) {
+		return Trust{}, fmt.Errorf("marketplace: invalid name (lower-case letters, digits and '-', at most 40; not %q)", plugin.OfficialMarketplace)
 	}
 	if r.PublicKey != "" {
 		return Trust{}, fmt.Errorf("marketplace %s: %w", r.Name, ErrPublicKeyRoot)
 	}
 	u, err := url.Parse(r.IndexURL)
-	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
-		return Trust{}, fmt.Errorf("marketplace %s: index_url must be an https:// URL", r.Name)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
+		// No query or userinfo: a token there would be shown and quoted
+		// (and the signature is fetched at index_url + ".sigstore.json").
+		return Trust{}, fmt.Errorf("marketplace %s: index_url must be an https:// URL without userinfo, query or fragment", r.Name)
 	}
 	if !strings.HasPrefix(r.IdentityRegexp, "^https://") {
 		return Trust{}, fmt.Errorf("marketplace %s: identity_regexp must start with ^https://", r.Name)
