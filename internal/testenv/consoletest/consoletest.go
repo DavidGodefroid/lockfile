@@ -1,11 +1,14 @@
 // Package consoletest runs a real lockfile console in the test process:
-// lockkit's console.Run on lockfile's backend, a local source, plugins
-// built from sandbox/testdata, a scripted human and a real socket in the
-// test's private runtime directory.
+// lockkit's console.Run on lockfile's backend, attached to a fake lockhub
+// (hubtest), a local source, plugins built from sandbox/testdata, a
+// scripted human and a real socket in the test's private runtime
+// directory.
 package consoletest
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -20,6 +23,8 @@ import (
 	"github.com/DavidGodefroid/lockkit/client"
 	"github.com/DavidGodefroid/lockkit/console"
 	"github.com/DavidGodefroid/lockkit/fingerprint"
+	"github.com/DavidGodefroid/lockkit/hubclient"
+	"github.com/DavidGodefroid/lockkit/hubclient/hubtest"
 	"github.com/DavidGodefroid/lockkit/ipc"
 	"github.com/DavidGodefroid/lockkit/sysconf"
 
@@ -140,8 +145,9 @@ type Plugin struct {
 
 // Options shape a test console.
 type Options struct {
-	// Answers script the human: the policy approval first, then each
-	// decision.
+	// Answers script the human at the console's terminal: the policy
+	// approval first, then the console's own decisions. Requests are
+	// decided on the hub (Console.Hub), never here.
 	Answers []string
 	Plugins []Plugin
 	// Files are created in the local source, by key.
@@ -159,7 +165,8 @@ type Options struct {
 	// a client, and only while Clients (nil: always) allows it.
 	Shared  bool
 	Clients func() bool
-	// Hub runs the console in hub mode.
+	// Hub attaches the console to this hub; unset, to a fake lockhub of
+	// its own (Console.Hub). A console is hub-attached only.
 	Hub console.HubOptions
 	// Now is the console's clock (hub mode: tickets, decisions, plans);
 	// nil is time.Now.
@@ -180,6 +187,10 @@ type Console struct {
 	// StartLines is how many lines the console printed before it listened
 	// (start-up: isolation, policy review, status).
 	StartLines int
+	// Hub is the fake lockhub the console is attached to, nil when the
+	// test gave its own (Options.Hub); HubOptions attach a console to it.
+	Hub        *hubtest.Hub
+	HubOptions console.HubOptions
 	done       chan error
 
 	// What Restart starts again on.
@@ -269,21 +280,51 @@ func Start(t testing.TB, o Options) *Console {
 		c.SharedDir = separated(t, iso, o.Clients)
 	}
 	c.iso, c.cfg, c.state = iso, cfg, t.TempDir()
+	if !o.Hub.Enabled() {
+		o.Hub, c.Hub, _ = NewHub(t)
+	}
+	c.HubOptions = o.Hub
 	c.launch(t, o)
 	return c
 }
 
+// HubInstance is the instance name of the hub NewHub makes.
+const HubInstance = "files"
+
+// NewHub is a fake lockhub for one console (instance HubInstance), the
+// options that attach a console to it, and the console's instance key.
+func NewHub(t testing.TB) (console.HubOptions, *hubtest.Hub, ed25519.PublicKey) {
+	t.Helper()
+	home := t.TempDir()
+	key, err := hubclient.InstanceKey(home, HubInstance)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pub := key.Public().(ed25519.PublicKey)
+	hub := hubtest.New(t, HubInstance, pub)
+	hubKey := filepath.Join(t.TempDir(), "hub.pub")
+	if err := os.WriteFile(hubKey, []byte(base64.StdEncoding.EncodeToString(hub.Pub)+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return console.HubOptions{URL: hub.URL(), KeyFile: hubKey, Instance: HubInstance, Home: home}, hub, pub
+}
+
 // Restart stops c and starts a console again on the same config, state
 // (approved policy, audit log, hub plans), plugin store, work directory
-// and source, with o's Answers, Hub and Now (the rest of o is ignored):
-// a console restarted with or without hub mode.
+// and source, with o's Answers, Hub and Now (the rest of o is ignored);
+// without o.Hub, on c's hub.
 func (c *Console) Restart(t testing.TB, o Options) *Console {
 	t.Helper()
 	c.Stop(t)
 	n := &Console{IO: NewScriptIO(o.Answers...), Work: c.Work, Root: c.Root, Profile: c.Profile, SharedDir: c.SharedDir,
-		PluginDir: c.PluginDir, done: make(chan error, 1), iso: c.iso, cfg: c.cfg, state: c.state}
+		PluginDir: c.PluginDir, done: make(chan error, 1), iso: c.iso, cfg: c.cfg, state: c.state, Hub: c.Hub, HubOptions: c.HubOptions}
 	opts := c.opts
 	opts.Answers, opts.Hub, opts.Now = o.Answers, o.Hub, o.Now
+	if !opts.Hub.Enabled() {
+		opts.Hub = c.HubOptions
+	} else {
+		n.Hub, n.HubOptions = nil, opts.Hub
+	}
 	n.launch(t, opts)
 	return n
 }

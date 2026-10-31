@@ -227,13 +227,19 @@ separate](#what-docker-does-and-does-not-separate).
 
 ## Run the console
 
-In a terminal you keep in view:
+The console runs hub-attached only: lockhub's `lox up` starts it with its hub flags
+(`lockfile console` on its own refuses to start: "launched by `lox up` only"):
 
 ```sh
-LOCKFILE_DOCKER_ARGS="-v /data/samples:/srv/lockfile/samples:ro" lockfile console --profile samples
+lox add lockfile samples
+lox up
+lox attach samples   # the console's policy review (detach: Ctrl-P Ctrl-Q)
+lox approve          # the agent's plans
 ```
 
-Add `--auto` after `console` as on a host. The launcher takes from the
+The rest of this page describes the launcher's own console container (`lockfile console` with
+the hub flags `lox up` writes, and for example
+`LOCKFILE_DOCKER_ARGS="-v /data/samples:/srv/lockfile/samples:ro"`). The launcher takes from the
 container what the console never needs: every capability, privilege gain
 (the plugin sandbox sets `no_new_privs` itself), a writable root; and bounds
 its processes and memory (a plugin may take up to 2 GB). The console refuses

@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+The console is hub-attached only (DavidGodefroid/lockkit#110).
+
+- `lockfile console` is launched by `lox up` only: `--hub`, `--hub-key-file` and `--instance`
+  are required, and without them (or with only some) it refuses before the config, the
+  plugin store or the terminal is touched ("the console is launched by `lox up` only", exit
+  64). `--auto` and auto mode (`:mode`, Shift+Tab) are gone: plans are decided on lockhub,
+  the console's own decisions (its policy) stay at its terminal. The standalone start that
+  withdrew the plans hub mode had left pending is gone too.
+- A run by plan id answers the fixed text `in hub mode, run the ticket file.plan answered`
+  (`rpc.MsgRunTicket`), now in the closed list with the pending answer (ticket, lock,
+  instance) (docs/security-model.md).
+- The quick start (README, docs, site) goes through `lox add lockfile <instance>`, `lox up`,
+  `lox attach` and `lox approve`; the profile and plugin setup steps are unchanged.
+- Tests: every test console (`internal/testenv/consoletest`, the CLI's, the MCP server's,
+  `test/e2e`, `test/docker`) runs attached to a fake lockhub (hubtest) and approves its plans
+  there. Builds on lockkit's hub-only console (pseudo-version until its release).
+
 ## v0.5.3
 
 lockkit v0.8.1: the hub URL is `http(s)://host[:port]` only, and lockfile prints lockkit's

@@ -93,7 +93,7 @@
   <tr><td>profile names and <code>production</code> flag, <code>busy</code></td><td>lockfile configuration; <code>busy</code> means the console is waiting for the human on another request</td></tr>
   <tr><td><code>approval_denied</code>, <code>approval_timeout</code></td><td>a human decision; the reason the human types is never forwarded</td></tr>
   <tr><td>refusal codes (<code>E_*</code>, with a static hint)</td><td>computed from the request and the local install, before or without reading the file</td></tr>
-  <tr><td><code>status</code>: console up, production, auto mode, security level, timers, plugin protocol, sandbox ok</td><td>console state</td></tr>
+  <tr><td><code>status</code>: console up, production, auto mode (always off: lockhub decides), security level, timers, plugin protocol, sandbox ok</td><td>console state</td></tr>
   </tbody>
   </table>
   </div>
@@ -104,7 +104,7 @@
   <h2 id="side-channels">Side channels</h2>
   <ul class="prose">
     <li><strong>Timing.</strong> A run’s response leaves the console only at the next multiple of <code>answer_quantum</code> (default 5 s) after the run started; a fetch failure after approval too. Residual: a plan that takes longer than one quantum shows it took longer.</li>
-    <li><strong>The console window.</strong> At desktop security level 1 the agent’s account can read the console’s window. It shows the agent’s own request, the plugin metadata and the outcome codes; causes, sizes and hashes go to the audit only. Residual: the start-up lines show the profile’s location, and a reason you type with a denial (<code>n &lt;reason&gt;</code>) is echoed in the window: do not type file details there.</li>
+    <li><strong>The console window.</strong> At desktop security level 1 the agent’s account can read the console’s window. It shows the agent’s own request, the plugin metadata and the outcome codes; causes, sizes and hashes go to the audit only (a plan’s content sha256 and size, or that it could not be fetched, also go to the hub’s masked screen for you, never to the window). Residual: the start-up lines show the profile’s location, and a reason you type with a denial (<code>n &lt;reason&gt;</code>) is echoed in the window: do not type file details there.</li>
     <li><strong>Exit codes</strong> depend on the outcome only, never on an answer.</li>
   </ul>
 </section>

@@ -58,6 +58,34 @@ var screenDetectors = func() []pii.Detector {
 	return ds
 }()
 
+// msgUnfetched is the hub's content line of a plan whose object could
+// not be fetched at plan time.
+const msgUnfetched = "the object could not be fetched now: an approval will answer fetch_failed"
+
+// contentLine is the hub's content line of a fetched object.
+func contentLine(sha256 string, size int64) string {
+	return fmt.Sprintf("sha256 %s · %d bytes", sha256, size)
+}
+
+// hubScreens splits a hub plan's screen: the console window's (sc, which
+// lockkit prints on the terminal the agent's account can read at desktop
+// level 1, and seals as the ticket's clear screen) and the masked screen
+// the hub shows the human. The content line (the object's sha256 and
+// size, or that it could not be fetched) goes to the masked screen only:
+// the window never tells a size, a hash or a fetch outcome before an
+// approval (docs/security-model.md, the console window).
+func hubScreens(sc console.Screen, content string) (console.Screen, render.MaskedScreen) {
+	lines := make([]render.Line, 0, len(sc.Body)+1)
+	for _, l := range sc.Body {
+		lines = append(lines, render.Structure(l))
+	}
+	if content != "" {
+		lines = append(lines, render.Structure(content))
+	}
+	return sc, render.MaskScreen(render.ScreenSource{Header: sc.Header, Note: sc.Note, Body: lines, Warnings: sc.Warnings, Red: sc.Red},
+		render.Masking{Detectors: screenDetectors})
+}
+
 // hubPlan is file.plan in hub mode: the content is fetched now and its
 // sha256, the plugins and their pins make the plan hash; the plan is
 // stored, its masked screen pushed to the hub, and the agent hears
@@ -69,6 +97,7 @@ func (b *Backend) hubPlan(ctx context.Context, req ipc.Request, env console.Env,
 	start := b.o.Now()
 	defer func() { _ = answers.Quantize(ctx, start, pr.AnswerQuantum, b.o.Now) }()
 	body := hubBody{Profile: pr.Name, Key: pl.key, Handle: string(pl.handle), Plugins: pl.plugins, Pins: pl.pins}
+	content := "" // the hub's masked screen only (hubScreens)
 	if pl.key != "" {
 		if _, err := env.Session(ctx); err != nil {
 			return console.ErrResp(req.ID, ipc.CodeConnLost, msgConnLost)
@@ -86,12 +115,12 @@ func (b *Backend) hubPlan(ctx context.Context, req ipc.Request, env console.Env,
 			// Not told to the agent now (the key's prefix was checked
 			// before): the human sees it, the run refuses it.
 			body.Unfetched = true
-			sc.Body = append(sc.Body, "the object could not be fetched now: an approval will answer fetch_failed")
+			content = msgUnfetched
 		} else {
 			// Only hashed here: the run fetches again and serves that copy.
 			_ = ws.Release(hd)
 			body.SHA256 = info.SHA256
-			sc.Body = append(sc.Body, fmt.Sprintf("sha256 %s · %d bytes", info.SHA256, info.Size))
+			content = contentLine(info.SHA256, info.Size)
 		}
 	}
 	raw, err := json.Marshal(body)
@@ -108,14 +137,9 @@ func (b *Backend) hubPlan(ctx context.Context, req ipc.Request, env console.Env,
 	if err != nil {
 		return console.ErrResp(req.ID, ipc.CodeInternal, msgInternal)
 	}
-	lines := make([]render.Line, 0, len(sc.Body))
-	for _, l := range sc.Body {
-		lines = append(lines, render.Structure(l))
-	}
+	sc, masked := hubScreens(sc, content)
 	sc.Hub = &console.HubTicket{PlanID: stored.ID, Caller: caller, Risk: ticket.RiskReadPII,
-		Requester: ticket.Requester{Agent: p.Requester.Agent},
-		Masked: render.MaskScreen(render.ScreenSource{Header: sc.Header, Note: sc.Note, Body: lines, Warnings: sc.Warnings, Red: sc.Red},
-			render.Masking{Detectors: screenDetectors})}
+		Requester: ticket.Requester{Agent: p.Requester.Agent}, Masked: masked}
 	a := env.Approve(ctx, req.ID, sc)
 	if a.Pending != nil {
 		return a.Refusal
@@ -133,7 +157,7 @@ func (b *Backend) hubPlan(ctx context.Context, req ipc.Request, env console.Env,
 // binding (policy, plugins, content) has not moved.
 func (b *Backend) hubRun(ctx context.Context, req ipc.Request, env console.Env, h *console.Hub, p rpc.RunParams) ipc.Response {
 	if p.Ticket == "" {
-		return console.ErrResp(req.ID, ipc.CodeInvalidParams, "in hub mode, run the ticket file.plan answered")
+		return console.ErrResp(req.ID, ipc.CodeInvalidParams, rpc.MsgRunTicket)
 	}
 	pol := policyOf(env)
 	if pol == nil {

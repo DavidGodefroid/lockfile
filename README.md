@@ -139,13 +139,22 @@ lockfile profile add samples --source local --path /srv/lockfile/samples --prefi
 lockfile plugin install file.non-empty@1.0.0
 lockfile plugin install format.is-pdf@1.0.0
 
-# 3. The console, in a terminal you keep in view.
-LOCKFILE_DOCKER_ARGS="-v /data/samples:/srv/lockfile/samples:ro" lockfile console --profile samples
+# 3. Declare the lock and start it with its hub (lockhub's lox CLI), then
+#    answer the console's own questions (policy review) and approve plans.
+lox add lockfile samples
+lox up
+lox attach samples  # the policy review (detach: Ctrl-P Ctrl-Q)
 
-# 4. Your agent: wire it (from the project root), then ask.
+# 4. Your agent: wire it (from the project root), then ask. The plan waits
+#    for your approval on lockhub (lox approve), then its ticket runs.
 lockfile init claude
-lockfile plan --key invoices/2026/10/abc123.pdf --plugin file.non-empty --plugin format.is-pdf --run --json
+lockfile plan --key invoices/2026/10/abc123.pdf --plugin file.non-empty --plugin format.is-pdf --json
+lox approve
+lockfile run TICKET --json
 ```
+
+The console runs hub-attached only: `lox up` starts it with its hub flags,
+and `lockfile console` on its own refuses to start.
 
 ```json
 {"handle":"f_8Kq2xR","answers":[
@@ -226,10 +235,10 @@ only guide the agent; the console's checks are the guarantee.
   connection and refuses any other account (`--allowed-uids` or `ALLOWED_UIDS` names an
   agent in its own container). Whoever runs `docker` on the host stays outside this
   boundary: see [docs/docker.md](docs/docker.md#what-docker-does-and-does-not-separate).
-- **Human approval.** Every plan is approved in the console; no socket method
-  approves, installs or loosens anything. On production you type the profile
-  name, not `y`. Auto mode switches only from the console's keyboard, never
-  on production, never for unofficial plugins.
+- **Human approval.** Every plan is approved by you on lockhub (`lox
+  approve`); the console's own decisions (its policy) stay at its terminal.
+  No socket method approves, installs or loosens anything. An unofficial
+  plugin is never auto-approved.
 - **A closed output list.** Everything the console sends the agent is a
   plugin answer, an absence of answer, a random handle or plan id, signed
   plugin metadata, profile names, an approval outcome, a refusal code or the
@@ -325,8 +334,8 @@ lockfile marketplace add NAME --index URL --identity-regexp REGEXP
 ```
 
 An unofficial marketplace needs its name typed when added, is flagged on
-every approval screen and in every agent result, and never runs in auto
-mode. **Writing a plugin**: see [docs/plugin-contract.md](docs/plugin-contract.md).
+every approval screen and in every agent result, and is never
+auto-approved. **Writing a plugin**: see [docs/plugin-contract.md](docs/plugin-contract.md).
 
 ## Documentation
 
