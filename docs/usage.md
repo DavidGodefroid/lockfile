@@ -157,6 +157,7 @@ be a service name without a dot or a private address.
 
 | lockfile | lockkit | lockhub |
 |---|---|---|
+| v0.5.2 | v0.6.0 | as v0.5.1 |
 | v0.5.1 | v0.6.0 | as v0.5.0; `allowed_uids` (`--allowed-uids`, for lea's agents) from lockhub v0.2.4 |
 | v0.5.0 | v0.6.0 | v0.2.0 or later: hub mode, `devices: true` (paired phones), reveals (`reveal: true`, Ctrl-O) and renewals |
 | v0.4.0 | v0.3.1 | v0.2.0 or later: hub mode only; leave `devices` and `reveal` off |
