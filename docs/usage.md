@@ -17,7 +17,7 @@ release image, with the account and the volumes it needs ([docker.md](docker.md#
 | console account: `profile`, `plugin`, `marketplace`, `audit`, `forget`, `doctor` | `lockfile`, on the `lockfile-home` volume |
 | the console | `lockfile`, confined, under the shipped seccomp profile ([Run the console](docker.md#run-the-console)); `local` sources mounted with `LOCKFILE_DOCKER_ARGS` |
 | `init`, `doctor --fix` | you, with your home and the project |
-| agent side: `status`, `sources`, `plugins`, `plan`, `run`, `answers`, `release`, `mcp` | `agent`, with the `lockfile-run` volume only |
+| agent side: `status`, `sources`, `plugins`, `plan`, `run`, `answers`, `release`, `mcp` | `agent`, with the socket volume of the workspace's lockfile lock that `lox up` runs, read-only, only ([docker.md](docker.md#the-socket-of-lox-ups-lock)) |
 
 `lockfile version` prints the launcher's version and the image's; `lockfile update [vX.Y.Z]`
 replaces the launcher and the seccomp profile with a release's (cosign signatures and checksum

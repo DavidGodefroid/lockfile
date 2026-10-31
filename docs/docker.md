@@ -18,9 +18,11 @@ only the socket volume:
   and the binaries (`lockfile`, `cosign`) are owned by root; there is no
   `sudo` and the image starts no shell;
 - the socket directory `/run/lockfile` (mode 2750,
-  `lockfile:lockfile-clients`) is a named volume, `lockfile-run`, shared by
-  the console container and the agent's containers. The kernel checks every
-  peer on the socket as on a host;
+  `lockfile:lockfile-clients`) is a named volume, shared by the console
+  container and the agent's containers (read-only there): `lox up`'s socket
+  volume of the lock (`lockfamily-<hash>_<instance>-run`, named in
+  `.lockfamily/up.json`). The kernel checks every peer on the socket as on
+  a host;
 - the console account's home is a named volume, `lockfile-home`: the config
   and profiles, the plugin store and `plugins.lock`, the approved policies,
   the audit log, the fetched files (`work_dir`), SFTP keys and `known_hosts`,
@@ -82,9 +84,10 @@ does.
 |---|---|---|
 | `console` | `lockfile`, in a container of its own per profile (`lockfile-console-<n>`; `LOCKFILE_CONSOLE_NAME` names it), under the seccomp profile, with no capability, `no-new-privileges`, a read-only root with a 64 MB `/tmp`, at most 512 processes and 4 GB of memory, no log driver, `--add-host=host.docker.internal:host-gateway` | `lockfile-run`, `lockfile-home` |
 | `profile`, `plugin`, `marketplace`, `audit`, `forget` | `lockfile` | `lockfile-home` |
-| `doctor` | `lockfile`, under the seccomp profile | `lockfile-run`, `lockfile-home` |
+| `doctor` | `lockfile`, under the seccomp profile | lox up's socket volume of the lock, read-only, when there is one; `lockfile-home` |
 | `init`, `doctor --fix` | you (your uid and gid): they write your agents' files | your home, and the project (the nearest directory up holding `.lockfile/`, or else `.git`), each at its own path |
-| everything else: `mcp`, `status`, `sources`, `plugins`, `plan`, `run`, `answers`, `release`, `help` | `agent` | `lockfile-run` only |
+| the agent commands: `mcp`, `status`, `sources`, `plugins`, `plan`, `run`, `answers`, `release` | `agent` | the socket volume of the workspace's lockfile lock that `lox up` runs, read-only, only ([below](#the-socket-of-lox-ups-lock)) |
+| everything else: `help`... | `agent` | none |
 
 The launcher reads:
 
@@ -97,6 +100,60 @@ The launcher reads:
   `LOCKFILE_DOCKER_ARGS="-v /data/samples:/srv/lockfile/samples:ro" lockfile console --profile samples`;
 - `VAULT_ADDR`, `VAULT_NAMESPACE`: passed to the console; `VAULT_CACERT`
   too, with its file mounted read-only at its own path.
+
+### The socket of lox up's lock
+
+The consoles run hub-attached only, started by `lox up` (lockhub): each
+under compose, with its socket in the volume
+`lockfamily-<8 hex of sha256(workspace)>_<instance>-run`, which `lox up`
+names in `<workspace>/.lockfamily/up.json` (lockhub's `docs/lox-up.md`).
+The agent commands mount that volume on `/run/lockfile`, read-only
+(connecting to a socket needs no write), and no other: without it they stop
+(exit 2) and say why, and what to do (`lox up`), never falling back to the
+fixed `lockfile-run`. The launcher takes the volume only after the checks
+lea makes for its own agents:
+
+- `up.json` is found in the nearest directory up from here whose
+  `.lockfamily` holds one (that directory is the workspace); the
+  `.lockfamily` directory and `up.json` are no link, are yours, and
+  neither group nor others may write them; `up.json` is lox up's state
+  (version 1, as `lox up` writes it: two-space indented JSON, the values
+  the launcher reads unescaped) of this very workspace (its `workspace`,
+  and its `project` `lockfamily-<8 hex of sha256(workspace)>`);
+- the lock is the workspace's only lockfile lock, or the one `--instance
+  NAME` names (the launcher's own option, taken out of the command line;
+  with several and no `--instance`, the error names them). In
+  `.mcp.json`, add it to the arguments: `"args": ["mcp", "--instance",
+  "NAME"]`;
+- its socket volume is the one `lox up` names for it, its clients group
+  the image's (10030);
+- Docker confirms the volume: lox up's labels (compose's project and
+  volume, `dev.lockfamily.role=socket`, its instance, type and workspace),
+  read as JSON and compared whole; and every container that mounts it is
+  lox up's own (compose ran it from lox up's state directory: its
+  `project.working_dir` is `$XDG_STATE_HOME/lockfamily/<project>` or
+  `~/.local/state/lockfamily/<project>`, its `config_files` `-` or that
+  directory's `compose.yaml`) or mounts it read-only (the agents', as the
+  launcher's own). A compose file written in the workspace, with lox up's
+  project name and volume, or any container mounting the volume
+  read-write, could serve the socket from an image of its own: the
+  launcher then trusts none of that socket.
+
+`up.json` only names the lock: what is mounted is what Docker's labels
+prove. Anything else fails closed.
+
+What these checks are for: mistakes (a stale or copied `up.json`, another
+workspace's lock, a volume or compose file of the same name) and files
+others than you can write. They are no boundary against an agent that
+runs as you on the host with Docker access (Claude Code started in a
+terminal usually does): it can write `up.json`, make volumes and
+containers with any labels, or `docker exec` into lox up's containers.
+Even then it holds none of the console's credentials and cannot sign a
+decision (the hub signs them, the console checks the hub's key), but it
+could serve an impostor socket to another agent. To contain the agent
+itself, run it in lea, whose containers have no Docker access.
+
+lox up runs the console of the `default` profile (`--profile default`) unless the lock names another; the agent commands find its socket in the volume.
 
 It never mounts the Docker socket, and refuses a path holding `:` (docker
 `-v` separates on it).
