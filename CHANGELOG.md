@@ -16,6 +16,9 @@
   value (`--hub URL`, `--instance`, `--require-device`, `hub-key --instance`) are printed
   with that value replaced by `<value>`, and lockkit's `invalid profile name %q` and
   `unknown agent %q` are not reached (lockfile checks first).
+- A marketplace `index_url` with a query or fragment is refused, as one with userinfo was:
+  a token there would be shown by `marketplace add` and `marketplace list` (and the
+  signature is fetched at `index_url` + `.sigstore.json`).
 
 ## v0.5.1
 

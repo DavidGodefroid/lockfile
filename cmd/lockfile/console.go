@@ -145,7 +145,7 @@ func runHubKey(e env, args []string) int {
 		}
 	}
 	if err := hubclient.HubKeyCommand(e.stdout, home, args); err != nil {
-		fmt.Fprintln(e.stderr, "lockfile hub-key:", scrub(err.Error(), typedValues(args)...))
+		fmt.Fprintln(e.stderr, "lockfile hub-key:", scrub(err.Error(), typedValues(args, []string{"instance"}, hubclient.ValidInstance)...))
 		return product.ExitUsage
 	}
 	return product.ExitOK

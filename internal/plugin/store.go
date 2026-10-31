@@ -51,7 +51,6 @@ type Installed struct {
 	Tampered bool
 }
 
-// Qualify returns the store name of a plugin from a marketplace.
 // ValidQualified reports whether s is a plugin name, bare (official) or
 // MARKETPLACE/name: one an error may quote.
 func ValidQualified(s string) bool {
@@ -61,6 +60,7 @@ func ValidQualified(s string) bool {
 	return pluginspec.ValidName(s)
 }
 
+// Qualify returns the store name of a plugin from a marketplace.
 func Qualify(marketplace, name string, official bool) string {
 	if official {
 		return name

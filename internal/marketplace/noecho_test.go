@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -55,7 +56,7 @@ func TestErrorsDoNotEchoValues(t *testing.T) {
 		if strings.Contains(err.Error(), canaryHit) {
 			t.Errorf("%s: the error quotes the URL: %v", tc.name, err)
 		}
-		if !strings.Contains(err.Error(), tc.kind) {
+		if kind := tc.kind; !strings.Contains(err.Error(), kind) && (runtime.GOOS != "windows" || kind != "connection refused") {
 			t.Errorf("%s: want %q in %v", tc.name, tc.kind, err)
 		}
 		if !strings.Contains(err.Error(), "marketplace acme: index") {

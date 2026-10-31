@@ -18,7 +18,9 @@ func scrub(msg string, values ...string) string {
 	var parts []string
 	for _, v := range values {
 		parts = append(parts, v)
-		parts = append(parts, strings.Split(v, ",")...)
+		for _, p := range strings.Split(v, ",") {
+			parts = append(parts, p, strings.TrimSpace(p))
+		}
 	}
 	// Longest first, so that a part never splits a whole value.
 	slices.SortFunc(parts, func(a, b string) int { return len(b) - len(a) })
@@ -33,15 +35,28 @@ func scrub(msg string, values ...string) string {
 	return msg
 }
 
-// typedValues are the values in args: the arguments that are not flags,
-// and the VALUE of -flag=VALUE.
-func typedValues(args []string) []string {
+// typedValues are the values in args that an error may quote: the
+// arguments that are not flags, the VALUE of -flag=VALUE, and the name of
+// a flag not in known (the flag package quotes an unknown flag), except
+// those keep accepts (a valid name, quoted on purpose).
+func typedValues(args []string, known []string, keep func(string) bool) []string {
 	var out []string
+	add := func(v string) {
+		if keep == nil || !keep(v) {
+			out = append(out, v)
+		}
+	}
 	for _, a := range args {
 		if !strings.HasPrefix(a, "-") {
-			out = append(out, a)
-		} else if _, v, ok := strings.Cut(a, "="); ok {
-			out = append(out, v)
+			add(a)
+			continue
+		}
+		name, v, ok := strings.Cut(strings.TrimLeft(a, "-"), "=")
+		if !slices.Contains(known, name) {
+			out = append(out, name)
+		}
+		if ok {
+			add(v)
 		}
 	}
 	return out

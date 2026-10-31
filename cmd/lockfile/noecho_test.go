@@ -49,6 +49,8 @@ func TestErrorsDoNotEchoValues(t *testing.T) {
 		{"profile", "add", canary + " x", "--source", "local", "--path", "/srv"},
 		{"hub-key", "--instance", canary + " x"},
 		{"hub-key", "--instance=" + urlCanary},
+		{"hub-key", "--" + canary},
+		{"hub-key", "--instance", "files", canary},
 		{"init", canary + " x"},
 		{"init", "--user", urlCanary},
 	} {
@@ -71,11 +73,16 @@ func TestConsoleHubErrorsDoNotEchoValues(t *testing.T) {
 	if err := os.WriteFile(key, []byte(base64.StdEncoding.EncodeToString(make([]byte, 32))+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	devices := filepath.Join(dir, "devices.json")
+	if err := os.WriteFile(devices, []byte(`{"devices":[]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() { testConsoleHooks = nil })
 	for _, hub := range [][]string{
 		{"--hub", "http://user:" + canary + "@hub.example.org", "--instance", "files"},
 		{"--hub", "https://" + canary + "%zz", "--instance", "files"},
 		{"--hub", "https://hub.example.org", "--instance", canary + " x"},
+		{"--hub", "https://hub.example.org", "--instance", "files", "--devices-file", devices, "--require-device", "read, " + canary},
 	} {
 		testConsoleHooks = &consoleHooks{io: consoletest.NewScriptIO(), isolation: sameUserIsolation(t), harden: func() error { return nil },
 			stateDir: t.TempDir(), configPath: cfg, home: t.TempDir()}
@@ -95,7 +102,11 @@ func TestScrub(t *testing.T) {
 	if got := scrub(`x "a\"`+canary+`"`, `a"`+canary); strings.Contains(got, canaryHit) {
 		t.Errorf("quoted form kept: %q", got)
 	}
-	if v := typedValues([]string{"--instance", "x1", "--hub=" + urlCanary, "-v"}); len(v) != 2 || v[1] != urlCanary {
+	if got := scrub(`unknown risk class "`+canary+`"`, "read, "+canary); strings.Contains(got, canaryHit) {
+		t.Errorf("trimmed part kept: %q", got)
+	}
+	v := typedValues([]string{"--instance", "files", "--hub=" + urlCanary, "--" + canary, "x1"}, []string{"instance", "hub"}, func(s string) bool { return s == "files" })
+	if len(v) != 3 || v[0] != urlCanary || v[1] != canary || v[2] != "x1" {
 		t.Errorf("typedValues = %q", v)
 	}
 }
