@@ -133,7 +133,7 @@ func (b *Backend) hubPlan(ctx context.Context, req ipc.Request, env console.Env,
 // binding (policy, plugins, content) has not moved.
 func (b *Backend) hubRun(ctx context.Context, req ipc.Request, env console.Env, h *console.Hub, p rpc.RunParams) ipc.Response {
 	if p.Ticket == "" {
-		return console.ErrResp(req.ID, ipc.CodeInvalidParams, "in hub mode, run the ticket file.plan answered")
+		return console.ErrResp(req.ID, ipc.CodeInvalidParams, rpc.MsgRunTicket)
 	}
 	pol := policyOf(env)
 	if pol == nil {

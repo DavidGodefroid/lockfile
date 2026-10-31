@@ -104,7 +104,7 @@ The official marketplace's signer is pinned in the binary. An unofficial marketp
 unescaped `.` or does not pin `HOST/OWNER/REPO/` (other signers would match). It needs
 its name typed when added (in a terminal: a typed name is never read from a pipe, nor the
 plugin name `plugin update` asks for), is flagged on every approval screen and in every agent result,
-and never runs in auto mode. Keyless signers only (`--public-key` is refused).
+and is never auto-approved. Keyless signers only (`--public-key` is refused).
 
 A running console sees an installed plugin or an added marketplace as a policy loosening:
 it applies it only after `:review` in the console.
@@ -112,8 +112,12 @@ it applies it only after `:review` in the console.
 ## The console
 
 ```sh
-lockfile console --profile docs [--allowed-uids UID,...] [--auto | --hub URL [--hub-plain-http] --hub-key-file FILE --instance NAME]
+lockfile console --profile docs --hub URL [--hub-plain-http] --hub-key-file FILE --instance NAME [--allowed-uids UID,...]
 ```
+
+The console is launched by `lox up` only (lockhub's CLI), which writes the hub flags: without
+`--hub`, `--hub-key-file` and `--instance` it refuses to start ("launched by `lox up` only").
+There is no standalone console and no auto mode.
 
 `--allowed-uids UID,...` lets these uids connect besides the members of `lockfile-clients`, as
 `allowed_uids` in the image's `/etc/lockfile/system.toml` does: an agent in a container of its
@@ -125,17 +129,16 @@ Run in its container ([docker.md](docker.md#run-the-console)), it checks the iso
 console account, its own terminal), the sandbox and `/proc`, asks for the secret, connects,
 and serves the profile's socket in `/run/lockfile` (the `lockfile-run` volume). Every plan shows an approval screen: the key as
 the agent typed it, each plugin with its question and the meaning of 1 and 0, how many answers
-the plan reveals, and a red line per unofficial plugin. `y` approves (the profile name on
-production), `n <reason>` denies. Keys: `:review`, `:status`, `:mode`/Shift+Tab (auto mode, never
-on production, never for unofficial plugins), `:quit`. Results show as `plan pl_…: answered` or
-`refused <code>`; the answers, causes, sizes and hashes are in the audit:
+the plan reveals, and a red line per unofficial plugin; it is decided on lockhub (below). Keys:
+`:review`, `:status`, `:quit`. Results show as `plan …: answered` or `refused <code>`; the
+answers, causes, sizes and hashes are in the audit:
 
 ```sh
 lockfile audit [--since 24h] [--json]           # console account only
 ```
 
-**Hub mode.** With `--hub URL --hub-key-file FILE --instance NAME` (the three go together, never with
-`--auto`; `lock up` writes them), plans are decided on lockhub, never on this terminal; the
+**Hub mode.** With `--hub URL --hub-key-file FILE --instance NAME` (the three are required;
+`lox up` writes them), plans are decided on lockhub, never on this terminal; the
 policy and `:review` stay here. `file.plan` fetches the object at once, hashes it, and asks
 the hub with a signed ticket (an object that cannot be fetched is not told to the agent then:
 the plan goes to the hub, the screen says so, and an approval answers `fetch_failed`; the plan

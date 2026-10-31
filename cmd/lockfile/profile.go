@@ -71,6 +71,6 @@ func runProfile(e env, args []string) int {
 	if err := profile.AppendProfile(path, pos[0], keys, values); err != nil {
 		return failHuman(e, "profile add", err)
 	}
-	fmt.Fprintf(e.stdout, "added profile %s to %s\nstart it: lockfile console --profile %s\n", pos[0], path, pos[0])
+	fmt.Fprintf(e.stdout, "added profile %s to %s\nstart it with its hub: lox add lockfile NAME (profile %s), then lox up\n", pos[0], path, pos[0])
 	return product.ExitOK
 }

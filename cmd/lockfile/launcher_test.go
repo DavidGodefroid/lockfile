@@ -207,7 +207,7 @@ func TestLauncherConsoleNamePerProfile(t *testing.T) {
 	if !strings.HasPrefix(a, "lockfile-console-") || !strings.HasPrefix(b, "lockfile-console-") || a == b {
 		t.Errorf("names %q and %q", a, b)
 	}
-	if c, _ := name(nil, "--profile=samples", "--auto"); c != a {
+	if c, _ := name(nil, "--profile=samples", "--allowed-uids", "1000"); c != a {
 		t.Errorf("--profile=samples: %q, want %q", c, a)
 	}
 	if got, _ := name([]string{"LOCKFILE_CONSOLE_NAME=lockfile-console"}); got != "lockfile-console" {

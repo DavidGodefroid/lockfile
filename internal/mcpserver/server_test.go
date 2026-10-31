@@ -14,6 +14,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/DavidGodefroid/lockkit/mcpkit"
+	"github.com/DavidGodefroid/lockkit/ticket"
 
 	"github.com/DavidGodefroid/lockfile/internal/testenv"
 	"github.com/DavidGodefroid/lockfile/internal/testenv/consoletest"
@@ -114,6 +115,36 @@ func TestToolsList(t *testing.T) {
 	}
 }
 
+// pendingTicket is the ticket of a pending tool answer (decided on the
+// hub), "" for another answer.
+func pendingTicket(st map[string]any) string {
+	if st["status"] != "pending" {
+		return ""
+	}
+	tk, _ := st["ticket"].(string)
+	return tk
+}
+
+// runDecided calls lockfile_run on ticket tk until the hub's decision has
+// reached the console, then returns that call's answer.
+func (s *session) runDecided(t *testing.T, args map[string]any, tk string, token any) (*mcp.CallToolResult, string, map[string]any) {
+	t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		s.mu.Lock()
+		s.progress, s.at = nil, nil
+		s.mu.Unlock()
+		res, text, st := s.call(t, ToolRun, args, token)
+		if pendingTicket(st) != tk {
+			return res, text, st
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the decision never arrived")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
 // textTemplates are the fixed texts of the tools' text output.
 var textTemplates = []string{
 	mcpkit.Untrusted("plugin descriptions", "the plugin manifests"), mcpkit.Untrusted("answers", "lockfile plugins"),
@@ -131,7 +162,7 @@ var progressRe = regexp.MustCompile(`^(?:waiting for the human to approve in the
 // content, progress) against the closed vocabulary, as a whitelist.
 func TestRunToolOutputClosed(t *testing.T) {
 	plugins := []string{"test.answer1", "test.printthenhang", "acme/test.answer0"}
-	c := consoletest.Start(t, consoletest.Options{Answers: []string{"y", "y"},
+	c := consoletest.Start(t, consoletest.Options{Answers: []string{"y"},
 		Plugins: []consoletest.Plugin{{Name: plugins[0]}, {Name: plugins[1]}, {Name: plugins[2]}}})
 	extra := append([]string{"invoices/a.pdf", "../etc/passwd", "check"}, textTemplates...)
 	for _, p := range plugins {
@@ -163,8 +194,13 @@ func TestRunToolOutputClosed(t *testing.T) {
 		t.Fatalf("plan: %s\n%s", text, c.IO.Output())
 	}
 	check(text, st)
-	id, _ := st["plan_id"].(string)
-	res, text, st = s.call(t, ToolRun, map[string]any{"plan_id": id}, "run")
+	// Pending on the hub: the plan's ticket runs once it is decided there.
+	tk := pendingTicket(st)
+	if !ticket.ValidID(tk) || !strings.HasPrefix(text, "Pending human approval: ticket "+tk) {
+		t.Fatalf("plan not pending: %s %v", text, st)
+	}
+	c.Hub.Decide(tk, ticket.Approved, "")
+	res, text, st = s.runDecided(t, map[string]any{"plan_id": tk}, tk, "run")
 	if res.IsError {
 		t.Fatalf("run: %s", text)
 	}
@@ -199,14 +235,13 @@ func TestRunToolOutputClosed(t *testing.T) {
 func TestRunProgressTextConstant(t *testing.T) {
 	// A 12 s quantum: the run answers after 12 s, heartbeats every 6 s (on
 	// the quantum's halves), not on lockkit's default 5 s.
-	consoletest.Start(t, consoletest.Options{Answers: []string{"y", "y"}, Profile: "answer_quantum = \"12s\"\n",
+	c := consoletest.Start(t, consoletest.Options{Answers: []string{"y"}, Profile: "answer_quantum = \"12s\"\n",
 		Plugins: []consoletest.Plugin{{Name: "test.answer1"}}})
 	s := connect(t, "samples")
 	_, _, st := s.call(t, ToolPlan, map[string]any{"key": "invoices/a.pdf", "plugins": []string{"test.answer1"}}, nil)
-	s.mu.Lock()
-	s.progress, s.at = nil, nil
-	s.mu.Unlock()
-	res, text, _ := s.call(t, ToolRun, map[string]any{"plan_id": st["plan_id"]}, "tok")
+	tk := pendingTicket(st)
+	c.Hub.Decide(tk, ticket.Approved, "")
+	res, text, _ := s.runDecided(t, map[string]any{"plan_id": tk}, tk, "tok")
 	if res.IsError {
 		t.Fatalf("run: %s", text)
 	}
@@ -252,8 +287,9 @@ func TestRefusalStructured(t *testing.T) {
 	if !res.IsError || text != "unknown_profile" || ref["code"] != "E_UNKNOWN_PROFILE" || !strings.Contains(ref["hint"].(string), "lockfile console --profile nope") {
 		t.Fatalf("unknown profile: %v %q %v", res.IsError, text, st)
 	}
+	// A plan id is not a ticket: hub-attached, only a ticket runs.
 	res, text, _ = s.call(t, ToolRun, map[string]any{"plan_id": "pl_unknown"}, nil)
-	if !res.IsError || !strings.Contains(text, "plan again") {
-		t.Fatalf("no such plan: %v %q", res.IsError, text)
+	if !res.IsError || text != "invalid params" {
+		t.Fatalf("plan id: %v %q", res.IsError, text)
 	}
 }

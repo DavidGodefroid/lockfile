@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"crypto/ed25519"
-	"encoding/base64"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -12,7 +11,6 @@ import (
 	"time"
 
 	"github.com/DavidGodefroid/lockkit/console"
-	"github.com/DavidGodefroid/lockkit/hubclient"
 	"github.com/DavidGodefroid/lockkit/hubclient/hubtest"
 	"github.com/DavidGodefroid/lockkit/ipc"
 	"github.com/DavidGodefroid/lockkit/ticket"
@@ -22,7 +20,7 @@ import (
 	"github.com/DavidGodefroid/lockfile/internal/testenv/consoletest"
 )
 
-const hubInstance = "files"
+const hubInstance = consoletest.HubInstance
 
 // hubConsole is a console in hub mode beside a fake lockhub.
 func hubConsole(t *testing.T, files map[string]string) (*consoletest.Console, *hubtest.Hub, ed25519.PublicKey) {
@@ -35,18 +33,7 @@ func hubConsole(t *testing.T, files map[string]string) (*consoletest.Console, *h
 // the console's hub options, for a restart.
 func hubConsoleAt(t *testing.T, files map[string]string, now func() time.Time) (*consoletest.Console, *hubtest.Hub, ed25519.PublicKey, console.HubOptions) {
 	t.Helper()
-	home := t.TempDir()
-	key, err := hubclient.InstanceKey(home, hubInstance)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pub := key.Public().(ed25519.PublicKey)
-	hub := hubtest.New(t, hubInstance, pub)
-	hubKey := filepath.Join(t.TempDir(), "hub.pub")
-	if err := os.WriteFile(hubKey, []byte(base64.StdEncoding.EncodeToString(hub.Pub)+"\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	ho := console.HubOptions{URL: hub.URL(), KeyFile: hubKey, Instance: hubInstance, Home: home}
+	ho, hub, pub := consoletest.NewHub(t)
 	c := consoletest.Start(t, consoletest.Options{
 		Answers: []string{"y"}, // the policy, on the terminal; nothing else is asked here
 		Plugins: []consoletest.Plugin{{Name: "test.answer1"}},
@@ -256,57 +243,6 @@ func TestHubExpiredTicketRenewed(t *testing.T) {
 	}
 	if _, r := w.call(rpc.MethodRun, rpc.RunParams{Ticket: renewed, Requester: who}); r.Error == nil {
 		t.Fatalf("the renewal ran twice: %s", r.Result)
-	}
-}
-
-// Rollback of hub mode (D.5): restarted without --hub, the console
-// withdraws the plans its hub mode left pending, and the run of their
-// ticket is refused explicitly (withdrawn) before lockfile sees it: no
-// fetch, no plugin. Back in hub mode, the hub hears of the withdrawal.
-func TestHubRollbackWithdraws(t *testing.T) {
-	c, hub, _, ho := hubConsoleAt(t, map[string]string{"invoices/a.pdf": "%PDF-1.7 synthetic"}, nil)
-	w := dialWire(t, c.Socket)
-	who := ipc.Requester{Agent: "dev-1", Token: "tok-1"}
-	_, r := w.call(rpc.MethodPlan, rpc.PlanParams{Key: "invoices/a.pdf", Plugins: []string{"test.answer1"}, Requester: who})
-	tk := pendingTicket(t, r)
-	hub.Decide(tk, ticket.Approved, "") // decided at the hub: the console never hears of it
-
-	sc := c.Restart(t, consoletest.Options{})
-	t.Cleanup(func() {
-		if t.Failed() {
-			t.Log(sc.IO.Output())
-		}
-	})
-	if !strings.Contains(sc.IO.Output(), "hub mode is off: 1 pending ticket(s)") {
-		t.Fatalf("no withdrawal told:\n%s", sc.IO.Output())
-	}
-	before := sc.AuditLog(t)
-	sw := dialWire(t, sc.Socket)
-	_, r = sw.call(rpc.MethodRun, rpc.RunParams{Ticket: tk, Requester: who})
-	if r.Error == nil || r.Error.Code != ipc.CodeWithdrawn || len(r.Result) != 0 {
-		t.Fatalf("standalone run of a hub ticket: %+v %s", r.Error, r.Result)
-	}
-	after := strings.TrimPrefix(sc.AuditLog(t), before)
-	for _, ev := range []string{`"event":"run"`, `"event":"approved"`} {
-		if strings.Contains(after, ev) {
-			t.Fatalf("lockfile acted on a withdrawn ticket (%s):\n%s", ev, after)
-		}
-	}
-
-	hc := sc.Restart(t, consoletest.Options{Hub: ho})
-	deadline := time.Now().Add(15 * time.Second)
-	for {
-		if _, ok := hub.Withdrawn(tk); ok {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("the hub never heard of the withdrawal:\n%s", hc.IO.Output())
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	hw := dialWire(t, hc.Socket)
-	if _, r := hw.call(rpc.MethodRun, rpc.RunParams{Ticket: tk, Requester: who}); r.Error == nil {
-		t.Fatalf("a withdrawn ticket ran in hub mode: %s", r.Result)
 	}
 }
 

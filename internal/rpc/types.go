@@ -24,6 +24,9 @@ const (
 	MsgPending    = "a policy change awaits the human in the console"
 	MsgClosed     = "the console closed the connection"
 	MsgInternal   = "console error"
+	// MsgRunTicket refuses a run by plan id: the console is hub-attached,
+	// and only the ticket file.plan answered runs.
+	MsgRunTicket = "in hub mode, run the ticket file.plan answered"
 )
 
 // MaxIntent bounds the agent's one-line reason shown on the approval

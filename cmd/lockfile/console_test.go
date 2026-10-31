@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -10,7 +11,10 @@ import (
 	"time"
 
 	"github.com/DavidGodefroid/lockkit/client"
+	"github.com/DavidGodefroid/lockkit/console"
+	"github.com/DavidGodefroid/lockkit/hubclient/hubtest"
 	"github.com/DavidGodefroid/lockkit/ipc"
+	"github.com/DavidGodefroid/lockkit/ticket"
 
 	"github.com/DavidGodefroid/lockfile/internal/answers"
 	"github.com/DavidGodefroid/lockfile/internal/backend"
@@ -28,10 +32,19 @@ type consoleRun struct {
 	socket string
 	work   string
 	done   chan int
+	// hub is the fake lockhub the console is attached to.
+	hub   *hubtest.Hub
+	state string
+}
+
+// hubArgs are the hub flags lox up writes, for o.
+func hubArgs(o console.HubOptions) []string {
+	return []string{"--hub", o.URL, "--hub-key-file", o.KeyFile, "--instance", o.Instance}
 }
 
 // startConsole runs `lockfile console --profile samples` in-process on a
-// local source holding invoices/a.pdf, with the given plugins installed.
+// local source holding invoices/a.pdf, with the given plugins installed,
+// attached to a fake lockhub.
 func startConsole(t *testing.T, answersScript []string, plugins ...string) *consoleRun {
 	t.Helper()
 	root := t.TempDir()
@@ -51,11 +64,12 @@ func startConsole(t *testing.T, answersScript []string, plugins ...string) *cons
 		testenv.Install(t, store, p, testenv.BuildPlugin(t, p[strings.LastIndex(p, ".")+1:]), "Is it "+p+"?", 2)
 	}
 	work := filepath.Join(t.TempDir(), "work")
-	r := &consoleRun{io: consoletest.NewScriptIO(answersScript...), work: work, done: make(chan int, 1)}
+	ho, hub, _ := consoletest.NewHub(t)
+	r := &consoleRun{io: consoletest.NewScriptIO(answersScript...), work: work, done: make(chan int, 1), hub: hub, state: t.TempDir()}
 	ready := make(chan string, 1)
 	testConsoleHooks = &consoleHooks{
 		io: r.io, isolation: sameUserIsolation(t), harden: func() error { return nil },
-		stateDir: t.TempDir(), configPath: cfg, ready: func(s string) { ready <- s },
+		stateDir: r.state, configPath: cfg, ready: func(s string) { ready <- s }, home: ho.Home,
 		backend: func(o *backend.Options) {
 			o.PluginDir, o.WorkDir = store.Dir, work
 			o.ProcHidden = func() error { return nil }
@@ -63,7 +77,7 @@ func startConsole(t *testing.T, answersScript []string, plugins ...string) *cons
 	}
 	t.Cleanup(func() { testConsoleHooks = nil })
 	go func() {
-		code, _, errText := runArgs(t, "", "console", "--profile", "samples")
+		code, _, errText := runArgs(t, "", append([]string{"console", "--profile", "samples"}, hubArgs(ho)...)...)
 		if code != 0 {
 			t.Logf("console exit %d: %s", code, errText)
 		}
@@ -108,7 +122,8 @@ func TestConsoleRefusesWithoutSandbox(t *testing.T) {
 		},
 	}
 	t.Cleanup(func() { testConsoleHooks = nil })
-	code, _, errText := runArgs(t, "", "console", "--profile", "samples")
+	ho, _, _ := consoletest.NewHub(t)
+	code, _, errText := runArgs(t, "", append([]string{"console", "--profile", "samples"}, hubArgs(ho)...)...)
 	if code != product.ExitError || !strings.Contains(errText, "sandbox") {
 		t.Fatalf("exit %d: %s\n%s", code, errText, io.Output())
 	}
@@ -118,11 +133,27 @@ func TestConsoleUsage(t *testing.T) {
 	if code, _, _ := runArgs(t, "", "console"); code != product.ExitUsage {
 		t.Fatalf("no profile: exit %d", code)
 	}
+	// Launched by lox up only: without the hub flags, or with only some,
+	// refused before anything else.
+	for _, args := range [][]string{
+		{"console", "--profile", "samples"},
+		{"console", "--profile", "samples", "--hub", "http://lockhub:8443", "--instance", "files"},
+		{"console", "--profile", "samples", "--hub-key-file", "/run/lockfamily/hub.pub", "--instance", "files"},
+	} {
+		code, _, errText := runArgs(t, "", args...)
+		if code != product.ExitUsage || !strings.Contains(errText, "launched by `lox up` only") || !strings.Contains(errText, "usage: lockfile console --profile NAME --hub URL") {
+			t.Errorf("%v: exit %d: %s", args, code, errText)
+		}
+	}
+	if code, _, _ := runArgs(t, "", "console", "--profile", "samples", "--auto"); code != product.ExitUsage {
+		t.Errorf("--auto: exit %d", code)
+	}
 }
 
 func TestConsoleEndToEnd(t *testing.T) {
-	// First start: approve the policy; then approve the plan.
-	r := startConsole(t, []string{"y", "y"}, "test.answer1")
+	// First start: approve the policy at the terminal; the plan is
+	// approved on the hub.
+	r := startConsole(t, []string{"y"}, "test.answer1")
 	c, err := client.Dial(product.P, t.TempDir(), "samples")
 	if err != nil {
 		t.Fatal(err)
@@ -130,15 +161,32 @@ func TestConsoleEndToEnd(t *testing.T) {
 	defer c.Close()
 	ctx := context.Background()
 	var plan rpc.PlanResult
-	if err := c.Call(ctx, rpc.MethodPlan, rpc.PlanParams{Key: "invoices/a.pdf", Plugins: []string{"test.answer1"}}, &plan); err != nil {
-		t.Fatalf("plan: %v\n%s", err, r.io.Output())
+	if err := c.Call(ctx, rpc.MethodPlan, rpc.PlanParams{Key: "invoices/a.pdf", Plugins: []string{"test.answer1"}}, &plan); err != nil || plan.Status != "pending" {
+		t.Fatalf("plan: %+v %v\n%s", plan, err, r.io.Output())
 	}
+	r.hub.Decide(plan.Ticket, ticket.Approved, "")
 	var res answers.Result
-	if err := c.Call(ctx, rpc.MethodRun, rpc.RunParams{PlanID: plan.PlanID}, &res); err != nil {
-		t.Fatalf("run: %v\n%s", err, r.io.Output())
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		var raw json.RawMessage
+		if err := c.Call(ctx, rpc.MethodRun, rpc.RunParams{Ticket: plan.Ticket}, &raw); err != nil {
+			t.Fatalf("run: %v\n%s", err, r.io.Output())
+		}
+		var p rpc.PlanResult
+		if json.Unmarshal(raw, &p) != nil || p.Status != "pending" {
+			if err := json.Unmarshal(raw, &res); err != nil {
+				t.Fatalf("run result %s: %v", raw, err)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the decision never arrived")
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 	if len(res.Answers) != 1 || res.Answers[0].Result == nil || *res.Answers[0].Result != 1 {
-		t.Fatalf("result = %+v", res)
+		au, _ := os.ReadFile(filepath.Join(r.state, "lockfile", "audit.log"))
+		t.Fatalf("result = %+v\n%s\n%s", res, r.io.Output(), au)
 	}
 	entries, err := os.ReadDir(r.work)
 	if err != nil || len(entries) != 1 {
@@ -154,7 +202,7 @@ func TestConsoleEndToEnd(t *testing.T) {
 	}
 }
 
-// The hub flags go together, never with --auto; hub-key prints the
+// The hub flags are required, and --auto is gone; hub-key prints the
 // instance key lockhub pins, made once.
 func TestConsoleHubFlagsAndHubKey(t *testing.T) {
 	cfg := filepath.Join(t.TempDir(), "config.toml")
@@ -207,7 +255,8 @@ func TestConsoleAllowedUIDs(t *testing.T) {
 		backend: func(o *backend.Options) { o.WorkDir = filepath.Join(t.TempDir(), "work") },
 	}
 	t.Cleanup(func() { testConsoleHooks = nil })
-	code, _, errText := runArgs(t, "", "console", "--profile", "samples", "--allowed-uids", "1000")
+	ho, _, _ := consoletest.NewHub(t)
+	code, _, errText := runArgs(t, "", append([]string{"console", "--profile", "samples", "--allowed-uids", "1000"}, hubArgs(ho)...)...)
 	if code != product.ExitError || !strings.Contains(errText, "--allowed-uids needs the separated setup") {
 		t.Fatalf("exit %d: %s\n%s", code, errText, io.Output())
 	}

@@ -19,7 +19,7 @@ import (
 )
 
 func init() {
-	commands["console"] = command{human: true, help: "serve a profile to agents (run in the lockfile account) [--allowed-uids UID,...] [--hub URL [--hub-plain-http] --hub-key-file F --instance N]", run: runConsole}
+	commands["console"] = command{human: true, help: "serve a profile to agents, attached to lockhub (launched by lox up) --hub URL [--hub-plain-http] --hub-key-file F --instance N [--allowed-uids UID,...]", run: runConsole}
 	commands["hub-key"] = command{human: true, help: "hub-key --instance NAME: print the instance key for lockhub to pin (lockfile account)", run: runHubKey}
 }
 
@@ -42,13 +42,20 @@ func runConsole(e env, args []string) int {
 	fs := flag.NewFlagSet("console", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	profile := fs.String("profile", "", "profile to serve")
-	auto := fs.Bool("auto", false, "approve requests without a prompt (never on production, never for unofficial plugins)")
 	var allowed onceFlag
 	fs.Var(&allowed, "allowed-uids", "uids that may connect besides lockfile-clients' members (an agent in a container of its own)")
 	var hub console.HubOptions
 	hub.Register(fs)
+	const usage = "usage: lockfile console --profile NAME --hub URL [--hub-plain-http] --hub-key-file FILE --instance NAME [--allowed-uids UID,...] (launched by lox up)"
 	if err := fs.Parse(args); err != nil || *profile == "" || fs.NArg() != 0 {
-		fmt.Fprintln(e.stderr, "usage: lockfile console --profile NAME [--allowed-uids UID,...] [--auto | --hub URL [--hub-plain-http] --hub-key-file FILE --instance NAME]")
+		fmt.Fprintln(e.stderr, usage)
+		return product.ExitUsage
+	}
+	if hub.URL == "" || hub.KeyFile == "" || hub.Instance == "" {
+		// Hub-attached only: refused before the config, the store or the
+		// terminal is touched.
+		fmt.Fprintln(e.stderr, "lockfile console:", console.ErrNoHub)
+		fmt.Fprintln(e.stderr, usage)
 		return product.ExitUsage
 	}
 	uids, err := parseAllowedUIDs(allowed.v)
@@ -85,7 +92,7 @@ func runConsole(e env, args []string) int {
 	if cio == nil {
 		term := console.NewTerminal(os.Stdin, e.stdout)
 		if err := term.Interactive(); err != nil {
-			fmt.Fprintln(e.stderr, "lockfile console: warning:", err, "(the mode keys and the status line are off)")
+			fmt.Fprintln(e.stderr, "lockfile console: warning:", err, "(the console keys and the status line are off)")
 		}
 		defer term.Restore()
 		cio, tty = term, os.Stdin
@@ -106,7 +113,7 @@ func runConsole(e env, args []string) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	err = console.Run(ctx, product.P, b, console.Options{
-		Profile: *profile, IO: cio, TTY: tty, Auto: *auto, StateDir: opts.StateDir,
+		Profile: *profile, IO: cio, TTY: tty, StateDir: opts.StateDir,
 		// Runs are released at the profile's answer quantum by the backend;
 		// the other answers say nothing about a file.
 		Quantum:   -1,

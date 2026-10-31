@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/DavidGodefroid/lockkit/mcpkit"
 	"github.com/DavidGodefroid/lockkit/refusal"
 
 	"github.com/DavidGodefroid/lockfile/internal/answers"
@@ -40,6 +41,8 @@ var wireKeys = []string{
 	"product", "protocol", "sandbox", "answer_quantum_ms",
 	// change.request, sources and status (busy: documented addition)
 	"queued", "busy",
+	// a plan or run pending on the hub (console.PendingResp)
+	"status", "ticket", "lock", "instance",
 }
 
 // ClientKeys are the keys the CLI and MCP outputs add around the wire's
@@ -60,7 +63,11 @@ func ClosedVocab(extra ...string) Vocab {
 		"2.0": true, product.Version: true, "samples": true, "ok": true, "unavailable": true,
 		"official": true, "acme": true, "1.0.0": true, "yes": true, "no": true, answers.WarningUnofficial: true,
 		rpc.MsgPlanParams: true, rpc.MsgParams: true, rpc.MsgNoSuchPlan: true, rpc.MsgConnLost: true,
-		rpc.MsgPending: true, rpc.MsgClosed: true, rpc.MsgInternal: true,
+		rpc.MsgPending: true, rpc.MsgClosed: true, rpc.MsgInternal: true, rpc.MsgRunTicket: true,
+		// Pending on the hub: the status, the lock and the instance the
+		// tests' hub knows the console by (consoletest.HubInstance), and the
+		// fixed text the CLI and MCP print with the ticket.
+		"pending": true, product.P.Name: true, "files": true, mcpkit.PendingText(product.P.Name, ""): true,
 	}, Keys: map[string]bool{}}
 	for _, c := range answers.Codes {
 		v.Strings[string(c)] = true
@@ -81,6 +88,8 @@ func ClosedVocab(extra ...string) Vocab {
 	v.Patterns = []*regexp.Regexp{
 		regexp.MustCompile(`^pl_[0-9A-Za-z]{10}$`),
 		regexp.MustCompile(`^f_[0-9A-Za-z]+$`),
+		// a hub ticket id (ULID, random)
+		regexp.MustCompile(`^[0-9A-HJKMNP-TV-Z]{26}$`),
 		// lockkit's fixed texts naming the agent's own method.
 		regexp.MustCompile(`^invalid params for [a-z.]+$`),
 		regexp.MustCompile(`^unknown method "[a-z.]+"$`),

@@ -1,7 +1,9 @@
 //go:build docker
 
 // Package docker runs the image of the Dockerfile as docs/docker.md does:
-// the console in one container under the shipped seccomp profile, the
+// the console in one container under the shipped seccomp profile, attached
+// to a fake lockhub in the test process (hubtest; the console container is
+// on the host's network to reach it, as lox up puts it on the hub's), the
 // agent's commands in others, sharing only the socket volume. It needs a
 // Docker daemon and the image built beforehand:
 //
@@ -15,6 +17,8 @@ package docker
 
 import (
 	"bytes"
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -28,6 +32,9 @@ import (
 	"time"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/DavidGodefroid/lockkit/hubclient/hubtest"
+	"github.com/DavidGodefroid/lockkit/ticket"
 
 	"github.com/DavidGodefroid/lockfile/internal/plugin"
 	"github.com/DavidGodefroid/lockfile/internal/testenv"
@@ -65,13 +72,20 @@ func mustDk(t *testing.T, args ...string) string {
 	return out
 }
 
-// setup is one deployment: its volumes, the local source and the profile.
+// setup is one deployment: its volumes, the local source, the profile and
+// the hub the console is attached to.
 type setup struct {
 	run, home, data, seccomp string
 	terms                    []*syncBuffer
 	// consoleArgs go after the console's own arguments.
 	consoleArgs []string
+	// hub decides the plans; hubDir holds its pinned key (hub.pub).
+	hub    *hubtest.Hub
+	hubDir string
 }
+
+// hubInstance is the lock instance name the hub knows the console by.
+const hubInstance = "files"
 
 // syncBuffer is what script(1) wrote, read while it writes.
 type syncBuffer struct {
@@ -133,6 +147,20 @@ func newSetup(t *testing.T) *setup {
 	openUp(t, s.data)
 	mustDk(t, "run", "--rm", "--user", "lockfile", "-v", s.home+":/home/lockfile", image,
 		"profile", "add", "samples", "--source", "local", "--path", "/srv/lockfile/samples")
+
+	// The hub pins the instance key the console account made (hub-key, as
+	// lox up runs it); the console pins the hub's key.
+	pubText := mustDk(t, "run", "--rm", "--user", "lockfile", "-v", s.home+":/home/lockfile", image, "hub-key", "--instance", hubInstance)
+	pub, err := base64.StdEncoding.DecodeString(strings.TrimSpace(pubText))
+	if err != nil || len(pub) != ed25519.PublicKeySize {
+		t.Fatalf("hub-key printed %q: %v", pubText, err)
+	}
+	s.hub = hubtest.New(t, hubInstance, ed25519.PublicKey(pub))
+	s.hubDir = t.TempDir()
+	if err := os.WriteFile(filepath.Join(s.hubDir, "hub.pub"), []byte(base64.StdEncoding.EncodeToString(s.hub.Pub)+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	openUp(t, s.hubDir)
 	return s
 }
 
@@ -166,9 +194,11 @@ func (s *setup) console(t *testing.T, img string, opts ...string) string {
 	args := []string{dockerCLI, "run", "-it", "--rm", "--name", name, "--user", "lockfile",
 		"--cap-drop=ALL", "--security-opt", "no-new-privileges",
 		"-v", s.run + ":/run/lockfile", "-v", s.home + ":/home/lockfile",
-		"-v", s.data + ":/srv/lockfile/samples:ro"}
+		"-v", s.data + ":/srv/lockfile/samples:ro",
+		"--network", "host", "-v", s.hubDir + ":/run/lockfile-hub:ro"}
 	args = append(args, opts...)
-	args = append(args, img, "console", "--profile", "samples", "--auto")
+	args = append(args, img, "console", "--profile", "samples",
+		"--hub", s.hub.URL(), "--hub-key-file", "/run/lockfile-hub/hub.pub", "--instance", hubInstance)
 	args = append(args, s.consoleArgs...)
 	ptm, pts := openPTY(t)
 	cmd := exec.Command(args[0], args[1:]...)
@@ -248,16 +278,33 @@ func (s *setup) waitText(t *testing.T, want string) {
 	}
 }
 
-// answers runs plugins on a.txt from an agent container of img (opts:
-// docker run options) and returns the results by plugin; ok is false when
-// the plan gave none.
+// answers plans plugins on a.txt from an agent container of img (opts:
+// docker run options), approves the plan on the hub, runs its ticket and
+// returns the results by plugin; ok is false when the plan or the run gave
+// none.
 func (s *setup) answers(t *testing.T, img string, opts []string, plugins ...string) (got map[string]string, out string, ok bool) {
 	t.Helper()
-	args := []string{"plan", "--profile", "samples", "--key", "a.txt", "--run", "--json"}
+	args := []string{"plan", "--profile", "samples", "--key", "a.txt", "--json"}
 	for _, p := range plugins {
 		args = append(args, "--plugin", p)
 	}
 	out, err := s.agent(t, img, opts, args...)
+	var pending struct{ Status, Ticket string }
+	if err != nil || json.Unmarshal([]byte(out), &pending) != nil || pending.Status != "pending" || !ticket.ValidID(pending.Ticket) {
+		return nil, out, false
+	}
+	s.hub.Decide(pending.Ticket, ticket.Approved, "")
+	for deadline := time.Now().Add(60 * time.Second); ; {
+		out, err = s.agent(t, img, opts, "run", pending.Ticket, "--profile", "samples", "--json")
+		var p struct{ Status string }
+		if err != nil || json.Unmarshal([]byte(out), &p) != nil || p.Status != "pending" {
+			break
+		}
+		if time.Now().After(deadline) {
+			return nil, out, false
+		}
+		time.Sleep(time.Second)
+	}
 	var v struct {
 		Answers []struct {
 			Plugin string `json:"plugin"`

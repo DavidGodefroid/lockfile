@@ -114,9 +114,12 @@ lockfile plugin list</code></pre>
 </section>
 
 <section aria-labelledby="console">
-  <h2 id="console">4. The console</h2>
-  <pre tabindex="0" class="term"><code>LOCKFILE_DOCKER_ARGS="-v /data/samples:/srv/lockfile/samples:ro" lockfile console --profile samples</code></pre>
-  <p class="prose">It runs in a container of its own, under the shipped seccomp profile (never <code>seccomp=unconfined</code>), without capabilities, on a read-only root. It checks the isolation, asks for the secret, connects and serves the profile’s socket. Keep it in view: every plan waits for you there.</p>
+  <h2 id="console">4. The console, with its hub</h2>
+  <pre tabindex="0" class="term"><code>lox add lockfile samples
+lox up
+lox attach samples   <span class="cmt"># the policy review (detach: Ctrl-P Ctrl-Q)</span>
+lox approve          <span class="cmt"># the agent’s plans</span></code></pre>
+  <p class="prose">The console runs attached to lockhub only: lockhub’s <code>lox</code> CLI declares the lock and starts it with its hub (<code>lockfile console</code> on its own refuses to start). It runs in a container of its own, under the shipped seccomp profile (never <code>seccomp=unconfined</code>), without capabilities, on a read-only root. It checks the isolation, asks for the secret, connects and serves the profile’s socket. Every plan waits for your approval on lockhub.</p>
 </section>
 
 <section aria-labelledby="wire">

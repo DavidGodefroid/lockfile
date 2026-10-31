@@ -162,12 +162,14 @@ lockfile profile add samples --source local --path /srv/lockfile/samples --prefi
 lockfile plugin install file.non-empty@1.0.0
 lockfile plugin install format.is-pdf@1.0.0
 
-<span class="cmt"># 3. The console, in a terminal you keep in view</span>
-LOCKFILE_DOCKER_ARGS="-v /data/samples:/srv/lockfile/samples:ro" lockfile console --profile samples
+<span class="cmt"># 3. Declare the lock and start it with its hub (lockhub's lox CLI)</span>
+lox add lockfile samples
+lox up
+lox attach samples   <span class="cmt"># the policy review</span>
 
 <span class="cmt"># 4. Wire your agent, from the project root</span>
 lockfile init claude</code></pre>
-  <p class="prose">Then ask your agent about a file by its exact key. Each plan waits for your <code>y</code> in the console.</p>
+  <p class="prose">Then ask your agent about a file by its exact key. Each plan waits for your approval on lockhub (<code>lox approve</code>).</p>
   <p class="link-line"><a href="install/">The Docker setup, step by step</a></p>
 </section>
 

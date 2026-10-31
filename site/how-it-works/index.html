@@ -65,7 +65,7 @@
             │                                                  ▼
             └────── 1 / 0 per plugin ◀── strict check ◀── sandboxed plugin process</code></pre>
   <ul class="prose">
-    <li><strong>The console</strong> (<code>lockfile console --profile P</code>) runs in the <code>lockfile</code> account’s own session, in a terminal you keep in view. It serves the profile on a socket in <code>/run/lockfile</code>.</li>
+    <li><strong>The console</strong> (<code>lockfile console --profile P</code>, started by lockhub’s <code>lox up</code> with its hub flags) runs in the <code>lockfile</code> account’s own session; plans are approved on lockhub. It serves the profile on a socket in <code>/run/lockfile</code>.</li>
     <li><strong>The agent side</strong> is the <code>lockfile</code> CLI (<code>status</code>, <code>sources</code>, <code>plugins</code>, <code>plan</code>, <code>run</code>, <code>answers</code>, <code>release</code>) and the <code>lockfile mcp</code> server with the same seven tools. It holds no secret, no plugin and no file.</li>
   </ul>
 </section>
@@ -175,7 +175,6 @@ lockfile release f_8Kq2xR</code></pre>
     <ul>
       <li><code>:review</code>: apply a pending loosening (a plugin installed or a marketplace added while the console runs).</li>
       <li><code>:status</code>: the console state.</li>
-      <li><code>:mode</code> or Shift+Tab: auto mode, where plans run without a prompt. Never on production, never for unofficial plugins.</li>
       <li><code>:quit</code>: stop the console; fetched files are deleted.</li>
     </ul>
   </div>
