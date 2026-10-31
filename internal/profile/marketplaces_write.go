@@ -104,6 +104,10 @@ func AppendMarketplace(path string, r RawMarketplace) (Trust, error) {
 // the config file at path, after checking the whole file with Parse.
 func AppendProfile(path, name string, keys []string, values map[string]any) error {
 	production, _ := values["production"].(bool)
+	// lockkit's error quotes the name: check its shape first.
+	if config.CheckProfileName(name, false) != nil {
+		return errors.New("invalid profile name: use letters, digits, '_', '-' or '.', starting with a letter or digit, at most 64")
+	}
 	if err := config.CheckProfileName(name, production); err != nil {
 		return err
 	}

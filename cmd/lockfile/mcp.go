@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/DavidGodefroid/lockkit/agentwire"
@@ -58,6 +59,11 @@ func runInit(e env, args []string) int {
 		agents = []string{"claude"}
 	}
 	agent := agents[0]
+	// lockkit's error quotes an unknown agent: refuse it here first.
+	if !slices.Contains(agentwire.Agents(), agent) {
+		fmt.Fprintln(e.stderr, "lockfile init: unknown agent (want one of "+strings.Join(agentwire.Agents(), ", ")+")")
+		return product.ExitUsage
+	}
 	var res agentwire.Result
 	var err error
 	if *user {

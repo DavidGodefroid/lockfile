@@ -263,6 +263,8 @@ func transportError(err error) error {
 		return errors.New("host not found")
 	case errors.As(err, &cert):
 		return errors.New("TLS certificate not trusted")
+	// Windows' WSAECONNREFUSED is not syscall.ECONNREFUSED: it reads
+	// "connection failed" there.
 	case errors.Is(err, syscall.ECONNREFUSED):
 		return errors.New("connection refused")
 	case isTimeout(err):

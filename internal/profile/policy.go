@@ -54,7 +54,7 @@ func Load(path, name string, store plugin.Store) (*Policy, error) {
 func FromFile(f *File, name string, store plugin.Store) (*Policy, error) {
 	p, ok := f.Profiles[name]
 	if !ok {
-		return nil, fmt.Errorf("config: no profile %q", name)
+		return nil, ErrNoProfile
 	}
 	installed, err := store.Installed()
 	if err != nil {

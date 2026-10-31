@@ -6,7 +6,6 @@ package backend
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -105,7 +104,7 @@ func New(o Options) (*Backend, error) {
 		return nil, err
 	}
 	if _, ok := f.Profiles[o.Profile]; !ok {
-		return nil, fmt.Errorf("config: no profile %q", o.Profile)
+		return nil, profile.ErrNoProfile
 	}
 	home := filepath.Join(o.StateDir, product.P.Name)
 	if err := os.MkdirAll(home, 0o700); err != nil {

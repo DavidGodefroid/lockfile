@@ -133,7 +133,7 @@ func runForget(e env, args []string) int {
 	}
 	p, ok := f.Profiles[*name]
 	if !ok {
-		return failHuman(e, "forget", fmt.Errorf("no profile %q", *name))
+		return failHuman(e, "forget", profile.ErrNoProfile)
 	}
 	cp := p.Console()
 	if err := secrets.NewKeychain(product.P.KeychainService).Delete(cp.Name, cp.Host, cp.Port); err != nil {

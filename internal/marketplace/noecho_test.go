@@ -2,6 +2,7 @@ package marketplace
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -34,14 +35,15 @@ func TestErrorsDoNotEchoValues(t *testing.T) {
 	for _, tc := range []struct {
 		name, url string
 		client    *http.Client
+		kind      string
 	}{
-		{"plain http", "http://" + tok + "plugins.example.org/index.json", srv.Client()},
-		{"not a URL", "https://" + canary + "%zz", srv.Client()},
-		{"status", "https://" + tok + host + "/" + canary + "/index.json?token=" + canary, srv.Client()},
-		{"too large", "https://" + tok + host + "/" + canary + "/big?token=" + canary, srv.Client()},
-		{"untrusted certificate", "https://" + tok + host + "/" + canary + "?token=" + canary, nil},
-		{"connection refused", "https://" + tok + "127.0.0.1:1/" + canary + "?token=" + canary, srv.Client()},
-		{"unknown host", "https://" + tok + canary + ".invalid/index.json?token=" + canary, srv.Client()},
+		{"plain http", "http://" + tok + "plugins.example.org/index.json", srv.Client(), "non-https"},
+		{"not a URL", "https://" + canary + "%zz", srv.Client(), "non-https"},
+		{"status", "https://" + tok + host + "/" + canary + "/index.json?token=" + canary, srv.Client(), "HTTP 404"},
+		{"too large", "https://" + tok + host + "/" + canary + "/big?token=" + canary, srv.Client(), "larger than"},
+		{"untrusted certificate", "https://" + tok + host + "/" + canary + "?token=" + canary, nil, "TLS certificate not trusted"},
+		{"connection refused", "https://" + tok + "127.0.0.1:1/" + canary + "?token=" + canary, srv.Client(), "connection refused"},
+		{"unknown host", "https://" + tok + canary + ".invalid/index.json?token=" + canary, srv.Client(), ""},
 	} {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		_, err := Installer{HTTP: tc.client}.fetch(ctx, "marketplace acme: index", tc.url, filepath.Join(dir, "f"), 1<<10)
@@ -52,6 +54,9 @@ func TestErrorsDoNotEchoValues(t *testing.T) {
 		}
 		if strings.Contains(err.Error(), canaryHit) {
 			t.Errorf("%s: the error quotes the URL: %v", tc.name, err)
+		}
+		if !strings.Contains(err.Error(), tc.kind) {
+			t.Errorf("%s: want %q in %v", tc.name, tc.kind, err)
 		}
 		if !strings.Contains(err.Error(), "marketplace acme: index") {
 			t.Errorf("%s: the error does not name the download: %v", tc.name, err)
@@ -70,5 +75,28 @@ func TestErrorsDoNotEchoValues(t *testing.T) {
 	}
 	if _, err := (Installer{}).Install(context.Background(), m, "acme.ok", canary); err == nil || !strings.Contains(err.Error(), "version") {
 		t.Errorf("invalid version: %v", err)
+	}
+}
+
+// A cancelled download stays context.Canceled, and a redirect to http
+// ErrInsecureRedirect, without the URL.
+func TestFetchErrorKindsMatch(t *testing.T) {
+	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	t.Cleanup(plain.Close)
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, plain.URL+"/"+canary, http.StatusFound)
+	}))
+	t.Cleanup(srv.Close)
+	i := Installer{HTTP: srv.Client()}
+	path := filepath.Join(t.TempDir(), "f")
+	_, err := i.fetch(context.Background(), "x", srv.URL+"/"+canary, path, 1<<10)
+	if !errors.Is(err, ErrInsecureRedirect) || strings.Contains(err.Error(), canaryHit) {
+		t.Errorf("redirect: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err = i.fetch(ctx, "x", srv.URL+"/"+canary, path, 1<<10)
+	if !errors.Is(err, context.Canceled) || strings.Contains(err.Error(), canaryHit) {
+		t.Errorf("cancelled: %v", err)
 	}
 }

@@ -8,8 +8,14 @@
   download: HTTP 404`, `... connection refused`), not the URL, and keeps only the kind of a
   transport error (its host and address are dropped); an invalid plugin name or version,
   marketplace name (`--marketplace`, `marketplace remove`), `--since`, source kind, size, or
-  manifest name, version or media type is refused naming the key and what is allowed. A
-  plugin or marketplace name is quoted only once it is checked to be one.
+  manifest name, version or media type, `--allowed-uids`, an unknown command or agent
+  (`lockfile init`), or a profile name (`profile add`, `forget --profile`, `console
+  --profile`) is refused naming the key and what is allowed. A plugin or marketplace name
+  is quoted only once it is checked to be one, and the `unknown_profile` hint names the
+  profile only when it is a valid profile name. Errors of lockkit v0.6.0 that quote a flag
+  value (`--hub URL`, `--instance`, `--require-device`, `hub-key --instance`) are printed
+  with that value replaced by `<value>`, and lockkit's `invalid profile name %q` and
+  `unknown agent %q` are not reached (lockfile checks first).
 
 ## v0.5.1
 

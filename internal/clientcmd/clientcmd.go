@@ -11,6 +11,7 @@ import (
 	"errors"
 
 	"github.com/DavidGodefroid/lockkit/client"
+	"github.com/DavidGodefroid/lockkit/config"
 	"github.com/DavidGodefroid/lockkit/ipc"
 	"github.com/DavidGodefroid/lockkit/mcpkit"
 	"github.com/DavidGodefroid/lockkit/refusal"
@@ -60,12 +61,21 @@ var dial = func(profile string) (caller, error) {
 // StartCommand is the command that starts profile's console.
 func StartCommand(profile string) string { return client.StartCommand(product.P, profile, "") }
 
+// profileWord is profile when it is a valid profile name, else NAME: a
+// typed value is never quoted back unchecked.
+func profileWord(profile string) string {
+	if config.CheckProfileName(profile, false) != nil {
+		return "NAME"
+	}
+	return profile
+}
+
 // unknownProfile is the refusal for a profile no running console serves;
 // the hint names the start command of the profile the agent passed.
 func unknownProfile(profile string) *Error {
 	c := product.Code(answers.CodeUnknownProfile)
 	info := refusal.Info{Code: c, Retry: c.Retry(),
-		Hint: "use a profile listed by lockfile sources, or ask the user to run, in the lockfile account: " + StartCommand(profile)}
+		Hint: "use a profile listed by lockfile sources, or ask the user to run, in the lockfile account: " + StartCommand(profileWord(profile))}
 	return &Error{Kind: KindNoConsole, Msg: string(answers.CodeUnknownProfile), Refusal: &info}
 }
 
