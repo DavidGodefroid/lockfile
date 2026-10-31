@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v0.5.2
+
+Errors never quote a typed config or CLI value (a token pasted in the wrong key, a URL
+carrying one).
+
 - Errors no longer quote a value typed in the config or on the command line: a pasted
   token or a URL with one (userinfo, path, query) never reaches the terminal, a log or an
   agent. A download error names the marketplace and the file (`marketplace acme: index:
