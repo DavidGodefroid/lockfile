@@ -13,7 +13,7 @@
 #   LOCKFILE_VERSION=$V sh install.sh
 #
 # Environment:
-#   LOCKFILE_VERSION      tag to install (default: the latest release), e.g. v0.5.2
+#   LOCKFILE_VERSION      tag to install (default: the latest release), e.g. v0.5.3
 #   LOCKFILE_INSTALL_DIR  launcher directory (default: /usr/local/bin, via sudo if needed)
 #   LOCKFILE_SHARE_DIR    seccomp profile directory (default: /usr/local/share/lockfile)
 #   LOCKFILE_ALLOW_DOWNGRADE=1  replace an installed lockfile with an older release

@@ -159,6 +159,7 @@ serves its API at the root and authenticates the lock by signature).
 
 | lockfile | lockkit | lockhub |
 |---|---|---|
+| v0.5.3 | v0.8.1 | as v0.5.2; the hub URL is `http(s)://host[:port]` only (`lock up`'s `http://lockhub:8443` is one) |
 | v0.5.2 | v0.6.0 | as v0.5.1 |
 | v0.5.1 | v0.6.0 | as v0.5.0; `allowed_uids` (`--allowed-uids`, for lea's agents) from lockhub v0.2.4 |
 | v0.5.0 | v0.6.0 | v0.2.0 or later: hub mode, `devices: true` (paired phones), reveals (`reveal: true`, Ctrl-O) and renewals |
