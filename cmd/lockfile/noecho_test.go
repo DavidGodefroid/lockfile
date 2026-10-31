@@ -16,6 +16,8 @@ const (
 	canary    = "glsa_CanarySecretToken123"
 	urlCanary = "https://user:glsa_Canary@h"
 	canaryHit = "glsa_Canary"
+	// pathCanary carries a token in the userinfo, the path and the query.
+	pathCanary = "https://user:glsa_Canary@h/path?token=glsa_Canary"
 )
 
 // TestErrorsDoNotEchoValues: a typed value (a pasted token, a URL with
@@ -47,10 +49,15 @@ func TestErrorsDoNotEchoValues(t *testing.T) {
 		{"forget", "--profile", canary + " x"},
 		{"profile", "add", urlCanary, "--source", "local", "--path", "/srv"},
 		{"profile", "add", canary + " x", "--source", "local", "--path", "/srv"},
+		{"hub-key", "--instance", canary},
 		{"hub-key", "--instance", canary + " x"},
 		{"hub-key", "--instance=" + urlCanary},
+		{"hub-key", "--instance=" + pathCanary},
 		{"hub-key", "--" + canary},
+		{"hub-key", "--" + canary + "=x"},
+		{"hub-key", "--" + pathCanary},
 		{"hub-key", "--instance", "files", canary},
+		{"hub-key", "--instance", "files", pathCanary},
 		{"init", canary + " x"},
 		{"init", "--user", urlCanary},
 	} {
@@ -61,8 +68,31 @@ func TestErrorsDoNotEchoValues(t *testing.T) {
 	}
 }
 
-// The hub flags reach lockkit, whose checks quote them: the console prints
-// its errors without the typed values.
+// TestHubKeyErrorsDoNotEchoValues: lockkit's hub-key errors are printed as
+// they are (no value is replaced) and still name no typed value.
+func TestHubKeyErrorsDoNotEchoValues(t *testing.T) {
+	t.Cleanup(func() { testConsoleHooks = nil })
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"--instance", canary}, "invalid instance name"},
+		{[]string{"--instance=" + pathCanary}, "invalid instance name"},
+		{[]string{"--" + canary}, "unknown or malformed flag"},
+		{[]string{"--" + pathCanary}, "unknown or malformed flag"},
+		{[]string{"--instance", "files", canary}, "usage: hub-key --instance NAME"},
+	} {
+		testConsoleHooks = &consoleHooks{home: t.TempDir()}
+		code, out, errText := runArgs(t, "", append([]string{"hub-key"}, tc.args...)...)
+		if code != product.ExitUsage || strings.Contains(out+errText, canaryHit) || strings.Contains(errText, "<value>") ||
+			!strings.Contains(errText, "lockfile hub-key: ") || !strings.Contains(errText, tc.want) {
+			t.Errorf("%v: exit %d: %s %s", tc.args, code, out, errText)
+		}
+	}
+}
+
+// The hub flags reach lockkit, whose checks never quote them (v0.8.1): the
+// console prints its errors as they are, with no value replaced.
 func TestConsoleHubErrorsDoNotEchoValues(t *testing.T) {
 	dir := t.TempDir()
 	cfg := filepath.Join(dir, "config.toml")
@@ -81,32 +111,32 @@ func TestConsoleHubErrorsDoNotEchoValues(t *testing.T) {
 	for _, hub := range [][]string{
 		{"--hub", "http://user:" + canary + "@hub.example.org", "--instance", "files"},
 		{"--hub", "https://" + canary + "%zz", "--instance", "files"},
+		{"--hub", urlCanary, "--instance", "files"},
+		{"--hub", pathCanary, "--instance", "files"},
+		{"--hub", "https://hub.example.org/" + canary, "--instance", "files"},
+		{"--hub", "https://hub.example.org/lockhub/" + canary + "/", "--instance", "files"},
+		{"--hub", "https://hub.example.org?token=" + canary, "--instance", "files"},
+		{"--hub", "https://hub.example.org/?token=" + canary, "--instance", "files"},
+		{"--hub", "https://hub.example.org/path?token=" + canary, "--instance", "files"},
+		{"--hub", "https://hub.example.org#" + canary, "--instance", "files"},
+		{"--hub", "https://hub.example.org:" + canary, "--instance", "files"},
+		{"--hub", "https://[fe80::1%25" + canary + "]", "--instance", "files"},
+		{"--hub", "https://hub.example.org;" + canary, "--instance", "files"},
+		{"--hub", canary, "--instance", "files"},
+		{"--hub", "https://hub.example.org", "--instance", canary},
 		{"--hub", "https://hub.example.org", "--instance", canary + " x"},
+		{"--hub", "https://hub.example.org", "--instance", pathCanary},
+		{"--hub", "https://hub.example.org", "--instance", "files", "--devices-file", devices, "--require-device", canary},
 		{"--hub", "https://hub.example.org", "--instance", "files", "--devices-file", devices, "--require-device", "read, " + canary},
+		{"--hub", "https://hub.example.org", "--instance", "files", "--devices-file", devices, "--require-device", pathCanary},
 	} {
 		testConsoleHooks = &consoleHooks{io: consoletest.NewScriptIO(), isolation: sameUserIsolation(t), harden: func() error { return nil },
 			stateDir: t.TempDir(), configPath: cfg, home: t.TempDir()}
 		args := append([]string{"console", "--profile", "samples", "--hub-key-file", key}, hub...)
 		code, out, errText := runArgs(t, "", args...)
-		if code == product.ExitOK || strings.Contains(out+errText, canaryHit) || !strings.Contains(errText, "lockfile console: configuration error") {
+		if code == product.ExitOK || strings.Contains(out+errText, canaryHit) || strings.Contains(errText, "<value>") ||
+			!strings.Contains(errText, "lockfile console: configuration error") {
 			t.Errorf("%v: exit %d: %s %s", hub, code, out, errText)
 		}
-	}
-}
-
-func TestScrub(t *testing.T) {
-	got := scrub(`bad "https://u:`+canary+`@h" and `+canary+`, risk "aaaa" in aaaa,bbbb; ab stays`, "https://u:"+canary+"@h", canary, "aaaa,bbbb", "ab")
-	if want := `bad "<value>" and <value>, risk "<value>" in <value>; ab stays`; got != want {
-		t.Errorf("scrub = %q, want %q", got, want)
-	}
-	if got := scrub(`x "a\"`+canary+`"`, `a"`+canary); strings.Contains(got, canaryHit) {
-		t.Errorf("quoted form kept: %q", got)
-	}
-	if got := scrub(`unknown risk class "`+canary+`"`, "read, "+canary); strings.Contains(got, canaryHit) {
-		t.Errorf("trimmed part kept: %q", got)
-	}
-	v := typedValues([]string{"--instance", "files", "--hub=" + urlCanary, "--" + canary, "x1"}, []string{"instance", "hub"}, func(s string) bool { return s == "files" })
-	if len(v) != 3 || v[0] != urlCanary || v[1] != canary || v[2] != "x1" {
-		t.Errorf("typedValues = %q", v)
 	}
 }

@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- lockkit v0.8.1 (from v0.6.0). The `--hub` URL is `http(s)://host[:port]` only: a path
+  (`https://h/lockhub`, which never reached a working hub: lockhub serves `/v1/` at its
+  root), query, fragment, IPv6 zone, user or password, a host that is not a DNS name or an
+  IP address, or a port outside 1-65535 is refused naming `--hub` and the allowed form,
+  never the URL. The console's start line names the hub in that form, and a hub that
+  cannot be reached is named by scheme and host, no longer by the whole request URL.
+- lockkit's hub errors are printed as they are: lockkit v0.8.1 quotes no typed `--hub`
+  URL, `--instance`, `--require-device` class or `hub-key` flag, so lockfile no longer
+  replaces those values with `<value>` (the workaround of v0.5.2 is gone). The no-echo
+  tests cover a token in the hub URL's userinfo, path, query, fragment, port and zone
+  without it.
+- The hub screen's personal data (`email`, `phone`, `iban`, `card`) is also found right
+  after a JSON `\n`, `\t` or `\u00XX` escape, read as the blank or delimiter it stands for
+  (lockkit v0.8.0): a key such as `{"msg":"tel:\t0475123456"}` is now masked. lockfile
+  implements none of lockkit v0.7.0's console product hooks and turns on none of v0.8.0's
+  new detectors, so the console is otherwise unchanged.
+
 ## v0.5.2
 
 Errors never quote a typed config or CLI value (a token pasted in the wrong key, a URL
