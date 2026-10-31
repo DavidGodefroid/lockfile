@@ -5,7 +5,7 @@ or local file) that you must not read: is it empty, a PDF, does it parse, is a p
 truncated. Never download, cat or open such a file yourself.
 
 - `lockfile_sources` (CLI `lockfile sources --json`): profiles of the running consoles. None: ask
-  the user to run `lockfile console --profile NAME` in the lockfile account.
+  the user to run `lox up` (the profile, if missing, is added first in the lockfile account).
 - You cannot list keys: ask the user for the exact object key.
 - `lockfile_plugins`: each plugin's question and the meaning of 1 and 0. Ask only what you need.
 - `lockfile_plan` (key + plugins + intent) waits for the user's approval in the console; then

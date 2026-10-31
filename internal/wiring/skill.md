@@ -7,9 +7,9 @@ description: Use when the user asks a yes/no question about a stored file you mu
 
 **Purpose:** answer structural questions about one file (is it empty, a PDF, does it parse, is a
 page blank, are fonts embedded, is it truncated) without the file, its name, its size or any of
-its content ever reaching you. A human runs `lockfile console` in a separate account; it fetches
-the file and runs signed plugins on it in a sandbox. Each plugin answers one fixed question with
-`1` or `0`. That is all you get.
+its content ever reaching you. A console the human starts (`lox up`) runs in a separate account;
+it fetches the file and runs signed plugins on it in a sandbox. Each plugin answers one fixed
+question with `1` or `0`. That is all you get.
 
 Use lockfile only on the user's request. If a file check would merely help, propose it and wait.
 
@@ -19,8 +19,9 @@ Use the MCP tools (`lockfile_*`) when they are available, otherwise the `lockfil
 `--json`. Both talk to the same console.
 
 1. **Console?** `lockfile_sources` (CLI `lockfile sources`) lists the profiles of the running
-   consoles. If none runs, ask the user to start one in the lockfile account
-   (`lockfile console --profile NAME`) and stop. Never start one yourself.
+   consoles. If none runs, or not the profile you need, ask the user to start it (`lox up`, after
+   adding the profile in the lockfile account if it does not exist) and stop. Never start one
+   yourself.
 2. **The exact key.** You cannot list keys or stat files. Ask the user for the exact object key
    (from the ticket, a log line, a database row). Never guess one.
 3. **The questions.** `lockfile_plugins` lists each plugin's question and the meaning of 1 and 0.

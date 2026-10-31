@@ -19,6 +19,21 @@ The console is hub-attached only (DavidGodefroid/lockkit#110).
   `test/e2e`, `test/docker`) runs attached to a fake lockhub (hubtest) and approves its plans
   there. Builds on lockkit's hub-only console (pseudo-version until its release).
 
+lockkit v0.9.1 (from v0.9.0): a console is started by `lox up` only, and the agent's hints say so.
+
+- The no-console text (`lockfile_sources`, `lockfile status` and `lockfile_status` with no
+  console running, a call without a profile when none runs) ends with lockkit's `client.StartHint`, "the console is started by
+  `lox up` only: ask the user to run `lox up`", no longer `lockfile console --profile NAME`.
+- The `unknown_profile` hint no longer names `lockfile console --profile P`, which refuses to
+  start, nor only `lox up`, which does not make a missing profile: "use a profile listed by
+  lockfile sources, or ask the user to add profile P in the lockfile account (lockfile profile
+  add P, then lox add lockfile) and to run `lox up`" (P only when it is a valid profile name,
+  else NAME).
+- `clientcmd.StartCommand` is lockkit's, `lox up`, and takes no profile.
+- The agent instructions `lockfile init` writes (skill, AGENTS.md), the MCP instructions,
+  `lockfile doctor`'s config check and the security model (docs, site) say `lox up` where they
+  said to start or use the `lockfile console` terminal.
+
 ## v0.5.3
 
 lockkit v0.8.1: the hub URL is `http(s)://host[:port]` only, and lockfile prints lockkit's

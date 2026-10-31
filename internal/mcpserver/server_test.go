@@ -16,6 +16,7 @@ import (
 	"github.com/DavidGodefroid/lockkit/mcpkit"
 	"github.com/DavidGodefroid/lockkit/ticket"
 
+	"github.com/DavidGodefroid/lockfile/internal/clientcmd"
 	"github.com/DavidGodefroid/lockfile/internal/testenv"
 	"github.com/DavidGodefroid/lockfile/internal/testenv/consoletest"
 	"github.com/DavidGodefroid/lockfile/sandbox"
@@ -284,7 +285,7 @@ func TestRefusalStructured(t *testing.T) {
 	}
 	res, text, st = s.call(t, ToolRun, map[string]any{"profile": "nope", "plan_id": "pl_x"}, nil)
 	ref, _ = st["refusal"].(map[string]any)
-	if !res.IsError || text != "unknown_profile" || ref["code"] != "E_UNKNOWN_PROFILE" || !strings.Contains(ref["hint"].(string), "lockfile console --profile nope") {
+	if !res.IsError || text != "unknown_profile" || ref["code"] != "E_UNKNOWN_PROFILE" || ref["hint"] != clientcmd.UnknownProfileHint("nope") {
 		t.Fatalf("unknown profile: %v %q %v", res.IsError, text, st)
 	}
 	// A plan id is not a ticket: hub-attached, only a ticket runs.

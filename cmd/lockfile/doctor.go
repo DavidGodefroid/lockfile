@@ -278,7 +278,7 @@ func doctorConsoleSide(h doctorHooks, sys *sysconf.Config, add func(string, stri
 		add("config", "warn", "no profile yet: lockfile profile add NAME --source …")
 		return
 	case err != nil:
-		add("config", "fail", "the config file does not load: lockfile console --profile NAME names the error")
+		add("config", "fail", "the config file does not load: the console names the error when `lox up` starts it")
 		return
 	}
 	add("config", "ok", fmt.Sprintf("%d profile(s)", len(f.Profiles)))
