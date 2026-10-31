@@ -3,8 +3,8 @@ lockfile answers yes/no questions about a file you never read. A console run by 
 Flow:
 1. lockfile_sources lists the profiles of the running consoles. You cannot list keys: ask the user for the exact object key (from the ticket, a log or a database row).
 2. lockfile_plugins lists the questions you may ask, each with the meaning of 1 and of 0. Pick only the plugins you need.
-3. lockfile_plan proposes the key and the plugins; the user approves it in the console (this can take minutes). It returns a plan id.
-4. lockfile_run runs the approved plan once. The answer comes back at the next multiple of a few seconds, whatever the plugins did.
+3. lockfile_plan proposes the key and the plugins. It answers pending with a ticket: the user decides it on lockhub (lox approve, lea's deck or a paired phone), never in the lockfile console. Do not retry; end your turn until it is decided.
+4. lockfile_run with the ticket as plan_id runs the approved plan once. The answer comes back at the next multiple of a few seconds, whatever the plugins did.
 5. Follow-up questions on the same file: lockfile_plan with the handle of the result instead of the key (no new fetch), then lockfile_run. lockfile_release deletes the fetched file when you are done.
 
 Reading results: result 1 or 0 is the plugin's answer to its question. result null with error "plugin_error" means the plugin gave no answer: it is NOT a 0, and says nothing either way. warning "unofficial_marketplace" means the plugin comes from a marketplace the user added: mention it when you report the answer.

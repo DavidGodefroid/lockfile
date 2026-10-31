@@ -231,7 +231,7 @@ The console runs hub-attached only: lockhub's `lox up` starts it with its hub fl
 (`lockfile console` on its own refuses to start: "launched by `lox up` only"):
 
 ```sh
-lox add lockfile samples
+lox add lockfile samples --profile samples
 lox up
 lox attach samples   # the console's policy review (detach: Ctrl-P Ctrl-Q)
 lox approve          # the agent's plans

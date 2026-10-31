@@ -25,14 +25,19 @@ lockkit v0.9.1 (from v0.9.0): a console is started by `lox up` only, and the age
   console running, a call without a profile when none runs) ends with lockkit's `client.StartHint`, "the console is started by
   `lox up` only: ask the user to run `lox up`", no longer `lockfile console --profile NAME`.
 - The `unknown_profile` hint no longer names `lockfile console --profile P`, which refuses to
-  start, nor only `lox up`, which does not make a missing profile: "use a profile listed by
-  lockfile sources, or ask the user to add profile P in the lockfile account (lockfile profile
-  add P, then lox add lockfile) and to run `lox up`" (P only when it is a valid profile name,
-  else NAME).
+  start. It covers both causes: "if profile P exists, its console is not running: ask the user
+  to run `lox up`; otherwise use a profile listed by lockfile sources, or ask the user to set up
+  profile P and declare it (lox add lockfile INSTANCE --profile P), then to run `lox up`" (P
+  only when it is a valid profile name, else NAME).
 - `clientcmd.StartCommand` is lockkit's, `lox up`, and takes no profile.
-- The agent instructions `lockfile init` writes (skill, AGENTS.md), the MCP instructions,
-  `lockfile doctor`'s config check and the security model (docs, site) say `lox up` where they
-  said to start or use the `lockfile console` terminal.
+- The agent instructions `lockfile init` writes (skill, AGENTS.md, the Claude Code note) and the
+  MCP instructions say plans are decided on lockhub (`lox approve`, lea's deck, a paired phone),
+  answer `pending` with a ticket and run by that ticket, no longer that they are approved in the
+  lockfile console. They, `lockfile doctor`'s config check and the security model (docs, site)
+  say `lox up` where they said to start or use the `lockfile console` terminal.
+- The quick start (README, docs/docker.md, site) declares the lock with its profile, `lox add
+  lockfile samples --profile samples` (without `--profile`, `lox up` serves `default`), and
+  `lockfile profile add` prints `lox add lockfile INSTANCE --profile P`.
 
 ## v0.5.3
 

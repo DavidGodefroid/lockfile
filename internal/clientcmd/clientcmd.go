@@ -71,10 +71,11 @@ func profileWord(profile string) string {
 	return profile
 }
 
-// unknownProfile is the refusal for a profile no running console serves.
-// `lox up` alone does not make a profile that does not exist: the hint
-// points at the listed profiles, or at adding the profile the agent passed
-// (named only when it is a valid profile name) before `lox up`.
+// unknownProfile is the refusal for a profile no running console serves:
+// most often a profile whose console is not running (`lox up`), but `lox
+// up` alone does not make a profile that does not exist, so the hint also
+// points at the listed profiles and at declaring the profile the agent
+// passed (named only when it is a valid profile name).
 func unknownProfile(profile string) *Error {
 	c := product.Code(answers.CodeUnknownProfile)
 	info := refusal.Info{Code: c, Retry: c.Retry(), Hint: UnknownProfileHint(profileWord(profile))}
@@ -84,8 +85,9 @@ func unknownProfile(profile string) *Error {
 // UnknownProfileHint is the unknown_profile hint for profile, a valid
 // profile name or NAME.
 func UnknownProfileHint(profile string) string {
-	return "use a profile listed by lockfile sources, or ask the user to add profile " + profile +
-		" in the lockfile account (lockfile profile add " + profile + ", then lox add lockfile) and to run `" + StartCommand() + "`"
+	return "if profile " + profile + " exists, its console is not running: ask the user to run `" + StartCommand() +
+		"`; otherwise use a profile listed by lockfile sources, or ask the user to set up profile " + profile +
+		" and declare it (lox add lockfile INSTANCE --profile " + profile + "), then to run `" + StartCommand() + "`"
 }
 
 // closed turns any error of a call into an *Error built from the closed
