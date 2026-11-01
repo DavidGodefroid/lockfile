@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -171,6 +172,45 @@ func TestInstanceBadNameRefused(t *testing.T) {
 	}
 	if e, _ := os.ReadDir(dir); len(e) != 0 {
 		t.Fatalf("socket dir holds %v", e)
+	}
+}
+
+// A leftover --instance or LOCKFILE_INSTANCE whose lock is not mounted here
+// is named, never swallowed into "console error", and the name is not
+// quoted back.
+func TestInstanceNotMounted(t *testing.T) {
+	dir := instanceSetup(t)
+	const want = "no lock directory for the instance set by --instance or LOCKFILE_INSTANCE: no lock of that name is mounted here"
+	for _, args := range [][]string{
+		{"status", "--profile", "samples", "--instance", "orders"},
+		{"status", "--instance", "orders"},
+		{"sources", "--instance", "orders"},
+		{"plugins", "--profile", "samples", "--instance", "orders"},
+		{"plan", "--key", "invoices/a.pdf", "--plugin", "test.answer0", "--instance", "orders"},
+		{"run", "p1", "--instance", "orders"},
+		{"answers", "h1", "--instance", "orders"},
+		{"release", "h1", "--instance", "orders"},
+	} {
+		code, out, errText := runArgs(t, "", args...)
+		both := out + errText
+		if code != product.ExitError || !strings.Contains(both, want) ||
+			strings.Contains(both, "console error") || strings.Contains(both, "orders") {
+			t.Errorf("%v: exit %d, stdout %q stderr %q", args, code, out, errText)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, "orders")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a path of the stale instance was created: %v", err)
+	}
+	// LOCKFILE_INSTANCE, without the flag, names itself too.
+	t.Setenv("LOCKFILE_INSTANCE", "orders")
+	code, out, errText := runArgs(t, "", "status", "--profile", "samples")
+	both := out + errText
+	if code != product.ExitError || !strings.Contains(both, want) ||
+		strings.Contains(both, "console error") || strings.Contains(both, "orders") {
+		t.Errorf("LOCKFILE_INSTANCE: exit %d, stdout %q stderr %q", code, out, errText)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "orders")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a path of the stale instance was created: %v", err)
 	}
 }
 

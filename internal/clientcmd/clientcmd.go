@@ -63,8 +63,13 @@ func SetInstance(name string) { instance = name }
 // dial connects to profile's console. Profiles live in the lockfile
 // account, never in a project: the client dials from "/" so that no
 // project directory changes the socket it looks for. The socket is the
-// lock instance's (SetInstance).
+// lock instance's (SetInstance); a leftover --instance or
+// <PREFIX>INSTANCE whose lock is not mounted here fails before the dial
+// with errInstanceNotMounted, which closed names.
 var dial = func(profile string) (caller, error) {
+	if err := instanceNotMountedErr(); err != nil {
+		return nil, err
+	}
 	return client.DialInstance(product.P, "/", profile, instance)
 }
 
@@ -114,6 +119,9 @@ func closed(profile string, err error) error {
 	}
 	if errors.Is(err, client.ErrConsoleClosed) {
 		return &Error{Kind: KindOther, Msg: rpc.MsgClosed}
+	}
+	if errors.Is(err, errInstanceNotMounted) {
+		return &Error{Kind: KindOther, Msg: rpc.MsgNoInstanceDir}
 	}
 	var re *ipc.RPCError
 	if !errors.As(err, &re) {
