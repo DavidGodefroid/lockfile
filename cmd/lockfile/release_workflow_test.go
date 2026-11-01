@@ -34,6 +34,11 @@ func TestReleaseWorkflowGuards(t *testing.T) {
 		"\n    needs: [on-main, test]\n",
 		"\n  image:\n", "\n    needs: [on-main, image]\n",
 		`cosign sign --yes "$IMAGE@$digest"`,
+		// The Homebrew bump comes last, after the archives and the images,
+		// and is skipped without its token.
+		"\n  tap:\n", "\n    needs: [goreleaser, image-manifest]\n",
+		"if: ${{ env.TAP_DISPATCH_TOKEN != '' }}",
+		`-f "client_payload[formula]=lockfile"`,
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("release.yml lacks %q", want)

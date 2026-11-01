@@ -366,6 +366,10 @@ where, the volumes, the seccomp profile, the `-vault` image
 host install. The base images are pinned by digest, cosign and the Vault CLI
 by sha256; the image has no `sudo`.
 
+**Homebrew (Linux).** `brew install davidgodefroid/tap/lockfile` installs the
+same launcher and profile, pinned to the same digests. Each release tag bumps
+that formula ([homebrew-tap](https://github.com/DavidGodefroid/homebrew-tap)).
+
 **Upgrade.** `lockfile update` (same checks), then restart the console; the
 volumes keep its state.
 

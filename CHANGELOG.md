@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Each release tag bumps the `lockfile` formula of the
+  [Homebrew tap](https://github.com/DavidGodefroid/homebrew-tap)
+  (`brew install davidgodefroid/tap/lockfile`): the release workflow's last job
+  dispatches the bump once the release is signed
+  (DavidGodefroid/lockfamily#8). It is skipped while the
+  `TAP_DISPATCH_TOKEN` secret is not set.
+
 ## v0.6.0
 
 The console is hub-attached only (DavidGodefroid/lockkit#110): `lox up` starts it, the
