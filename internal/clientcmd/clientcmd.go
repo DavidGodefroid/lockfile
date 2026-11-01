@@ -51,11 +51,21 @@ type caller interface {
 	Close() error
 }
 
+// instance is the lock instance every call reaches (SetInstance): ""
+// is the socket directory itself, as before instances.
+var instance string
+
+// SetInstance sets the lock instance every call reaches, the one
+// client.ResolveInstance resolved once per process (the CLI after its
+// flags, mcp before it serves).
+func SetInstance(name string) { instance = name }
+
 // dial connects to profile's console. Profiles live in the lockfile
 // account, never in a project: the client dials from "/" so that no
-// project directory changes the socket it looks for.
+// project directory changes the socket it looks for. The socket is the
+// lock instance's (SetInstance).
 var dial = func(profile string) (caller, error) {
-	return client.Dial(product.P, "/", profile)
+	return client.DialInstance(product.P, "/", profile, instance)
 }
 
 // StartCommand is the command that starts the consoles: lockkit's, `lox

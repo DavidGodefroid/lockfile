@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"unicode/utf8"
 
+	"github.com/DavidGodefroid/lockkit/client"
 	"github.com/DavidGodefroid/lockkit/mcpkit"
 	"github.com/DavidGodefroid/lockkit/refusal"
 	"github.com/DavidGodefroid/lockkit/render"
@@ -38,15 +39,33 @@ var outCaps = render.Caps{MaxCellChars: 512, MaxOutputBytes: 64 << 10}
 
 // agentFlags are the flags every agent command takes.
 type agentFlags struct {
-	fs      *flag.FlagSet
-	profile *string
-	json    *bool
+	fs       *flag.FlagSet
+	profile  *string
+	instance *string
+	json     *bool
 }
 
 func newAgentFlags(name string) agentFlags {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	return agentFlags{fs: fs, profile: fs.String("profile", "", "profile of the console"), json: fs.Bool("json", false, "JSON output")}
+	return agentFlags{fs: fs, profile: fs.String("profile", "", "profile of the console"),
+		instance: fs.String(client.FlagInstance, "", "lock instance, one among several of this type"),
+		json:     fs.Bool("json", false, "JSON output")}
+}
+
+// setInstance resolves the lock instance once per process, right after
+// the flags (--instance, else LOCKFILE_INSTANCE, else the one lock lea
+// lists), and hands it to clientcmd. Its error, which names the flag or
+// variable and never the value, is a usage error.
+func setInstance(e env, flagValue, use string) bool {
+	inst, err := client.ResolveInstance(product.P, flagValue)
+	if err != nil {
+		fmt.Fprintln(e.stderr, "lockfile: "+sanitize.Terminal(err.Error(), false))
+		usageErr(e, use)
+		return false
+	}
+	clientcmd.SetInstance(inst)
+	return true
 }
 
 // parse parses args, flags and positional arguments in any order.
@@ -146,9 +165,13 @@ func fail(e env, asJSON bool, err error) int {
 }
 
 func runStatus(e env, args []string) int {
+	const use = "status [--profile P] [--instance NAME] [--json]"
 	f := newAgentFlags("status")
 	if pos, err := f.parse(args); err != nil || len(pos) != 0 {
-		return usageErr(e, "status [--profile P] [--json]")
+		return usageErr(e, use)
+	}
+	if !setInstance(e, *f.instance, use) {
+		return product.ExitUsage
 	}
 	ctx, stop := agentContext()
 	defer stop()
@@ -163,9 +186,13 @@ func runStatus(e env, args []string) int {
 }
 
 func runSources(e env, args []string) int {
+	const use = "sources [--instance NAME] [--json]"
 	f := newAgentFlags("sources")
 	if pos, err := f.parse(args); err != nil || len(pos) != 0 || *f.profile != "" {
-		return usageErr(e, "sources [--json]")
+		return usageErr(e, use)
+	}
+	if !setInstance(e, *f.instance, use) {
+		return product.ExitUsage
 	}
 	ctx, stop := agentContext()
 	defer stop()
@@ -202,9 +229,13 @@ func resolve(e env, f agentFlags) (string, int, bool) {
 }
 
 func runPlugins(e env, args []string) int {
+	const use = "plugins [--profile P] [--instance NAME] [--json]"
 	f := newAgentFlags("plugins")
 	if pos, err := f.parse(args); err != nil || len(pos) != 0 {
-		return usageErr(e, "plugins [--profile P] [--json]")
+		return usageErr(e, use)
+	}
+	if !setInstance(e, *f.instance, use) {
+		return product.ExitUsage
 	}
 	profile, code, ok := resolve(e, f)
 	if !ok {
@@ -239,7 +270,7 @@ func (m *multi) String() string     { return strings.Join(*m, ",") }
 func (m *multi) Set(v string) error { *m = append(*m, v); return nil }
 
 func runPlan(e env, args []string) int {
-	const use = "plan [--profile P] (--key KEY | --handle HANDLE) --plugin NAME... [--intent TEXT] [--run] [--json]"
+	const use = "plan [--profile P] [--instance NAME] (--key KEY | --handle HANDLE) --plugin NAME... [--intent TEXT] [--run] [--json]"
 	f := newAgentFlags("plan")
 	key := f.fs.String("key", "", "exact object key")
 	handle := f.fs.String("handle", "", "handle of a file already fetched")
@@ -249,6 +280,9 @@ func runPlan(e env, args []string) int {
 	f.fs.Var(&plugins, "plugin", "plugin to run (repeat)")
 	if pos, err := f.parse(args); err != nil || len(pos) != 0 || (*key == "") == (*handle == "") || len(plugins) == 0 {
 		return usageErr(e, use)
+	}
+	if !setInstance(e, *f.instance, use) {
+		return product.ExitUsage
 	}
 	profile, code, ok := resolve(e, f)
 	if !ok {
@@ -300,6 +334,9 @@ func runOne(e env, args []string, name, use string, do func(ctx context.Context,
 	if err != nil || len(pos) != 1 || pos[0] == "" {
 		return usageErr(e, use)
 	}
+	if !setInstance(e, *f.instance, use) {
+		return product.ExitUsage
+	}
 	profile, code, ok := resolve(e, f)
 	if !ok {
 		return code
@@ -314,21 +351,21 @@ func runOne(e env, args []string, name, use string, do func(ctx context.Context,
 }
 
 func runRun(e env, args []string) int {
-	return runOne(e, args, "run", "run PLAN_ID|TICKET [--profile P] [--json]", func(ctx context.Context, profile, id string) (any, []string, error) {
+	return runOne(e, args, "run", "run PLAN_ID|TICKET [--profile P] [--instance NAME] [--json]", func(ctx context.Context, profile, id string) (any, []string, error) {
 		r, err := clientcmd.Run(ctx, profile, id, mcpkit.RequesterFromEnv())
 		return r, resultLines(r), err
 	})
 }
 
 func runAnswers(e env, args []string) int {
-	return runOne(e, args, "answers", "answers HANDLE [--profile P] [--json]", func(ctx context.Context, profile, id string) (any, []string, error) {
+	return runOne(e, args, "answers", "answers HANDLE [--profile P] [--instance NAME] [--json]", func(ctx context.Context, profile, id string) (any, []string, error) {
 		r, err := clientcmd.Answers(ctx, profile, id)
 		return r, resultLines(r), err
 	})
 }
 
 func runRelease(e env, args []string) int {
-	return runOne(e, args, "release", "release HANDLE [--profile P] [--json]", func(ctx context.Context, profile, id string) (any, []string, error) {
+	return runOne(e, args, "release", "release HANDLE [--profile P] [--instance NAME] [--json]", func(ctx context.Context, profile, id string) (any, []string, error) {
 		r, err := clientcmd.Release(ctx, profile, id)
 		return r, []string{clientcmd.ReleasedText(id, r)}, err
 	})
