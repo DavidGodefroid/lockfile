@@ -370,7 +370,7 @@ volumes keep its state.
 Console, agent CLI, MCP server and agent wiring on
 [lockkit](https://github.com/DavidGodefroid/lockkit), deployed with Docker; hub
 mode (plans decided on [lockhub](https://github.com/DavidGodefroid/lockhub), in
-`lock approve` or another facade) since v0.4.0.
+`lox approve` or another facade) since v0.4.0.
 The console needs a Linux kernel with Landlock and seccomp (they sandbox the
 plugins).
 

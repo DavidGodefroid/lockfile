@@ -421,8 +421,8 @@ the flag adds them to it for that console only (the console prints them at
 start). Both refuse root (0), the console's own uid (10031) and 65534
 (nobody, the kernel's overflow uid). Only whoever starts the console sets
 them: the human, through the launcher (which passes the flag on) or
-through `lock up` (lockhub v0.2.4 or later: a lock's `allowed_uids` in the
-lockfamily.yaml lock up reviews with you); no client can. `lockfile doctor`
+through `lox up` (lockhub v0.2.4 or later: a lock's `allowed_uids` in the
+lockfamily.yaml `lox up` reviews with you); no client can. `lockfile doctor`
 in the agent's container cannot see a running console's flags: for a uid
 with no account it warns instead of failing. It is the uid the kernel reports for
 the agent's process, as the console sees it (the agent container's uid when
