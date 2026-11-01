@@ -29,7 +29,7 @@ only the socket volume:
   `~/.config/lockfile` (the volume `lockfamily-<hash>_profile-lockfile`);
 - the console's home is `lox up`'s volume `lockfamily-<hash>_<instance>-home`:
   the plugin store and `plugins.lock`, the approved policies, the audit log,
-  the fetched files (`work_dir`), the Vault token, cosign's trust root cache.
+  the fetched files (`work_dir`), cosign's trust root cache.
 
 ## Requirements
 
@@ -357,14 +357,25 @@ mounts read-only at the same path:
 LOCKFILE_VAULT=1 VAULT_ADDR=https://vault.example.com lockfile console --profile docs
 ```
 
-Log in once as the console account; the token stays in the console's home
-(`lox up`'s `lockfamily-<hash>_<instance>-home`), out of the agents' reach:
+The console account needs no `vault login`: at start the console asks
+`Vault token for <VAULT_ADDR>:` in its terminal (no echo) and keeps the
+token in memory for the session, never in its home volume or anywhere on
+disk.
+
+Get the token without storing it, then paste it at the prompt:
 
 ```sh
-docker run -it --rm --user lockfile -e VAULT_ADDR=https://vault.example.com \
-  -v lockfamily-<hash>_<instance>-home:/home/lockfile --entrypoint vault \
-  ghcr.io/davidgodefroid/lockfile:X.Y.Z-vault login -method=oidc
+vault login -method=oidc -no-store -token-only
 ```
+
+`-no-store -token-only` prints the token and writes no `~/.vault-token`.
+A plain `vault login` would store the token in your account, where the
+agent runs: the agent could read it and fetch the login from Vault itself,
+bypassing the console (`lockfile doctor` fails on it). For the same reason,
+do not leave `VAULT_TOKEN` set in that shell. When Vault refuses a read
+(`not authenticated or not allowed`: the token is expired or revoked, or
+its policy may not read `vault_path`), the console asks for a token again;
+three refusals in a row stop the connection.
 
 ## Wire the agent
 
