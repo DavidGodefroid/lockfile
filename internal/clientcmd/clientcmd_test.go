@@ -440,13 +440,13 @@ func TestNoConsoleIsUnknownProfile(t *testing.T) {
 	_, err := Plugins(context.Background(), "nope")
 	var ce *Error
 	if !errors.As(err, &ce) || ce.Kind != KindNoConsole || ce.Msg != "unknown_profile" ||
-		ce.Refusal == nil || ce.Refusal.Code != "E_UNKNOWN_PROFILE" || !strings.Contains(ce.Refusal.Hint, "lockfile console --profile nope") {
+		ce.Refusal == nil || ce.Refusal.Code != "E_UNKNOWN_PROFILE" || ce.Refusal.Hint != UnknownProfileHint("nope") {
 		t.Fatalf("err = %#v", err)
 	}
 	if _, err := Resolve("", "nope"); !errors.As(err, &ce) || ce.Msg != "unknown_profile" {
 		t.Fatalf("resolve: %v", err)
 	}
-	if _, err := Resolve("", ""); !errors.As(err, &ce) || ce.Kind != KindNoConsole {
+	if _, err := Resolve("", ""); !errors.As(err, &ce) || ce.Kind != KindNoConsole || ce.Msg != NoConsoleText {
 		t.Fatalf("resolve none: %v", err)
 	}
 	if p, err := Resolve("pinned", ""); err != nil || p != "pinned" {

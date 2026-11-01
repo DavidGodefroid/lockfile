@@ -141,7 +141,7 @@ lockfile plugin install format.is-pdf@1.0.0
 
 # 3. Declare the lock and start it with its hub (lockhub's lox CLI), then
 #    answer the console's own questions (policy review) and approve plans.
-lox add lockfile samples
+lox add lockfile samples --profile samples
 lox up
 lox attach samples  # the policy review (detach: Ctrl-P Ctrl-Q)
 

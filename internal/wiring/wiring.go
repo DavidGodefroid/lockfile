@@ -34,5 +34,5 @@ var Wiring = agentwire.Wiring{Product: product.P, Assets: agentwire.Assets{
 	Instructions:      Instructions,
 	CursorFrontMatter: CursorFrontMatter,
 	ClaudeAllow:       ClaudeAllow,
-	ClaudeNote:        "Plans are approved in the lockfile console, not in Claude Code.",
+	ClaudeNote:        "Plans are approved on lockhub (lox approve), not in Claude Code nor in the lockfile console.",
 }}
