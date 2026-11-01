@@ -4,6 +4,29 @@
 
 The console is hub-attached only (DavidGodefroid/lockkit#110).
 
+- **The launcher verbs of lockkit v0.10.0** (DavidGodefroid/lockkit#111), the same in every
+  lock, which `lox init` drives ([docs/usage.md](docs/usage.md#profiles-console-account)):
+  - `lockfile profile add [--non-interactive] [--json] [--project DIR] [--profile NAME]
+    [--production] [--credentials ask|vault [--vault-path P]] --source local|s3|sftp <source
+    flags>`. Breaking: the profile name is `--profile NAME` (`default` without it), no longer a
+    positional argument, which is refused, as any positional argument is; `profile add` is the
+    only `profile` command. On a terminal it asks for what the flags did not give (the
+    prompts on stderr); with `--non-interactive`, or without a terminal, a missing value is a
+    usage error naming its flag. `--credentials` takes `ask` or `vault` (`keychain`, `none`
+    and anything else are refused; the interactive form still offers `none` for an SFTP key
+    without a passphrase); a `local` source takes no `--credentials`. Its arguments go
+    through `verbs.Parse`: a flag named like a secret, a value that embeds a password and a
+    control character are refused and never quoted. A profile already in the file is never
+    rewritten (`exists`). `--json` prints one line, `verbs.Profile` or `verbs.Error` (codes
+    `usage`, `secret`, `exists`, `failed`). `--project DIR` writes that workspace's
+    `.lockfile/config.toml` (the launcher passes it on as an absolute path).
+  - `lockfile doctor [--fix [--yes]] [--json]`: `--fix` asks before wiring each agent unless
+    `--yes`, and refuses without a terminal and without `--yes`; `--yes` without `--fix` is a
+    usage error. `--json` prints one `verbs.Doctor` (`ok`, `fixed`, `checks` with `fix`)
+    instead of the array of findings, or a `verbs.Error` when doctor could not check.
+  - `lockfile init <agent>`: the agent is required (no default `claude`).
+- lockkit v0.10.0.
+
 - **The profile and the plugins reach the console `lox up` runs** (#44). `lockfile profile add`
   and `lockfile marketplace add|remove|list` edit the workspace's `.lockfile/config.toml`, as
   you (the launcher mounts only `.lockfile/`, made `0700`; the file `0600`), where `lox up`

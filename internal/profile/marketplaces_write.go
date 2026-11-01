@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/DavidGodefroid/lockkit/config"
+
+	"github.com/DavidGodefroid/lockfile/internal/product"
 )
 
 // The config file is the human's: these writers append or cut whole
@@ -99,17 +101,45 @@ func AppendMarketplace(path string, r RawMarketplace) (Trust, error) {
 	return t, writeConfig(path, []byte(b.String()), mode)
 }
 
+// ErrProfileExists refuses a profile the config file already defines:
+// AppendProfile never rewrites one.
+var ErrProfileExists = errors.New("the profile is already in the config file")
+
+// ErrInvalidProfile wraps the refusal of the profile AppendProfile was
+// given (its name or its keys), as opposed to a config file that cannot
+// be read, parsed or written.
+var ErrInvalidProfile = errors.New("invalid profile")
+
 // AppendProfile adds [profiles.<name>] with the given keys (TOML names;
 // string, int or bool values, written in the order of keys) at the end of
-// the config file at path, after checking the whole file with Parse.
+// the config file at path, after checking the profile alone, then the
+// whole file, with Parse. A profile the file already has is never
+// rewritten (ErrProfileExists).
 func AppendProfile(path, name string, keys []string, values map[string]any) error {
 	production, _ := values["production"].(bool)
 	// lockkit's error quotes the name: check its shape first.
 	if config.CheckProfileName(name, false) != nil {
-		return errors.New("invalid profile name: use letters, digits, '_', '-' or '.', starting with a letter or digit, at most 64")
+		return fmt.Errorf("%w: invalid profile name: use letters, digits, '_', '-' or '.', starting with a letter or digit, at most 64", ErrInvalidProfile)
 	}
 	if err := config.CheckProfileName(name, production); err != nil {
-		return err
+		return fmt.Errorf("%w: %v", ErrInvalidProfile, err)
+	}
+	var block strings.Builder
+	fmt.Fprintf(&block, "[profiles.%s]\n", name)
+	for _, k := range keys {
+		switch v := values[k].(type) {
+		case string:
+			fmt.Fprintf(&block, "%s = %s\n", k, tomlString(v))
+		case int:
+			fmt.Fprintf(&block, "%s = %d\n", k, v)
+		case bool:
+			fmt.Fprintf(&block, "%s = %t\n", k, v)
+		default:
+			return fmt.Errorf("%w: profile %s: unsupported value for %s", ErrInvalidProfile, name, k)
+		}
+	}
+	if err := checkProfileBlock(name, block.String()); err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidProfile, err)
 	}
 	data, mode, err := readConfig(path)
 	if err != nil {
@@ -121,7 +151,7 @@ func AppendProfile(path, name string, keys []string, values map[string]any) erro
 			return err
 		}
 		if _, ok := f.Profiles[name]; ok {
-			return fmt.Errorf("profile %s already exists: edit the config file to change it", name)
+			return fmt.Errorf("profile %s: %w (%s): it is kept as it is; edit the file to change it", name, ErrProfileExists, path)
 		}
 	}
 	var b strings.Builder
@@ -132,20 +162,19 @@ func AppendProfile(path, name string, keys []string, values map[string]any) erro
 	if len(data) > 0 {
 		b.WriteString("\n")
 	}
-	fmt.Fprintf(&b, "[profiles.%s]\n", name)
-	for _, k := range keys {
-		switch v := values[k].(type) {
-		case string:
-			fmt.Fprintf(&b, "%s = %s\n", k, tomlString(v))
-		case int:
-			fmt.Fprintf(&b, "%s = %d\n", k, v)
-		case bool:
-			fmt.Fprintf(&b, "%s = %t\n", k, v)
-		default:
-			return fmt.Errorf("profile %s: unsupported value for %s", name, k)
-		}
-	}
+	b.WriteString(block.String())
 	return writeConfig(path, []byte(b.String()), mode)
+}
+
+// checkProfileBlock checks one [profiles.<name>] block on its own, its
+// error without the file's name.
+func checkProfileBlock(name, block string) error {
+	var raw Raw
+	if _, err := config.Decode(product.P, []byte(block), "the new profile", &raw); err != nil {
+		return err
+	}
+	_, err := parseProfile(name, raw.Profiles[name])
+	return err
 }
 
 var (

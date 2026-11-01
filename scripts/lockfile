@@ -11,7 +11,8 @@
 #   profile, marketplace
 #                    as you, with the workspace's profile directory
 #                    (<workspace>/.lockfile, the nearest directory up from
-#                    here that holds .lockfamily/, else this one): `lox up`
+#                    here that holds .lockfamily/, else this one; profile
+#                    add --project DIR names another): `lox up`
 #                    reviews it and copies it, read-only, to the console's
 #                    ~/.config/lockfile
 #   plugin, audit, forget, doctor
@@ -637,7 +638,41 @@ console_mounts() {
 as_workspace() {
 	[ -n "$here" ] || die "the current directory no longer exists: cd to the workspace"
 	ws=
+	# profile add --project DIR: that workspace, passed on as an absolute
+	# path (the command runs from /).
+	if [ "${1:-}" = profile ] && has_flag --project "$@"; then
+		n=$#
+		take=
+		done_opts=
+		for a in "$@"; do
+			if [ -n "$done_opts" ]; then
+				set -- "$@" "$a"
+				continue
+			fi
+			if [ -n "$take" ]; then
+				a=--project=$a
+				take=
+			fi
+			case "$a" in
+			--) done_opts=1 ;;
+			--project)
+				take=1
+				continue
+				;;
+			--project=*)
+				p=${a#--project=}
+				[ -n "$p" ] && [ -d "$p" ] || die "--project: not a directory"
+				ws=$(cd "$p" && pwd -P) || die "--project: not a directory"
+				a=--project=$ws
+				;;
+			esac
+			set -- "$@" "$a"
+		done
+		shift "$n"
+		[ -z "$take" ] || die "--project: name the workspace directory"
+	fi
 	for want in up.json ""; do
+		[ -z "$ws" ] || break
 		d=$here
 		while :; do
 			if [ -e "$d/.lockfamily/$want" ] || [ -L "$d/.lockfamily/$want" ] || [ -L "$d/.lockfamily" ]; then

@@ -136,7 +136,7 @@ less install.sh && LOCKFILE_VERSION=$V sh install.sh
 # 2. From the workspace: the lock's profile, in .lockfile/ (lox up reviews it
 #    and copies it, read-only, to the console), then the lock and its hub
 #    (lockhub's lox CLI), then the console's own questions (policy review).
-lockfile profile add samples --source local --path /srv/lockfile/samples --prefix invoices/
+lockfile profile add --profile samples --source local --path /srv/lockfile/samples --prefix invoices/
 lox add lockfile samples --profile samples
 lox up
 lox attach samples  # the policy review (detach: Ctrl-P Ctrl-Q)
@@ -279,9 +279,13 @@ secure erase. Details: [docs/security-model.md](docs/security-model.md).
 
 ## Configuration
 
-Profiles live in the `lockfile` account's `~/.config/lockfile/config.toml`;
-there is no per-project config. `lockfile profile add` appends one,
-validated. No file ever holds a secret.
+Profiles live in the workspace's `.lockfile/config.toml`, which `lox up`
+reviews and copies, read-only, to the console's `~/.config/lockfile`.
+`lockfile profile add --profile NAME --source local|s3|sftp ...` appends one,
+validated, and never rewrites one; on a terminal it asks for what the flags
+did not give, and `--non-interactive --json` answers in one line of JSON
+([docs/usage.md](docs/usage.md#profiles-console-account)). No file ever holds a
+secret, and `profile add` never takes one.
 
 ```toml
 [profiles.docs]

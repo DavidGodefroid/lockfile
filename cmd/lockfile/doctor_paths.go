@@ -24,7 +24,9 @@ var sharedFS = map[string]bool{
 // table ("" when unreadable). No detail names the path.
 func workDirFindings(work, table string) []finding {
 	var out []finding
-	add := func(status, detail string) { out = append(out, finding{"work dir", status, detail}) }
+	add := func(status, detail string) {
+		out = append(out, finding{Check: "work dir", Status: status, Detail: detail})
+	}
 	fi, err := os.Stat(work)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):

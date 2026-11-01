@@ -608,7 +608,7 @@ func TestLauncherProfileDirectory(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(f.project, ".lockfamily"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if out, calls, err := f.run(t, filepath.Join(f.project, "sub"), nil, "profile", "add", "p", "--source", "local", "--path", "/x"); err != nil || !hasSeq(lastRun(t, calls), bind(f.root)...) {
+	if out, calls, err := f.run(t, filepath.Join(f.project, "sub"), nil, "profile", "add", "--profile", "p", "--source", "local", "--path", "/x"); err != nil || !hasSeq(lastRun(t, calls), bind(f.root)...) {
 		t.Errorf("%v\n%s\n%q", err, out, calls)
 	}
 	// No lox up yet: the nearest .lockfamily.
@@ -640,7 +640,45 @@ func TestLauncherProfileDirectory(t *testing.T) {
 	if err := os.Symlink(filepath.Join(f.project, "link"), filepath.Join(f.project, ".lockfile")); err != nil {
 		t.Fatal(err)
 	}
-	if out, calls, err := f.run(t, f.project, nil, "profile", "add", "p", "--source", "local", "--path", "/x"); err == nil || !strings.Contains(out, "is a link") || hasRun(calls) {
+	if out, calls, err := f.run(t, f.project, nil, "profile", "add", "--profile", "p", "--source", "local", "--path", "/x"); err == nil || !strings.Contains(out, "is a link") || hasRun(calls) {
 		t.Errorf("%v\n%s\n%q", err, out, calls)
+	}
+}
+
+// profile add --project DIR writes that workspace's profile directory,
+// passed on as an absolute path (the command runs from /); the other
+// arguments pass through as they are.
+func TestLauncherProfileProject(t *testing.T) {
+	f := newLauncherFixture(t)
+	other := filepath.Join(f.root, "other")
+	if err := os.MkdirAll(other, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	pd := filepath.Join(other, ".lockfile")
+	for _, args := range [][]string{
+		{"--project", "../other"},
+		{"--project=../other"},
+	} {
+		cmd := append(append([]string{"profile", "add", "--non-interactive", "--json"}, args...), "--profile", "p", "--source", "local", "--path", "/x")
+		out, calls, err := f.run(t, f.project, nil, cmd...)
+		if err != nil {
+			t.Fatalf("%v: %v\n%s", args, err, out)
+		}
+		r := lastRun(t, calls)
+		if !hasSeq(r, "--mount", "type=bind,src="+pd+",dst="+pd) || !hasSeq(r, "-e", "LOCKFILE_WORKSPACE="+other) {
+			t.Errorf("%v: %q", args, r)
+		}
+		if got := strings.Join(imageArgs(r, "lockfile")[1:], " "); got != "profile add --non-interactive --json --project="+other+" --profile p --source local --path /x" {
+			t.Errorf("%v: command %q", args, got)
+		}
+	}
+	if fi, err := os.Lstat(pd); err != nil || fi.Mode().Perm() != 0o700 {
+		t.Fatalf("%s: %v %v", pd, fi, err)
+	}
+	for _, args := range [][]string{{"--project", filepath.Join(f.root, "missing")}, {"--project"}, {"--project="}} {
+		out, calls, err := f.run(t, f.project, nil, append([]string{"profile", "add"}, args...)...)
+		if err == nil || !strings.Contains(out, "--project") || hasRun(calls) {
+			t.Errorf("%v: %v\n%s\n%q", args, err, out, calls)
+		}
 	}
 }

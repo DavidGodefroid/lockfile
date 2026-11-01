@@ -79,15 +79,15 @@ LOCKFILE_VERSION=$V sh install.sh</code></pre>
   <h2 id="profile">2. A source profile (console account)</h2>
   <p class="prose">Profiles live in the workspace’s <code>.lockfile/config.toml</code>, yours: <code>lox up</code> reviews it and copies it, read-only, to the console’s <code>~/.config/lockfile</code>. <code>lockfile profile add</code>, run from the workspace, appends one, validated:</p>
   <pre tabindex="0" class="term"><code><span class="cmt"># S3 (or an S3-compatible endpoint), credentials from Vault, production</span>
-lockfile profile add docs --source s3 --bucket documents --region eu-west-1 --prefix invoices/ \
+lockfile profile add --profile docs --source s3 --bucket documents --region eu-west-1 --prefix invoices/ \
   --credentials vault --vault-path secret/data/lockfile/docs --production
 
 <span class="cmt"># SFTP with a key, host key checked against known_hosts</span>
-lockfile profile add partner --source sftp --host sftp.example.org --user reader --auth key \
+lockfile profile add --profile partner --source sftp --host sftp.example.org --user reader --auth key \
   --key ~/.ssh/partner_ed25519 --known-hosts ~/.ssh/known_hosts --base-dir /outgoing
 
 <span class="cmt"># A local directory, mounted read-only in the console's container</span>
-lockfile profile add samples --source local --path /srv/lockfile/samples</code></pre>
+lockfile profile add --profile samples --source local --path /srv/lockfile/samples</code></pre>
   <pre tabindex="0"><code>[profiles.docs]
 source = "s3"                 <span class="cmt"># s3 | sftp | local</span>
 bucket = "documents"
@@ -128,7 +128,7 @@ lox attach samples   <span class="cmt"># :review applies them (detach: Ctrl-P Ct
   <h2 id="wire">5. Wire your agent (your account)</h2>
   <pre tabindex="0" class="term"><code>lockfile init claude                <span class="cmt"># or codex, cursor, gemini; this project</span>
 lockfile init claude --user         <span class="cmt"># every project of this account</span>
-lockfile doctor --fix               <span class="cmt"># wires the installed agents not wired yet</span></code></pre>
+lockfile doctor --fix               <span class="cmt"># wires the installed agents not wired yet (asks; --yes does not)</span></code></pre>
   <p class="prose"><code>lockfile mcp</code>, the MCP command it writes, runs through the launcher in a throwaway container. Claude Code may call <code>lockfile_status</code>, <code>lockfile_sources</code> and <code>lockfile_plugins</code> without a prompt; plans and runs always go through Claude Code’s permission prompt and the console.</p>
 </section>
 

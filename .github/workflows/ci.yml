@@ -94,7 +94,10 @@ jobs:
           set -x
           mkdir -p "$RUNNER_TEMP/ws/.lockfamily" && cd "$RUNNER_TEMP/ws" && ws=$(pwd -P)
           lf="$GITHUB_WORKSPACE/scripts/lockfile"
-          sh "$lf" profile add samples --source local --path /srv/lockfile/samples | grep -q "$ws/.lockfile/config.toml"
+          sh "$lf" profile add --profile samples --source local --path /srv/lockfile/samples | grep -q "$ws/.lockfile/config.toml"
+          # A profile already there is kept: code exists, one JSON line.
+          out=$(sh "$lf" profile add --non-interactive --json --profile samples --source local --path /srv/x) && exit 1
+          printf '%s\n' "$out" | grep -qx '{"lock":"lockfile","code":"exists",.*}'
           test "$(stat -c '%u %a' .lockfile)" = "$(id -u) 700"
           test "$(stat -c '%u %a' .lockfile/config.toml)" = "$(id -u) 600"
           grep -qx '\[profiles.samples\]' .lockfile/config.toml

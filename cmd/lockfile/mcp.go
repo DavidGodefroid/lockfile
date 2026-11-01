@@ -17,7 +17,7 @@ import (
 
 func init() {
 	commands["mcp"] = command{help: "MCP server on stdin/stdout (started by the agent)", run: runMCP}
-	commands["init"] = command{human: true, help: "wire an agent to lockfile: init [claude|codex|cursor|gemini] [--user]", run: runInit}
+	commands["init"] = command{human: true, help: "wire an agent to this project: init claude|codex|cursor|gemini (--user: for your account)", run: runInit}
 }
 
 func runMCP(e env, args []string) int {
@@ -36,8 +36,12 @@ func runMCP(e env, args []string) int {
 	return product.ExitOK
 }
 
+// runInit is `lockfile init <agent>`, the launcher verb of lockkit's
+// GUIDE.md §14: it writes the agent's files into the project of the
+// current directory (or, with --user, the account's), never asks, and is
+// idempotent.
 func runInit(e env, args []string) int {
-	const use = "init [claude|codex|cursor|gemini] [--user]"
+	const use = "init claude|codex|cursor|gemini [--user]"
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	user := fs.Bool("user", false, "wire the agent for the whole account instead of this project")
@@ -52,11 +56,8 @@ func runInit(e env, args []string) int {
 		agents = append(agents, fs.Arg(0))
 		args = fs.Args()[1:]
 	}
-	if len(agents) > 1 {
+	if len(agents) != 1 {
 		return usageErr(e, use)
-	}
-	if len(agents) == 0 {
-		agents = []string{"claude"}
 	}
 	agent := agents[0]
 	// lockkit's error quotes an unknown agent: refuse it here first.

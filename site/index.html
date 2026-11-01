@@ -158,7 +158,7 @@ curl -fsSLO "https://raw.githubusercontent.com/DavidGodefroid/lockfile/$V/script
 less install.sh &amp;&amp; LOCKFILE_VERSION=$V sh install.sh
 
 <span class="cmt"># 2. From the workspace: the lock's profile (.lockfile/, which lox up reviews and copies), the lock and its hub (lockhub's lox CLI)</span>
-lockfile profile add samples --source local --path /srv/lockfile/samples --prefix invoices/
+lockfile profile add --profile samples --source local --path /srv/lockfile/samples --prefix invoices/
 lox add lockfile samples --profile samples
 lox up
 lox attach samples   <span class="cmt"># the policy review</span>

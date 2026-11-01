@@ -252,9 +252,12 @@ The launcher's setup commands write where `lox up` reads:
 for every key):
 
 ```sh
-lockfile profile add docs --source s3 --bucket documents --region eu-west-1 --prefix invoices/ \
+lockfile profile add --profile docs --source s3 --bucket documents --region eu-west-1 --prefix invoices/ \
   --credentials vault --vault-path secret/data/lockfile/docs --production
 ```
+
+`--project DIR` names another workspace (the launcher passes it on as an
+absolute path and mounts that workspace's `.lockfile/` only).
 
 Inside a container, a few things differ from a host:
 
@@ -265,7 +268,7 @@ Inside a container, a few things differ from a host:
   profile:
 
   ```sh
-  lockfile profile add samples --source local --path /srv/lockfile/samples
+  lockfile profile add --profile samples --source local --path /srv/lockfile/samples
   ```
 
   and start the console with

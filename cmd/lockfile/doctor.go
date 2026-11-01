@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"flag"
 	"fmt"
@@ -17,8 +18,8 @@ import (
 	"syscall"
 
 	"github.com/DavidGodefroid/lockkit/agentwire"
-	"github.com/DavidGodefroid/lockkit/render"
 	"github.com/DavidGodefroid/lockkit/sysconf"
+	"github.com/DavidGodefroid/lockkit/verbs"
 
 	"github.com/DavidGodefroid/lockfile/internal/procmount"
 	"github.com/DavidGodefroid/lockfile/internal/product"
@@ -28,7 +29,7 @@ import (
 )
 
 func init() {
-	commands["doctor"] = command{human: true, help: "check the setup from this account: sandbox, separation, agent wiring [--fix] [--json]", run: runDoctor}
+	commands["doctor"] = command{human: true, help: "check the setup from this account: sandbox, separation, agent wiring [--fix [--yes]] [--json]", run: runDoctor}
 }
 
 // doctorHooks replace the system in tests.
@@ -49,21 +50,61 @@ type doctorHooks struct {
 
 var testDoctorHooks *doctorHooks
 
-// finding is one doctor line. Detail never holds a key, a secret or a path
-// inside the console account's home.
-type finding struct {
-	Check  string `json:"check"`
-	Status string `json:"status"` // ok, warn, fail
-	Detail string `json:"detail"`
-}
+// finding is one doctor line, as lockkit's verbs reports it. Detail never
+// holds a key, a secret or a path inside the console account's home.
+type finding = verbs.Check
 
+const doctorUsage = "doctor [--fix [--yes]] [--json]"
+
+// runDoctor is `lockfile doctor`, the launcher verb of lockkit's GUIDE.md
+// §14: it checks the setup from this account; --fix wires the agents not
+// wired yet (the only repair it makes), asking before each unless --yes.
 func runDoctor(e env, args []string) int {
+	jsonWanted := verbs.WantsJSON(args)
+	refuse := func(err error) int {
+		if jsonWanted {
+			if werr := verbs.WriteJSON(e.stdout, verbs.Error{Lock: product.P.Name, Code: verbs.CodeUsage, Error: err.Error()}); werr != nil {
+				return product.ExitError
+			}
+			return product.ExitUsage
+		}
+		fmt.Fprintln(e.stderr, "lockfile doctor:", err)
+		fmt.Fprintln(e.stderr, "usage: lockfile "+doctorUsage)
+		return product.ExitUsage
+	}
 	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	fix := fs.Bool("fix", false, "wire the installed agents that are not wired yet (nothing else)")
-	asJSON := fs.Bool("json", false, "JSON output")
-	if err := fs.Parse(args); err != nil || fs.NArg() != 0 {
-		return usageErr(e, "doctor [--fix] [--json]")
+	fix := fs.Bool(verbs.FlagFix, false, "wire the installed agents that are not wired yet (nothing else)")
+	yes := fs.Bool(verbs.FlagYes, false, "with --fix: repair without asking")
+	asJSON := fs.Bool(verbs.FlagJSON, false, "JSON output")
+	if err := fs.Parse(args); err != nil {
+		return refuse(errors.New("bad or unknown flag"))
+	}
+	if fs.NArg() != 0 {
+		return refuse(errors.New("doctor takes no argument"))
+	}
+	jsonWanted = *asJSON
+	if *yes && !*fix {
+		return refuse(fmt.Errorf("--%s goes with --%s", verbs.FlagYes, verbs.FlagFix))
+	}
+	if *fix && !*yes && !isTerminal(e.stdin) {
+		return refuse(fmt.Errorf("--%s asks before each repair: run it in a terminal, or add --%s", verbs.FlagFix, verbs.FlagYes))
+	}
+	in := bufio.NewReader(e.stdin)
+	ask := func(prompt string) bool {
+		if *yes {
+			return true
+		}
+		// The question goes to stderr: with --json, stdout carries the
+		// JSON line only.
+		fmt.Fprint(e.stderr, prompt+" [y/N] ")
+		line, err := in.ReadString('\n')
+		if err != nil && line == "" {
+			fmt.Fprintln(e.stderr)
+			return false
+		}
+		line = strings.TrimSpace(line)
+		return strings.EqualFold(line, "y") || strings.EqualFold(line, "yes")
 	}
 	h := doctorHooks{}
 	if testDoctorHooks != nil {
@@ -103,7 +144,10 @@ func runDoctor(e env, args []string) int {
 		h.container = procmount.SystemContainer
 	}
 	var out []finding
-	add := func(check, status, detail string) { out = append(out, finding{check, status, detail}) }
+	var fixed []string
+	add := func(check, status, detail string) {
+		out = append(out, finding{Check: check, Status: status, Detail: detail})
+	}
 
 	if abi, sec, err := h.probe(); err != nil {
 		add("sandbox", "fail", fmt.Sprintf("plugins cannot run here (Landlock ABI %d, seccomp %t): Linux ≥ 5.13 with Landlock and seccomp is required", abi, sec))
@@ -137,30 +181,34 @@ func runDoctor(e env, args []string) int {
 	}
 
 	if !service {
-		doctorWiring(h, *fix, add)
+		fixed = doctorWiring(h, *fix, ask, func(c finding) { out = append(out, c) })
 	}
 
-	failed := false
-	for _, f := range out {
-		failed = failed || f.Status == "fail"
-	}
+	report := verbs.NewDoctor(product.P, out, fixed)
 	if *asJSON {
-		if err := render.Value(e.stdout, out, outCaps); err != nil {
+		if err := verbs.WriteJSON(e.stdout, report); err != nil {
 			return product.ExitError
 		}
 	} else {
-		for _, f := range out {
+		for _, f := range report.Fixed {
+			fmt.Fprintf(e.stdout, "fixed %s\n", f)
+		}
+		for _, f := range report.Checks {
 			mark := "ok  "
 			switch f.Status {
-			case "warn":
+			case verbs.StatusWarn:
 				mark = yellow("warn")
-			case "fail":
+			case verbs.StatusFail:
 				mark = red("FAIL")
 			}
-			fmt.Fprintf(e.stdout, "%s  %-12s %s\n", mark, f.Check, f.Detail)
+			line := fmt.Sprintf("%s  %-12s %s", mark, f.Check, f.Detail)
+			if f.Fix != "" {
+				line += " (" + f.Fix + ")"
+			}
+			fmt.Fprintln(e.stdout, line)
 		}
 	}
-	if failed {
+	if !report.OK {
 		return product.ExitError
 	}
 	return product.ExitOK
@@ -275,7 +323,7 @@ func doctorConsoleSide(h doctorHooks, sys *sysconf.Config, add func(string, stri
 	f, err := profile.ReadFile(path)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
-		add("config", "warn", "no profile yet: lockfile profile add NAME --source …")
+		add("config", "warn", "no profile yet: lockfile profile add --profile NAME --source … from the workspace, then lox up")
 		return
 	case err != nil:
 		add("config", "fail", "the config file does not load: the console names the error when `lox up` starts it")
@@ -347,32 +395,39 @@ func doctorYanked(add func(string, string, string)) {
 	}
 }
 
-// doctorWiring reports the agents not wired to lockfile, and wires them
-// with --fix.
-func doctorWiring(h doctorHooks, fix bool, add func(string, string, string)) {
+// wireFix is the fix of an agent not wired to lockfile.
+const wireFix = "lockfile doctor --fix wires it for your account (or lockfile init <agent> for one project)"
+
+// doctorWiring reports the agents not wired to lockfile and, with --fix,
+// wires those ask accepts; it returns the repairs made.
+func doctorWiring(h doctorHooks, fix bool, ask func(string) bool, add func(finding)) []string {
 	env, err := h.agents()
 	if err != nil {
-		add("agents", "warn", "cannot look for agents: "+err.Error())
-		return
+		add(finding{Check: "agents", Status: verbs.StatusWarn, Detail: "cannot look for agents: " + err.Error()})
+		return nil
 	}
 	found, pending := wiring.Wiring.Unwired(env)
 	if len(found) == 0 {
-		add("agents", "warn", "no agent found (Claude Code, Codex, Cursor, Gemini CLI)")
-		return
+		add(finding{Check: "agents", Status: verbs.StatusWarn, Detail: "no agent found (Claude Code, Codex, Cursor, Gemini CLI)"})
+		return nil
 	}
 	if len(pending) == 0 {
-		add("agents", "ok", "wired: "+strings.Join(found, ", "))
-		return
+		add(finding{Check: "agents", Status: verbs.StatusOK, Detail: "wired: " + strings.Join(found, ", ")})
+		return nil
 	}
-	if !fix {
-		add("agents", "warn", "not wired: "+strings.Join(pending, ", ")+" (lockfile doctor --fix, or lockfile init <agent> --user)")
-		return
-	}
+	var fixed []string
 	for _, a := range pending {
-		if _, err := wiring.Wiring.InitUser(env, a); err != nil {
-			add("agents", "fail", "wiring "+a+": "+err.Error())
-			continue
+		switch {
+		case !fix || !ask("wire "+a+" to lockfile for your account?"):
+			add(finding{Check: "agents", Status: verbs.StatusWarn, Detail: "not wired: " + a, Fix: wireFix})
+		default:
+			if _, err := wiring.Wiring.InitUser(env, a); err != nil {
+				add(finding{Check: "agents", Status: verbs.StatusFail, Detail: "wiring " + a + ": " + err.Error(), Fix: wireFix})
+				continue
+			}
+			fixed = append(fixed, "wired "+a+" for your account")
+			add(finding{Check: "agents", Status: verbs.StatusOK, Detail: "wired " + a})
 		}
-		add("agents", "ok", "wired "+a)
 	}
+	return fixed
 }
