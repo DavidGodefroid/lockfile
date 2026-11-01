@@ -78,10 +78,13 @@ jobs:
           test "$(stat -c %u .mcp.json)" = "$(id -u)"
           sh "$GITHUB_WORKSPACE/scripts/lockfile" plugin list
           sh "$GITHUB_WORKSPACE/scripts/lockfile" doctor | grep -q 'sandbox'
-          sh "$GITHUB_WORKSPACE/scripts/lockfile" sources | grep -q 'no lockfile console is running'
+          # No lox up here: no console's socket to mount (exit 2, as a client
+          # that finds no console), never the fixed lockfile-run instead.
+          code=0; sh "$GITHUB_WORKSPACE/scripts/lockfile" sources 2>err || code=$?
+          test "$code" = 2 && grep -q 'no .lockfamily/up.json' err
           code=0; sh "$GITHUB_WORKSPACE/scripts/lockfile" install 2>err || code=$?
           test "$code" = 1 && grep -q 'runs in Docker' err
-          docker volume rm lockfile-home lockfile-run
+          docker volume rm lockfile-home
       - name: end to end (docs/docker.md)
         run: go test -count=1 -v -tags docker ./test/docker/...
 

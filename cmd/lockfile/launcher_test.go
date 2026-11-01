@@ -16,7 +16,10 @@ import (
 // "--". PATH holds only the tools the launcher needs.
 type launcherFixture struct {
 	root, bin, project, calls, script, seccomp string
-	env                                        []string
+	// fake holds what the fake docker prints for lox up's volumes and
+	// containers (launcher_lockup_test.go).
+	fake string
+	env  []string
 }
 
 func newLauncherFixture(t *testing.T) *launcherFixture {
@@ -30,9 +33,10 @@ func newLauncherFixture(t *testing.T) *launcherFixture {
 		bin:     filepath.Join(root, "bin"),
 		project: filepath.Join(root, "project"),
 		calls:   filepath.Join(root, "calls"),
+		fake:    filepath.Join(root, "fake"),
 		seccomp: filepath.Join(root, "share", "seccomp.json"),
 	}
-	for _, d := range []string{f.bin, filepath.Join(f.project, ".git"), filepath.Join(f.project, "sub"), filepath.Dir(f.seccomp)} {
+	for _, d := range []string{f.bin, f.fake, filepath.Join(f.project, ".git"), filepath.Join(f.project, "sub"), filepath.Dir(f.seccomp)} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -40,7 +44,7 @@ func newLauncherFixture(t *testing.T) *launcherFixture {
 	if err := os.WriteFile(f.seccomp, []byte("{}"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	for _, tool := range []string{"sh", "dirname", "id", "cat", "printf", "awk", "sha256sum", "shasum", "tar", "gzip", "install", "mktemp", "rm", "uname", "sed", "tr", "tail", "grep", "cksum", "wc"} {
+	for _, tool := range []string{"sh", "dirname", "id", "cat", "printf", "awk", "sha256sum", "shasum", "tar", "gzip", "install", "mktemp", "rm", "uname", "sed", "tr", "tail", "grep", "cksum", "wc", "find", "ls", "sort"} {
 		if p, err := exec.LookPath(tool); err == nil {
 			if err := os.Symlink(p, filepath.Join(f.bin, tool)); err != nil {
 				t.Fatal(err)
@@ -52,9 +56,12 @@ func newLauncherFixture(t *testing.T) *launcherFixture {
 	writeExec(t, filepath.Join(f.bin, "docker"), `#!/bin/sh
 for a in "$@"; do printf '%s\n' "$a"; done >> '`+f.calls+`'
 echo -- >> '`+f.calls+`'
-case "$1" in
-inspect) printf '%s\n' "${DOCKER_INSPECT:-}" ;;
-run) for a in "$@"; do [ "$a" = version ] && echo "lockfile v9.9.9"; done ;;
+case "$1 ${2:-}" in
+"volume inspect") eval "v=\${$#}"; cat '`+f.fake+`'/"volume-$v" 2>/dev/null || exit 1 ;;
+"ps "*) for a in "$@"; do case "$a" in volume=*) cat '`+f.fake+`'/"ps-${a#volume=}" 2>/dev/null ;; esac; done ;;
+"inspect --type") eval "c=\${$#}"; cat '`+f.fake+`'/"container-$c" 2>/dev/null || exit 1 ;;
+"inspect "*) printf '%s\n' "${DOCKER_INSPECT:-}" ;;
+"run "*) for a in "$@"; do [ "$a" = version ] && echo "lockfile v9.9.9"; done ;;
 esac
 exit 0
 `)
@@ -65,6 +72,8 @@ exit 0
 	f.script = filepath.Join(root, "lockfile")
 	writeExec(t, f.script, strings.Replace(string(launcher), "\nseccomp_profile=\n", "\nseccomp_profile="+f.seccomp+"\n", 1))
 	f.env = []string{"PATH=" + f.bin, "HOME=" + filepath.Join(root, "home")}
+	// The workspace (root) runs a lockfile lock files under lox up.
+	f.loxUp(t, root, map[string]string{"files": "lockfile"})
 	return f
 }
 
@@ -245,25 +254,27 @@ func TestLauncherAccountsPerCommand(t *testing.T) {
 	f := newLauncherFixture(t)
 	me := strconv.Itoa(os.Getuid()) + ":" + strconv.Itoa(os.Getgid())
 	home := filepath.Join(f.root, "home")
-	run, homeVol := []string{"-v", "lockfile-run:/run/lockfile"}, []string{"-v", "lockfile-home:/home/lockfile"}
+	// The agent commands: lox up's socket volume, read-only; never the
+	// fixed one of a console the launcher started.
+	run, fixed, homeVol := mountOf(f.root, "files"), []string{"-v", "lockfile-run:/run/lockfile"}, []string{"-v", "lockfile-home:/home/lockfile"}
 	asYou := [][]string{{"--user", me}, {"-e", "HOME=" + home}, {"-v", home + ":" + home}, {"-v", f.project + ":" + f.project}, {"-w", filepath.Join(f.project, "sub")}}
 	for _, tc := range []struct {
 		args       []string
 		want, deny [][]string
 		mounts     bool
 	}{
-		{[]string{"mcp"}, [][]string{{"-i"}, run}, [][]string{{"-it"}, {"--user"}, homeVol}, false},
-		{[]string{"status", "--json"}, [][]string{run}, [][]string{{"--user"}, homeVol}, false},
-		{[]string{"plan", "--key", "a.pdf", "--plugin", "file.non-empty", "--run"}, [][]string{run}, [][]string{{"--user"}, homeVol}, false},
-		{[]string{"doctor"}, [][]string{{"--user", "lockfile"}, {"--security-opt", "seccomp=" + f.seccomp}, run, homeVol}, nil, false},
-		{[]string{"doctor", "--fix"}, asYou, [][]string{run, homeVol}, true},
-		{[]string{"init", "claude"}, asYou, [][]string{run, homeVol}, true},
-		{[]string{"profile", "add", "samples", "--source", "local", "--path", "/srv/lockfile/samples"}, [][]string{{"--user", "lockfile"}, homeVol}, [][]string{run}, false},
-		{[]string{"plugin", "install", "file.non-empty@1.0.0"}, [][]string{{"--user", "lockfile"}, homeVol}, [][]string{run}, false},
-		{[]string{"marketplace", "list"}, [][]string{{"--user", "lockfile"}, homeVol}, [][]string{run}, false},
-		{[]string{"audit", "--since", "24h"}, [][]string{{"--user", "lockfile"}, homeVol}, [][]string{run}, false},
-		{[]string{"forget", "--profile", "p"}, [][]string{{"--user", "lockfile"}, homeVol}, [][]string{run}, false},
-		{nil, [][]string{run}, [][]string{{"--user"}}, false},
+		{[]string{"mcp"}, [][]string{{"-i"}, run}, [][]string{{"-it"}, {"--user"}, homeVol, fixed}, false},
+		{[]string{"status", "--json"}, [][]string{run}, [][]string{{"--user"}, homeVol, fixed}, false},
+		{[]string{"plan", "--key", "a.pdf", "--plugin", "file.non-empty", "--run"}, [][]string{run}, [][]string{{"--user"}, homeVol, fixed}, false},
+		{[]string{"doctor"}, [][]string{{"--user", "lockfile"}, {"--security-opt", "seccomp=" + f.seccomp}, run, homeVol}, [][]string{fixed}, false},
+		{[]string{"doctor", "--fix"}, asYou, [][]string{run, fixed, homeVol}, true},
+		{[]string{"init", "claude"}, asYou, [][]string{run, fixed, homeVol}, true},
+		{[]string{"profile", "add", "samples", "--source", "local", "--path", "/srv/lockfile/samples"}, [][]string{{"--user", "lockfile"}, homeVol}, [][]string{run, fixed}, false},
+		{[]string{"plugin", "install", "file.non-empty@1.0.0"}, [][]string{{"--user", "lockfile"}, homeVol}, [][]string{run, fixed}, false},
+		{[]string{"marketplace", "list"}, [][]string{{"--user", "lockfile"}, homeVol}, [][]string{run, fixed}, false},
+		{[]string{"audit", "--since", "24h"}, [][]string{{"--user", "lockfile"}, homeVol}, [][]string{run, fixed}, false},
+		{[]string{"forget", "--profile", "p"}, [][]string{{"--user", "lockfile"}, homeVol}, [][]string{run, fixed}, false},
+		{nil, nil, [][]string{{"--user"}, run, fixed}, false},
 	} {
 		out, calls, err := f.run(t, filepath.Join(f.project, "sub"), nil, tc.args...)
 		if err != nil {
@@ -302,7 +313,7 @@ func TestLauncherMigratesTheAccountIDs(t *testing.T) {
 		volumes [][]string // nil: no migrate-ids
 	}{
 		{[]string{"console", "--profile", "p"}, [][]string{run, homeVol}},
-		{[]string{"doctor"}, [][]string{run, homeVol}},
+		{[]string{"doctor"}, [][]string{homeVol}},
 		{[]string{"profile", "list"}, [][]string{homeVol}},
 		{[]string{"audit"}, [][]string{homeVol}},
 		{[]string{"mcp"}, nil},
