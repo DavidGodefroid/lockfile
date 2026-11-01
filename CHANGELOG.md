@@ -2,7 +2,12 @@
 
 ## Unreleased
 
-The console is hub-attached only (DavidGodefroid/lockkit#110).
+## v0.6.0
+
+The console is hub-attached only (DavidGodefroid/lockkit#110): `lox up` starts it, the
+launcher reaches it through `.lockfamily/up.json` (lockhub#78), and the launcher verbs of
+lockkit v0.10.0 (DavidGodefroid/lockkit#111). Builds on lockkit v0.10.0; lockhub v0.3.0 or
+later.
 
 - **The launcher verbs of lockkit v0.10.0** (DavidGodefroid/lockkit#111), the same in every
   lock, which `lox init` drives ([docs/usage.md](docs/usage.md#profiles-console-account)):
@@ -62,7 +67,7 @@ The console is hub-attached only (DavidGodefroid/lockkit#110).
   `lox attach` and `lox approve`; the profile and plugin setup steps are unchanged.
 - Tests: every test console (`internal/testenv/consoletest`, the CLI's, the MCP server's,
   `test/e2e`, `test/docker`) runs attached to a fake lockhub (hubtest) and approves its plans
-  there. Builds on lockkit's hub-only console (pseudo-version until its release).
+  there. Builds on lockkit's hub-only console.
 
 lockkit v0.9.1 (from v0.9.0): a console is started by `lox up` only, and the agent's hints say so.
 
