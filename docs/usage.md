@@ -37,6 +37,17 @@ reachable by other accounts or by the clients group: mount it under `/srv/lockfi
 socket directory's owner (`lockfile:lockfile-clients`). It prints no path from the
 configuration.
 
+```
+lockfile doctor [--fix [--yes]] [--json]
+```
+
+`--fix` wires the installed agents not wired yet for your account (the only repair it makes) and
+reports them again; it asks before each one unless `--yes`, and refuses without a terminal and
+without `--yes`; `--yes` without `--fix` is a usage error. `--json` prints one line:
+`{"lock":"lockfile","ok":…,"fixed":[…],"checks":[{"check":…,"status":"ok|warn|fail","detail":…,"fix":…}]}`,
+or, when doctor could not check (a usage error, `--fix` refused), `{"lock":"lockfile","code":"usage","error":…}`.
+The exit status is 0 exactly when no check fails (a warning does not fail).
+
 ## Profiles (console account)
 
 The console reads its profiles from `~/.config/lockfile/config.toml`: under `lox up`, the read-only
@@ -45,12 +56,34 @@ copy of the workspace's `.lockfile/config.toml` that `lox up` reviews and copies
 one to `.lockfile/config.toml`, validated, without touching the rest of the file:
 
 ```sh
-lockfile profile add docs --source s3 --bucket documents --region eu-west-1 --prefix invoices/ \
+lockfile profile add --profile docs --source s3 --bucket documents --region eu-west-1 --prefix invoices/ \
   --credentials vault --vault-path secret/data/lockfile/docs --production
-lockfile profile add partner --source sftp --host sftp.example.org --user reader --auth key \
+lockfile profile add --profile partner --source sftp --host sftp.example.org --user reader --auth key \
   --key ~/.ssh/partner_ed25519 --known-hosts ~/.ssh/known_hosts --base-dir /outgoing
-lockfile profile add samples --source local --path /srv/lockfile/samples   # mounted read-only, docker.md
+lockfile profile add --profile samples --source local --path /srv/lockfile/samples   # mounted read-only, docker.md
 ```
+
+```
+lockfile profile add [--non-interactive] [--json] [--project DIR] [--profile NAME] [--production]
+                     [--credentials ask|vault [--vault-path P]] --source local|s3|sftp <source flags>
+```
+
+The source flags are named after the config keys below (`--known-hosts` for `known_hosts`, ...).
+Without `--profile` the profile is `default`, the one `lox up` starts when `lockfamily.yaml`
+names none. `--project DIR` writes that workspace's `.lockfile/config.toml` instead of the one of
+the current directory. A profile already in the file is never rewritten: `profile add` fails
+and writes nothing (`exists`). On a terminal, `profile add` asks for what the flags did not give
+(the source, and its bucket, host, path, ...; the credential source, with `none` offered for an
+SFTP key without a passphrase); with `--non-interactive`, or without a terminal, a missing value
+is a usage error naming its flag. No form takes, asks for or writes a secret: a flag named like
+one (`--password`, `--vault-token`, ...), a value that embeds a password (`user:pw@host`) and
+any positional argument are refused, without quoting the value. `--credentials` takes `ask` (the
+console asks at start, masked; the default) or `vault` with `--vault-path`; a `local` source takes
+none. With `--json`, stdout carries exactly one line of JSON: on success
+`{"lock":"lockfile","profile":…,"config":…,"production":…,"credentials":…}` (no `credentials` for a
+`local` source), on failure `{"lock":"lockfile","code":"usage|secret|exists|failed","error":…}`.
+These are the launcher verbs `lox init` drives every lock with (lockkit's GUIDE.md §14; `lox init`
+detects no file store, so a lockfile profile is added by hand).
 
 ```toml
 [profiles.docs]
@@ -205,7 +238,7 @@ because it is serving another one: a plan waiting for the human, or a run until 
 `answer_quantum`. A console whose profile name is too long for a plain socket name cannot be
 listed while it is busy; passing its profile with `--profile` still reaches it.
 
-**Hub mode, expired tickets and rollback.** A ticket whose approval the console can no longer
+**Hub mode and expired tickets.** A ticket whose approval the console can no longer
 use (lockkit reports it expired; lockfile's `read_pii` tickets have no TTL, so this is a
 decision the console's clock refuses) is not a timeout: `lockfile run TICKET` and
 `lockfile_run` answer `pending` with a new ticket for the same plan, which the human approves
@@ -218,10 +251,9 @@ it fetches again, as for any ticket; so is a plan whose object could not be fetc
 approval answers `fetch_failed`). A ticket that cannot be asked again answers a
 timeout ("ticket expired, and could not be asked again: plan the request again"); the console prints and audits why
 (`hubclient.AnswerCode`: e.g. `policy_changed`, `recheck_failed` for a plugin that changed,
-`not_renewable`). A console
-restarted without `--hub` withdraws the plans its hub mode left pending (it says so at start)
-and refuses a run of their ticket `withdrawn`: plan again. The next start with `--hub` tells the
-hub. The other hub flags `lox up` writes (`--devices-file`, `--require-device`,
+`not_renewable`). The console
+never runs without its hub (`--hub` is required): there is no standalone mode, and no
+rollback to one. The other hub flags `lox up` writes (`--devices-file`, `--require-device`,
 `--seal-clear`, `--facade-keys-file` for a reveal of the clear screen on a local facade,
 Ctrl-O) come with `--hub` from lockkit; the console audits reveals and renewals.
 
@@ -232,10 +264,12 @@ There is no listing or stat: the agent asks the user for the exact key.
 
 ## Wiring an agent
 
-`lockfile init claude|codex|cursor|gemini`, run from the project root, writes the skill or
-rules file and `lockfile mcp` as the MCP command: the launcher starts the MCP server in a
-throwaway container with the socket volume only ([docker.md](docker.md#wire-the-agent)). For
-every project instead: `claude mcp add --scope user lockfile -- lockfile mcp`. Claude Code
+`lockfile init claude|codex|cursor|gemini` (the agent is required), run from the project,
+writes the skill or rules file and `lockfile mcp` as the MCP command into the project root (the
+nearest directory up holding `.lockfile/config.toml`, or else `.git`): the launcher starts the
+MCP server in a throwaway container with the socket volume only ([docker.md](docker.md#wire-the-agent)).
+It never asks and is idempotent. For every project instead: `lockfile init <agent> --user`, or
+`lockfile doctor --fix`, which wires every installed agent. Claude Code
 may call `lockfile_status`, `lockfile_sources` and `lockfile_plugins` without a prompt; plans
 and runs always go through Claude Code's permission prompt and the console.
 

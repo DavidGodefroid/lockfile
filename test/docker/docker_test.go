@@ -146,7 +146,7 @@ func newSetup(t *testing.T) *setup {
 	}
 	openUp(t, s.data)
 	mustDk(t, "run", "--rm", "--user", "lockfile", "-v", s.home+":/home/lockfile", image,
-		"profile", "add", "samples", "--source", "local", "--path", "/srv/lockfile/samples")
+		"profile", "add", "--profile", "samples", "--source", "local", "--path", "/srv/lockfile/samples")
 
 	// The hub pins the instance key the console account made (hub-key, as
 	// lox up runs it); the console pins the hub's key.

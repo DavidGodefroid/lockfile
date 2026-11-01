@@ -274,8 +274,9 @@ func TestLauncherAccountsPerCommand(t *testing.T) {
 		{[]string{"plan", "--key", "a.pdf", "--plugin", "file.non-empty", "--run"}, [][]string{run}, [][]string{{"--user"}, homeVol, fixed}, false},
 		{[]string{"doctor"}, append([][]string{{"--security-opt", "seccomp=" + f.seccomp}, run}, console...), [][]string{fixed, homeVol}, false},
 		{[]string{"doctor", "--fix"}, asYou, [][]string{run, fixed, homeVol}, true},
+		{[]string{"doctor", "--fix", "--yes", "--json"}, asYou, [][]string{run, fixed, homeVol}, true},
 		{[]string{"init", "claude"}, asYou, [][]string{run, fixed, homeVol}, true},
-		{[]string{"profile", "add", "samples", "--source", "local", "--path", "/srv/lockfile/samples"}, asWS, [][]string{run, fixed, homeVol, {"-v"}}, false},
+		{[]string{"profile", "add", "--profile", "samples", "--source", "local", "--path", "/srv/lockfile/samples"}, asWS, [][]string{run, fixed, homeVol, {"-v"}}, false},
 		{[]string{"marketplace", "list"}, asWS, [][]string{run, fixed, homeVol, {"-v"}}, false},
 		{[]string{"plugin", "install", "file.non-empty@1.0.0"}, console, [][]string{run, fixed, homeVol}, false},
 		{[]string{"audit", "--since", "24h"}, console, [][]string{run, fixed, homeVol}, false},
@@ -376,7 +377,7 @@ func TestLauncherInitProjectRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	for dir, want := range map[string]string{filepath.Join(f.project, "sub"): f.project, inner: inner, outside: outside} {
-		_, calls, err := f.run(t, dir, nil, "init")
+		_, calls, err := f.run(t, dir, nil, "init", "claude")
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -32,7 +32,7 @@ func workspaceHooks(t *testing.T) string {
 // owner-only modes lox up keeps, and never the lockfile account's file.
 func TestProfileAddWorkspace(t *testing.T) {
 	ws := workspaceHooks(t)
-	code, out, errText := runArgs(t, "", "profile", "add", "samples", "--source", "local", "--path", "/srv/lockfile/samples")
+	code, out, errText := runArgs(t, "", "profile", "add", "--profile", "samples", "--source", "local", "--path", "/srv/lockfile/samples")
 	if code != product.ExitOK {
 		t.Fatalf("exit %d: %s %s", code, out, errText)
 	}
@@ -55,7 +55,7 @@ func TestProfileAddWorkspace(t *testing.T) {
 		t.Fatalf("%+v %v", f, err)
 	}
 	// A second profile goes to the same file.
-	if code, _, errText := runArgs(t, "", "profile", "add", "docs", "--source", "local", "--path", "/srv/docs"); code != product.ExitOK {
+	if code, _, errText := runArgs(t, "", "profile", "add", "--profile", "docs", "--source", "local", "--path", "/srv/docs"); code != product.ExitOK {
 		t.Fatalf("second: exit %d: %s", code, errText)
 	}
 	if f, err := profile.ReadFile(file); err != nil || len(f.Profiles) != 2 {
@@ -90,7 +90,7 @@ func TestMarketplaceWorkspace(t *testing.T) {
 // written: a link, one others may write, one that is not yours.
 func TestProfileAddWorkspaceRefuses(t *testing.T) {
 	add := func(t *testing.T) (int, string) {
-		code, _, errText := runArgs(t, "", "profile", "add", "samples", "--source", "local", "--path", "/srv/x")
+		code, _, errText := runArgs(t, "", "profile", "add", "--profile", "samples", "--source", "local", "--path", "/srv/x")
 		return code, errText
 	}
 	t.Run("link", func(t *testing.T) {
@@ -159,7 +159,7 @@ func TestProfileAddWorkspaceRefuses(t *testing.T) {
 func TestProfileAddAccountWithoutWorkspace(t *testing.T) {
 	workspaceHooks(t)
 	t.Setenv(workspaceEnv, "")
-	if code, _, errText := runArgs(t, "", "profile", "add", "samples", "--source", "local", "--path", "/srv/x"); code != product.ExitError || !strings.Contains(errText, "lockfile account asked for") {
+	if code, _, errText := runArgs(t, "", "profile", "add", "--profile", "samples", "--source", "local", "--path", "/srv/x"); code != product.ExitError || !strings.Contains(errText, "lockfile account asked for") {
 		t.Fatalf("exit %d: %s", code, errText)
 	}
 }
