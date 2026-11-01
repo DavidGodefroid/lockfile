@@ -126,6 +126,20 @@ container, your agent's commands in others; they share only the socket volume.
 One `lockfile` command, the launcher, runs each of them in the signed release
 image. Full guide: [docs/docker.md](docs/docker.md).
 
+The shortest path is the Lock Family's (Linux only for lockfile): install it
+with Homebrew, then set up the lock with
+[`lox init --manual`](https://github.com/DavidGodefroid/lockhub/blob/main/docs/lox-init.md)
+(auto mode detects databases and brokers only):
+
+```sh
+brew install davidgodefroid/tap/lockfamily   # or only this tool: brew install davidgodefroid/tap/lockfile
+cd ~/projects/shop
+lox init --manual                             # check lockfile, give its source; runs lox up
+lea                                           # or: claude, then lox approve
+```
+
+By hand, with lockfile's own installer:
+
 ```sh
 # 1. The launcher and the seccomp profile the console runs under (cosign checks the
 #    release and its image; never seccomp=unconfined).
