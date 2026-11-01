@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/DavidGodefroid/lockkit/agentwire"
+	"github.com/DavidGodefroid/lockkit/client"
 
 	"github.com/DavidGodefroid/lockfile/internal/mcpserver"
 	"github.com/DavidGodefroid/lockfile/internal/product"
@@ -23,9 +24,14 @@ func init() {
 func runMCP(e env, args []string) int {
 	fs := flag.NewFlagSet("mcp", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
+	const use = "mcp [--profile P] [--instance NAME]"
 	profile := fs.String("profile", "", "pin the server to one profile")
+	instance := fs.String(client.FlagInstance, "", "lock instance, one among several of this type")
 	if err := fs.Parse(args); err != nil || fs.NArg() != 0 {
-		return usageErr(e, "mcp [--profile P]")
+		return usageErr(e, use)
+	}
+	if !setInstance(e, *instance, use) {
+		return product.ExitUsage
 	}
 	ctx, stop := agentContext()
 	defer stop()

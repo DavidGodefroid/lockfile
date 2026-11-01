@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.7.0 (2026-11-01)
 
 - Each release tag bumps the `lockfile` formula of the
   [Homebrew tap](https://github.com/DavidGodefroid/homebrew-tap)
@@ -8,6 +8,11 @@
   dispatches the bump once the release is signed
   (DavidGodefroid/lockfamily#8). It is skipped while the
   `TAP_DISPATCH_TOKEN` secret is not set.
+- `--instance NAME`: reach one lock among several of this type (lea mounts each at
+  /run/lockfile/NAME). Every agent-side command and `mcp` take it; it defaults to
+  `LOCKFILE_INSTANCE`, then to the one lock listed in `LEA_LOCKFILE_INSTANCES`.
+- `credentials = "vault"`: the console asks the Vault token at its start (masked), under
+  `lox up` too.
 
 ## v0.6.0
 

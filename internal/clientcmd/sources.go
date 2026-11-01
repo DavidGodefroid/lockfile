@@ -17,7 +17,6 @@ import (
 	"github.com/DavidGodefroid/lockkit/config"
 	"github.com/DavidGodefroid/lockkit/ipc"
 	"github.com/DavidGodefroid/lockkit/mcpkit"
-	"github.com/DavidGodefroid/lockkit/sysconf"
 
 	"github.com/DavidGodefroid/lockfile/internal/product"
 	"github.com/DavidGodefroid/lockfile/internal/rpc"
@@ -168,21 +167,41 @@ var NoConsoleText = "no lockfile console is running: " + client.StartHint
 var probeTimeout = 2 * time.Second
 
 // socketDir is where the consoles' sockets are: the shared directory of a
-// separated setup (mode 2750: the clients group may list it), else the
-// user's private runtime directory.
+// separated setup (mode 2750: the clients group may list it), or its
+// subdirectory of the lock instance (SetInstance), else the user's private
+// runtime directory.
 func socketDir() (string, error) {
-	sys, err := sysconf.Load(product.P)
+	return client.SocketDirInstance(product.P, instance)
+}
+
+// errInstanceNotMounted is what dial returns when the lock instance's
+// socket directory is not there: a leftover --instance or <PREFIX>INSTANCE
+// names a lock lea does not mount here. closed maps it to
+// rpc.MsgNoInstanceDir.
+var errInstanceNotMounted = errors.New("instance socket directory not mounted")
+
+// instanceNotMountedErr is errInstanceNotMounted when the lock instance
+// (SetInstance) has no socket directory here, nil otherwise: with instance
+// "" there is no instance directory to miss, and a socketDir error is a
+// setup problem, not a stale instance.
+func instanceNotMountedErr() error {
+	if instance == "" {
+		return nil
+	}
+	dir, err := socketDir()
 	if err != nil {
-		return "", err
+		return nil
 	}
-	if sys != nil {
-		return sys.SocketDir, nil
+	if _, err := os.Stat(dir); errors.Is(err, os.ErrNotExist) {
+		return errInstanceNotMounted
 	}
-	return product.P.RuntimeDir()
+	return nil
 }
 
 // Sources lists the profiles of the running consoles, sorted. A socket
-// nobody answers on is left out.
+// nobody answers on is left out. A lock instance (SetInstance) whose
+// directory is not mounted here is an error naming --instance, not an
+// empty list.
 func Sources(ctx context.Context) ([]rpc.Source, error) {
 	dir, err := socketDir()
 	if err != nil {
@@ -191,6 +210,9 @@ func Sources(ctx context.Context) ([]rpc.Source, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
+			if instance != "" {
+				return nil, &Error{Kind: KindOther, Msg: rpc.MsgNoInstanceDir}
+			}
 			return []rpc.Source{}, nil
 		}
 		return nil, &Error{Kind: KindOther, Msg: "cannot list the running consoles; ask the user to run lockfile doctor"}
@@ -233,7 +255,7 @@ func probe(ctx context.Context, path, profile string) (rpc.Source, bool) {
 			return rpc.Source{}, false
 		}
 		// The name must lead back to this very socket.
-		if want, err := client.SocketPath(product.P, "/", p); err != nil || want != path {
+		if want, err := client.SocketPathInstance(product.P, "/", p, instance); err != nil || want != path {
 			return rpc.Source{}, false
 		}
 		profile = p
@@ -324,7 +346,7 @@ func StatusProfile(pinned, arg string) (string, error) {
 // socket name is hashed cannot be named without that answer, so Sources
 // may leave out a console that runs.
 func socketExists(profile string) bool {
-	p, err := client.SocketPath(product.P, "/", profile)
+	p, err := client.SocketPathInstance(product.P, "/", profile, instance)
 	if err != nil {
 		return false
 	}

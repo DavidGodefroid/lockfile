@@ -24,6 +24,9 @@ const (
 	MsgPending    = "a policy change awaits the human in the console"
 	MsgClosed     = "the console closed the connection"
 	MsgInternal   = "console error"
+	// MsgNoInstanceDir names a leftover --instance or <PREFIX>INSTANCE
+	// whose lock directory is not mounted here; it never carries the name.
+	MsgNoInstanceDir = "no lock directory for the instance set by --instance or LOCKFILE_INSTANCE: no lock of that name is mounted here"
 	// MsgRunTicket refuses a run by plan id: the console is hub-attached,
 	// and only the ticket file.plan answered runs.
 	MsgRunTicket = "in hub mode, run the ticket file.plan answered"

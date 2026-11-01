@@ -127,17 +127,22 @@ One `lockfile` command, the launcher, runs each of them in the signed release
 image. Full guide: [docs/docker.md](docs/docker.md).
 
 The shortest path is the Lock Family's (Linux only for lockfile): install it
-with Homebrew, then set up the lock with
-[`lox init --manual`](https://github.com/DavidGodefroid/lockhub/blob/main/docs/lox-init.md)
-(auto mode detects databases and brokers only):
+with Homebrew, then let
+[`lox add lockfile`](https://github.com/DavidGodefroid/lockhub/blob/main/docs/lox-add.md)
+ask for your file store (S3, SFTP or a local directory), set up its lock and
+start its console:
 
 ```sh
 brew trust davidgodefroid/tap                # Homebrew asks you to trust a third-party tap once
 brew install davidgodefroid/tap/lockfamily   # or only this tool: brew install davidgodefroid/tap/lockfile
 cd ~/projects                                 # with lea: its projects directory; with claude: the project
-lox init --manual                             # check lockfile, give its source; runs lox up
+lox add lockfile                              # asks about the file store, sets up the lock, runs lox up
 lea                                           # or: claude, then lox approve
 ```
+
+If a lea container already runs for the project, `lox add` says `lea gets lock
+NAME at its next start: lea stop, then lea`: lea mounts the locks' sockets
+when its container starts, so `lea stop`, then `lea` brings the new lock in.
 
 By hand, with lockfile's own installer:
 
@@ -235,6 +240,11 @@ agent account (CLI / MCP)            lockfile account (console, human terminal)
 | `lockfile plan --handle H --plugin X… --run` | `lockfile_plan` + `lockfile_run` | follow-up on the same file |
 | `lockfile answers HANDLE` | `lockfile_answers` | answers already given |
 | `lockfile release HANDLE` | `lockfile_release` | delete the fetched file now |
+
+Every agent command and `lockfile mcp` also take `--instance NAME`, to reach one lock among several of this type that lea
+mounts (without it: `$LOCKFILE_INSTANCE`, else the one lock in
+`$LEA_LOCKFILE_INSTANCES`). `lockfile console` and `lockfile hub-key` take an
+`--instance` too, but that one is the name `lox up` gives the lock.
 
 Exit codes depend on the outcome only, never on an answer: 0 answered, 1 no
 console or error, 2 refused, 3 denied or no answer in time, 64 usage. Full

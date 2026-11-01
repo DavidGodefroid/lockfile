@@ -170,6 +170,11 @@ func TestDoctorProcContainer(t *testing.T) {
 	h := doctorEnv(t, "/nonexistent")
 	h.mounts = func() ([]byte, error) { return []byte(openProc), nil }
 	dir := t.TempDir()
+	// A umask of 002 makes the temp dir group-writable: the declaration's
+	// directory must be closed to writes by others.
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	decl := filepath.Join(dir, "container.toml")
 	if err := os.WriteFile(decl, []byte("pid_namespace = \"private\"\n"), 0o644); err != nil {
 		t.Fatal(err)
