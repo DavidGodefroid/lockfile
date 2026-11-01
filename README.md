@@ -132,8 +132,9 @@ with Homebrew, then set up the lock with
 (auto mode detects databases and brokers only):
 
 ```sh
+brew trust davidgodefroid/tap                # Homebrew asks you to trust a third-party tap once
 brew install davidgodefroid/tap/lockfamily   # or only this tool: brew install davidgodefroid/tap/lockfile
-cd ~/projects/shop
+cd ~/projects                                 # with lea: its projects directory; with claude: the project
 lox init --manual                             # check lockfile, give its source; runs lox up
 lea                                           # or: claude, then lox approve
 ```
@@ -380,8 +381,10 @@ where, the volumes, the seccomp profile, the `-vault` image
 host install. The base images are pinned by digest, cosign and the Vault CLI
 by sha256; the image has no `sudo`.
 
-**Homebrew (Linux).** `brew install davidgodefroid/tap/lockfile` installs the
-same launcher and profile, pinned to the same digests. Each release tag bumps
+**Homebrew (Linux).** `brew trust davidgodefroid/tap` then
+`brew install davidgodefroid/tap/lockfile` installs the same launcher and
+profile, pinned to the same digests (Homebrew asks you to trust a third-party
+tap once). Each release tag bumps
 that formula ([homebrew-tap](https://github.com/DavidGodefroid/homebrew-tap)).
 
 **Upgrade.** `lockfile update` (same checks), then restart the console; the
