@@ -8,6 +8,7 @@
   dispatches the bump once the release is signed
   (DavidGodefroid/lockfamily#8). It is skipped while the
   `TAP_DISPATCH_TOKEN` secret is not set.
+- credentials = "vault": the console asks the Vault token at its start (masked), under lox up too
 
 ## v0.6.0
 
