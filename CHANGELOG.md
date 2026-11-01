@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.7.0 (2026-11-01)
 
 - Each release tag bumps the `lockfile` formula of the
   [Homebrew tap](https://github.com/DavidGodefroid/homebrew-tap)
