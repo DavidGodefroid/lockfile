@@ -152,28 +152,28 @@ The agent hears `pending` with the ticket and runs it once decided (`lockfile ru
 usable, nonce once), the policy and the plugins, fetches again, and refuses other bytes
 `stale` before any plugin. A ticket runs once, for the agent that asked (its lea token). The
 decision is audited with the ticket, the approver, the facade and the hub's signature.
-`lockfile hub-key --instance NAME` prints the instance key for `lock up` to pin (made once in
+`lockfile hub-key --instance NAME` prints the instance key for `lox up` to pin (made once in
 the console account's home, `0600`).
-`lock up` also passes `--hub-plain-http` for its `http://lockhub:8443` on the hub's own network:
+`lox up` also passes `--hub-plain-http` for its `http://lockhub:8443` on the hub's own network:
 without it an `http://` hub URL other than loopback is refused, and with it the URL must still
 be a service name without a dot or a private address.
 The hub URL is `http(s)://host[:port]`: no path, query, fragment, user or password (lockhub
 serves its API at the root and authenticates the lock by signature).
 
 **Supported lockhub versions.** Which [lockhub](https://github.com/DavidGodefroid/lockhub) releases
-(its `lock` CLI and its hub image) each lockfile release works with under `lock up`:
+(its `lox` CLI, named `lock` before lockhub v0.3.0, and its hub image) each lockfile release works with under `lox up`:
 
 | lockfile | lockkit | lockhub |
 |---|---|---|
-| v0.5.3 | v0.8.1 | as v0.5.2; the hub URL is `http(s)://host[:port]` only (`lock up`'s `http://lockhub:8443` is one) |
+| v0.5.3 | v0.8.1 | as v0.5.2; the hub URL is `http(s)://host[:port]` only (`lox up`'s `http://lockhub:8443` is one) |
 | v0.5.2 | v0.6.0 | as v0.5.1 |
 | v0.5.1 | v0.6.0 | as v0.5.0; `allowed_uids` (`--allowed-uids`, for lea's agents) from lockhub v0.2.4 |
 | v0.5.0 | v0.6.0 | v0.2.0 or later: hub mode, `devices: true` (paired phones), reveals (`reveal: true`, Ctrl-O) and renewals |
 | v0.4.0 | v0.3.1 | v0.2.0 or later: hub mode only; leave `devices` and `reveal` off |
 | v0.3.0 and older | older than v0.3.1, or none | none (no hub mode) |
 
-`lock up` runs these consoles from the `lock` CLI of lockhub v0.2.0 on (the console account, a
-terminal, the reviewed profile copy); the `lock up` of lockhub v0.1.x cannot run them. A console
+`lox up` runs these consoles from the `lox` CLI of lockhub v0.2.0 on (the console account, a
+terminal, the reviewed profile copy); the `lox up` of lockhub v0.1.x cannot run them. A console
 older than a feature `lockfamily.yaml` asks of it refuses the flag and does not start: leave
 `devices`/`reveal`/`allowed_uids` off for it. A lock on lockkit older than v0.5.0 ignores the hub's reveal and
 renewal requests, which then time out. lockhub's CI does not run a lockfile image: the table
@@ -221,7 +221,7 @@ timeout ("ticket expired, and could not be asked again: plan the request again")
 `not_renewable`). A console
 restarted without `--hub` withdraws the plans its hub mode left pending (it says so at start)
 and refuses a run of their ticket `withdrawn`: plan again. The next start with `--hub` tells the
-hub. The other hub flags `lock up` writes (`--devices-file`, `--require-device`,
+hub. The other hub flags `lox up` writes (`--devices-file`, `--require-device`,
 `--seal-clear`, `--facade-keys-file` for a reveal of the clear screen on a local facade,
 Ctrl-O) come with `--hub` from lockkit; the console audits reveals and renewals.
 

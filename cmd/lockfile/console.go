@@ -139,7 +139,7 @@ func withHome(o console.HubOptions, home string) console.HubOptions {
 }
 
 // runHubKey is `lockfile hub-key --instance NAME`: the instance's public
-// key, made on the first call in the account's home, for `lock up`.
+// key, made on the first call in the account's home, for `lox up`.
 func runHubKey(e env, args []string) int {
 	home := ""
 	if testConsoleHooks != nil {
