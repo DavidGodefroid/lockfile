@@ -94,6 +94,19 @@ func drained(ch <-chan struct{}) bool {
 	}
 }
 
+// dialled waits for the listener to report a connection, then empties ch. The
+// client can return before the accepting goroutine has been scheduled, so a
+// positive check must not read the channel at the instant the command returns.
+func dialled(ch <-chan struct{}) bool {
+	select {
+	case <-ch:
+		drained(ch)
+		return true
+	case <-time.After(5 * time.Second):
+		return false
+	}
+}
+
 // --instance orders reaches the socket in <socket dir>/orders: status of a
 // profile, sources (which lists that directory) and a profile's command.
 func TestInstanceDialsItsDirectory(t *testing.T) {
@@ -105,7 +118,7 @@ func TestInstanceDialsItsDirectory(t *testing.T) {
 		{"plugins", "--profile", "samples", "--instance", "orders"},
 	} {
 		runArgs(t, "", args...)
-		if !drained(got) {
+		if !dialled(got) {
 			t.Errorf("%v: nothing dialled %s", args, filepath.Join(dir, "orders"))
 		}
 	}
@@ -117,13 +130,13 @@ func TestInstanceDialsItsDirectory(t *testing.T) {
 	// LOCKFILE_INSTANCE and the one lock lea lists pick it too.
 	t.Setenv("LOCKFILE_INSTANCE", "orders")
 	runArgs(t, "", "status", "--profile", "samples")
-	if !drained(got) {
+	if !dialled(got) {
 		t.Fatal("LOCKFILE_INSTANCE=orders did not dial the orders lock")
 	}
 	t.Setenv("LOCKFILE_INSTANCE", "")
 	t.Setenv("LEA_LOCKFILE_INSTANCES", "orders")
 	runArgs(t, "", "status", "--profile", "samples")
-	if !drained(got) {
+	if !dialled(got) {
 		t.Fatal("the one listed lock was not dialled")
 	}
 }
