@@ -7,9 +7,9 @@ description: Use when the user asks a yes/no question about a stored file you mu
 
 **Purpose:** answer structural questions about one file (is it empty, a PDF, does it parse, is a
 page blank, are fonts embedded, is it truncated) without the file, its name, its size or any of
-its content ever reaching you. A human runs `lockfile console` in a separate account; it fetches
-the file and runs signed plugins on it in a sandbox. Each plugin answers one fixed question with
-`1` or `0`. That is all you get.
+its content ever reaching you. A console the human starts (`lox up`) runs in a separate account;
+it fetches the file and runs signed plugins on it in a sandbox. Each plugin answers one fixed
+question with `1` or `0`. That is all you get.
 
 Use lockfile only on the user's request. If a file check would merely help, propose it and wait.
 
@@ -19,19 +19,20 @@ Use the MCP tools (`lockfile_*`) when they are available, otherwise the `lockfil
 `--json`. Both talk to the same console.
 
 1. **Console?** `lockfile_sources` (CLI `lockfile sources`) lists the profiles of the running
-   consoles. If none runs, ask the user to start one in the lockfile account
-   (`lockfile console --profile NAME`) and stop. Never start one yourself.
+   consoles. If none runs, or not the profile you need, ask the user to start it (`lox up`; a
+   profile that does not exist is set up and declared first) and stop. Never start one
+   yourself.
 2. **The exact key.** You cannot list keys or stat files. Ask the user for the exact object key
    (from the ticket, a log line, a database row). Never guess one.
 3. **The questions.** `lockfile_plugins` lists each plugin's question and the meaning of 1 and 0.
    Pick only the plugins that answer what the user asked: every answer reveals one bit about the
    file, and the profile caps the answers per file.
-4. **Plan.** `lockfile_plan` with `key`, `plugins` and a one-line `intent` in the user's terms. Tell
-   the user: *"Waiting for your approval in the lockfile console."* With the CLI, use the Bash
-   tool with **`timeout: 600000`** (approval can take up to 5 minutes), and `--run` to run the plan
-   as soon as it is approved.
-5. **Run.** `lockfile_run` with the plan id. The answer comes at the next multiple of a few
-   seconds, whatever the plugins did. A plan runs once.
+4. **Plan.** `lockfile_plan` with `key`, `plugins` and a one-line `intent` in the user's terms. The
+   plan is decided on lockhub, not in the lockfile console: it answers `pending` with a ticket.
+   Tell the user: *"Waiting for your approval on lockhub (lox approve)."* Do not retry; end your
+   turn until it is decided. With the CLI, use the Bash tool with **`timeout: 600000`**.
+5. **Run.** `lockfile_run` with the ticket as `plan_id` (CLI `lockfile run TICKET`). The answer
+   comes at the next multiple of a few seconds, whatever the plugins did. A plan runs once.
 6. **Follow-ups** on the same file: `lockfile_plan` with the result's `handle` instead of the key
    (no new fetch, a lighter approval), then `lockfile_run`. `lockfile_release` when you are done.
 

@@ -157,8 +157,9 @@ func yesNo(b bool) string {
 	return "no"
 }
 
-// NoConsoleText says that no console runs and how to start one.
-var NoConsoleText = "no lockfile console is running: ask the user to start one in the lockfile account (" + StartCommand("NAME") + ")"
+// NoConsoleText says that no console runs and how one starts: lockkit's
+// hint, `lox up` only.
+var NoConsoleText = "no lockfile console is running: " + client.StartHint
 
 // probeTimeout bounds the status call of each console in Sources and
 // Statuses. A console serves one request at a time: one serving another

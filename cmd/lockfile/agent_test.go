@@ -117,7 +117,7 @@ func cliVocab(inputs ...string) testenv.Vocab {
 	extra := append([]string{
 		"lockfile:", "refusal", "retry:", "usage: lockfile",
 		"plan [--profile P] (--key KEY | --handle HANDLE) --plugin NAME... [--intent TEXT] [--run] [--json]",
-		"use a profile listed by lockfile sources, or ask the user to run, in the lockfile account: " + clientcmd.StartCommand("other"),
+		clientcmd.UnknownProfileHint("other"),
 		"handle", "no answer", "(unofficial marketplace)", "released", "UNOFFICIAL MARKETPLACE",
 		"plan approved: it reveals at most answers", "run it once: lockfile run --profile",
 		"console up, production no, auto no, security level, plugin protocol, sandbox ok",
@@ -185,7 +185,8 @@ func TestCLIExitCodes(t *testing.T) {
 	// unknown_profile is a refusal (2) whether the client or the console
 	// detects it.
 	out = check("no console for the profile", product.ExitRefused, "plugins", "--profile", "other")
-	if !strings.Contains(out, "lockfile console --profile other") || !strings.Contains(out, "E_UNKNOWN_PROFILE") {
+	if !strings.Contains(out, "lox add lockfile INSTANCE --profile other") || !strings.Contains(out, "`lox up`") ||
+		strings.Contains(out, "lockfile console") || !strings.Contains(out, "E_UNKNOWN_PROFILE") {
 		t.Fatalf("no hint: %s", out)
 	}
 	check("no console for the profile, plan", product.ExitRefused, "plan", "--profile", "other", "--key", "invoices/a.pdf", "--plugin", "test.answer0")

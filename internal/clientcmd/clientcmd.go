@@ -58,8 +58,9 @@ var dial = func(profile string) (caller, error) {
 	return client.Dial(product.P, "/", profile)
 }
 
-// StartCommand is the command that starts profile's console.
-func StartCommand(profile string) string { return client.StartCommand(product.P, profile, "") }
+// StartCommand is the command that starts the consoles: lockkit's, `lox
+// up`, the same for every profile (a console is launched by `lox up` only).
+func StartCommand() string { return client.StartCommand(product.P, "", "") }
 
 // profileWord is profile when it is a valid profile name, else NAME: a
 // typed value is never quoted back unchecked.
@@ -70,13 +71,23 @@ func profileWord(profile string) string {
 	return profile
 }
 
-// unknownProfile is the refusal for a profile no running console serves;
-// the hint names the start command of the profile the agent passed.
+// unknownProfile is the refusal for a profile no running console serves:
+// most often a profile whose console is not running (`lox up`), but `lox
+// up` alone does not make a profile that does not exist, so the hint also
+// points at the listed profiles and at declaring the profile the agent
+// passed (named only when it is a valid profile name).
 func unknownProfile(profile string) *Error {
 	c := product.Code(answers.CodeUnknownProfile)
-	info := refusal.Info{Code: c, Retry: c.Retry(),
-		Hint: "use a profile listed by lockfile sources, or ask the user to run, in the lockfile account: " + StartCommand(profileWord(profile))}
+	info := refusal.Info{Code: c, Retry: c.Retry(), Hint: UnknownProfileHint(profileWord(profile))}
 	return &Error{Kind: KindNoConsole, Msg: string(answers.CodeUnknownProfile), Refusal: &info}
+}
+
+// UnknownProfileHint is the unknown_profile hint for profile, a valid
+// profile name or NAME.
+func UnknownProfileHint(profile string) string {
+	return "if profile " + profile + " exists, its console is not running: ask the user to run `" + StartCommand() +
+		"`; otherwise use a profile listed by lockfile sources, or ask the user to set up profile " + profile +
+		" and declare it (lox add lockfile INSTANCE --profile " + profile + "), then to run `" + StartCommand() + "`"
 }
 
 // closed turns any error of a call into an *Error built from the closed
