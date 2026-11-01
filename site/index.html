@@ -151,11 +151,11 @@
 
 <section aria-labelledby="quick-start">
   <h2 id="quick-start">Quick start</h2>
-  <p class="prose">The shortest path is the Lock Family’s (Linux only for lockfile): install it with Homebrew, then set up the lock with <a href="https://github.com/DavidGodefroid/lockhub/blob/main/docs/lox-init.md"><code>lox init --manual</code></a> (auto mode detects databases and brokers only):</p>
+  <p class="prose">The shortest path is the Lock Family’s (Linux only for lockfile): install it with Homebrew, then let <a href="https://github.com/DavidGodefroid/lockhub/blob/main/docs/lox-add.md"><code>lox add lockfile</code></a> ask for your file store (S3, SFTP or a local directory), set up its lock and start its console:</p>
   <pre tabindex="0" class="term"><code>brew trust davidgodefroid/tap                <span class="cmt"># Homebrew asks you to trust a third-party tap once</span>
 brew install davidgodefroid/tap/lockfamily   <span class="cmt"># or only this tool: brew install davidgodefroid/tap/lockfile</span>
 cd ~/projects                                 <span class="cmt"># with lea: its projects directory; with claude: the project</span>
-lox init --manual                             <span class="cmt"># check lockfile, give its source; runs lox up</span>
+lox add lockfile                              <span class="cmt"># asks about the file store, sets up the lock, runs lox up</span>
 lea                                           <span class="cmt"># or: claude, then lox approve</span></code></pre>
   <p class="prose">By hand, with Docker on Linux (a kernel with Landlock) and <a href="https://docs.sigstore.dev/cosign/system_config/installation/">cosign</a> installed:</p>
   <pre tabindex="0" class="term"><code><span class="cmt"># 1. The launcher and the console's seccomp profile (cosign checks the release and its image)</span>

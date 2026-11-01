@@ -82,8 +82,8 @@ console asks at start, masked; the default) or `vault` with `--vault-path`; a `l
 none. With `--json`, stdout carries exactly one line of JSON: on success
 `{"lock":"lockfile","profile":…,"config":…,"production":…,"credentials":…}` (no `credentials` for a
 `local` source), on failure `{"lock":"lockfile","code":"usage|secret|exists|failed","error":…}`.
-These are the launcher verbs `lox init` drives every lock with (lockkit's GUIDE.md §14; `lox init`
-detects no file store, so a lockfile profile is added by hand).
+These are the launcher verbs `lox add` drives every lock with (lockkit's GUIDE.md §14); `lox add
+lockfile` asks the questions and runs them ([lox add](https://github.com/DavidGodefroid/lockhub/blob/main/docs/lox-add.md)).
 
 ```toml
 [profiles.docs]
@@ -217,16 +217,24 @@ v0.2.0).
 
 ## The agent side
 
+`--instance NAME` (on every command below and on `lockfile mcp [--profile P] [--instance NAME]`)
+reaches one lock among several of this type that lea mounts (a name is lowercase letters, digits
+and `-`). Without it the client takes `$LOCKFILE_INSTANCE`, else the one lock in
+`$LEA_LOCKFILE_INSTANCES`. A name no lock mounted here has is refused with `no lock directory for
+the instance set by --instance or LOCKFILE_INSTANCE: no lock of that name is mounted here`.
+`lockfile console` and `lockfile hub-key` take a different `--instance`: the name `lox up` gives
+the lock (the hub instance). `lockfile doctor` takes none.
+
 | Command | MCP tool | What |
 |---|---|---|
-| `lockfile status [--profile P]` | `lockfile_status` | the running consoles' state (`busy`: see below) |
-| `lockfile sources` | `lockfile_sources` | profiles of the running consoles (`busy`: see below) |
-| `lockfile plugins [--profile P]` | `lockfile_plugins` | questions, meaning of 1 and 0 |
-| `lockfile plan --key K --plugin X… [--intent T] [--run]` | `lockfile_plan` | ask the human to approve |
-| `lockfile run PLAN_ID` (hub mode: `TICKET`) | `lockfile_run` | run an approved plan once (hub mode: the ticket of a pending plan, once decided) |
+| `lockfile status [--profile P] [--instance NAME]` | `lockfile_status` | the running consoles' state (`busy`: see below) |
+| `lockfile sources [--instance NAME]` | `lockfile_sources` | profiles of the running consoles (`busy`: see below) |
+| `lockfile plugins [--profile P] [--instance NAME]` | `lockfile_plugins` | questions, meaning of 1 and 0 |
+| `lockfile plan --key K --plugin X… [--intent T] [--run] [--profile P] [--instance NAME]` | `lockfile_plan` | ask the human to approve |
+| `lockfile run PLAN_ID [--profile P] [--instance NAME]` (hub mode: `TICKET`) | `lockfile_run` | run an approved plan once (hub mode: the ticket of a pending plan, once decided) |
 | `lockfile plan --handle H --plugin X… --run` | `lockfile_plan` + `lockfile_run` | follow-up on the same file |
-| `lockfile answers HANDLE` | `lockfile_answers` | answers already given |
-| `lockfile release HANDLE` | `lockfile_release` | delete the fetched file now (answers at the next `answer_quantum`) |
+| `lockfile answers HANDLE [--profile P] [--instance NAME]` | `lockfile_answers` | answers already given |
+| `lockfile release HANDLE [--profile P] [--instance NAME]` | `lockfile_release` | delete the fetched file now (answers at the next `answer_quantum`) |
 
 Every command takes `--json` and `--profile P` (optional when one console runs). Exit codes
 depend on the outcome only, never on an answer: 0 answered, 1 no console running or another

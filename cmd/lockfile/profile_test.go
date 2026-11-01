@@ -109,7 +109,7 @@ func TestProfileAddJSON(t *testing.T) {
 }
 
 // Every refusal of --json is one verbs.Error line on stdout, with the code
-// lox init acts on, and nothing written.
+// lox add acts on, and nothing written.
 func TestProfileAddJSONErrors(t *testing.T) {
 	h, _ := humanEnv(t, "official")
 	noTerminal(h)
