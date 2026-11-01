@@ -14,7 +14,8 @@ release image, with the account and the volumes it needs ([docker.md](docker.md#
 
 | Commands | Runs as |
 |---|---|
-| console account: `profile`, `plugin`, `marketplace`, `audit`, `forget`, `doctor` | `lockfile`, on the `lockfile-home` volume |
+| configuration: `profile`, `marketplace` | you, on the workspace's `.lockfile/` only, which `lox up` reviews and copies to the console ([docker.md](docker.md#the-console-of-lox-up)) |
+| console account: `plugin`, `audit`, `forget`, `doctor` | `lockfile`, on the home of the console `lox up` runs and its profile copy, read-only |
 | the console | `lockfile`, confined, under the shipped seccomp profile ([Run the console](docker.md#run-the-console)); `local` sources mounted with `LOCKFILE_DOCKER_ARGS` |
 | `init`, `doctor --fix` | you, with your home and the project |
 | agent side: `status`, `sources`, `plugins`, `plan`, `run`, `answers`, `release`, `mcp` | `agent`, with the socket volume of the workspace's lockfile lock that `lox up` runs, read-only, only ([docker.md](docker.md#the-socket-of-lox-ups-lock)) |
@@ -38,8 +39,10 @@ configuration.
 
 ## Profiles (console account)
 
-Profiles live in the lockfile account's `~/.config/lockfile/config.toml`; there is no per-project
-config. `lockfile profile add` appends one, validated, without touching the rest of the file:
+The console reads its profiles from `~/.config/lockfile/config.toml`: under `lox up`, the read-only
+copy of the workspace's `.lockfile/config.toml` that `lox up` reviews and copies to it
+([docker.md](docker.md#the-console-of-lox-up)). `lockfile profile add`, run from the workspace, appends
+one to `.lockfile/config.toml`, validated, without touching the rest of the file:
 
 ```sh
 lockfile profile add docs --source s3 --bucket documents --region eu-west-1 --prefix invoices/ \

@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/DavidGodefroid/lockfile/internal/product"
@@ -61,7 +62,7 @@ func runProfile(e env, args []string) int {
 	if *production {
 		keys, values["production"] = append(keys, "production"), true
 	}
-	if err := serviceAccount(); err != nil {
+	if err := configAccount(); err != nil {
 		return failHuman(e, "profile add", err)
 	}
 	path, err := configPath()
@@ -71,6 +72,11 @@ func runProfile(e env, args []string) int {
 	if err := profile.AppendProfile(path, pos[0], keys, values); err != nil {
 		return failHuman(e, "profile add", err)
 	}
-	fmt.Fprintf(e.stdout, "added profile %s to %s\nstart it with its hub: lox add lockfile INSTANCE --profile %s, then lox up\n", pos[0], path, pos[0])
+	fmt.Fprintf(e.stdout, "added profile %s to %s\n", pos[0], path)
+	if os.Getenv(workspaceEnv) != "" {
+		fmt.Fprintf(e.stdout, "lox up reviews it and copies it to the console: lox add lockfile INSTANCE --profile %s, then lox up\n", pos[0])
+	} else {
+		fmt.Fprintf(e.stdout, "start it with its hub: lox add lockfile INSTANCE --profile %s, then lox up\n", pos[0])
+	}
 	return product.ExitOK
 }

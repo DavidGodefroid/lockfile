@@ -4,6 +4,20 @@
 
 The console is hub-attached only (DavidGodefroid/lockkit#110).
 
+- **The profile and the plugins reach the console `lox up` runs** (#44). `lockfile profile add`
+  and `lockfile marketplace add|remove|list` edit the workspace's `.lockfile/config.toml`, as
+  you (the launcher mounts only `.lockfile/`, made `0700`; the file `0600`), where `lox up`
+  reads the lock's profile, reviews it and copies it read-only to the console's
+  `~/.config/lockfile`; a `.lockfile` or `config.toml` that is a link, someone else's, or that
+  others may write is refused, as `lox up` would. The workspace is the one the agent commands
+  reach (`.lockfamily/up.json`), else the nearest `.lockfamily/`, else the current directory.
+  `lockfile plugin`, `audit`, `forget` and `doctor` run with the home of the console `lox up`
+  runs (`lockfamily-<hash>_<instance>-home`) and its profile copy, read-only, once Docker shows
+  both are lox up's (compose's labels), with `--instance NAME` for one of several; without
+  `lox up`, `plugin`, `audit` and `forget` exit 2 and say why. The fixed `lockfile-home`
+  volume is no longer used by them ([docs/docker.md](docs/docker.md#the-console-of-lox-up)).
+  The quick start installs the plugins after `lox up`.
+- The agent commands no longer hang when the current directory was removed: they exit 2.
 - **The agent commands reach the console `lox up` runs** (lockhub#78). The launcher's `mcp`,
   `status`, `sources`, `plugins`, `plan`, `run`, `answers`, `release` and `doctor` mount the
   socket volume of the workspace's lockfile lock that `lox up` names in `.lockfamily/up.json`,

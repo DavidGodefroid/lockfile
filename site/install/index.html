@@ -54,7 +54,7 @@
 <h1>Install lockfile</h1>
 <div class="prose">
   <p class="lead">lockfile runs in Docker. On your machine: Docker, one <code>lockfile</code> command (a launcher that runs every command in the signed release image, with the account it needs) and the seccomp profile of the console’s container.</p>
-  <p>The image holds the separated setup: the console as <code>lockfile</code>, the agent as <code>agent</code> in <code>lockfile-clients</code>, the socket directory shared through the <code>lockfile-run</code> volume, the console’s state in the <code>lockfile-home</code> volume. Its images are published for amd64 and arm64 and signed with cosign by lockfile’s release workflow.</p>
+  <p>The image holds the separated setup: the console as <code>lockfile</code>, the agent as <code>agent</code> in <code>lockfile-clients</code>, the socket directory shared through the <code>lockfile-run</code> volume, the console’s configuration in the workspace’s <code>.lockfile/</code> (which <code>lox up</code> reviews and copies to it, read-only), its state in the home volume <code>lox up</code> gives it. Its images are published for amd64 and arm64 and signed with cosign by lockfile’s release workflow.</p>
 </div>
 
 <section aria-labelledby="requirements">
@@ -77,7 +77,7 @@ LOCKFILE_VERSION=$V sh install.sh</code></pre>
 
 <section aria-labelledby="profile">
   <h2 id="profile">2. A source profile (console account)</h2>
-  <p class="prose">Profiles live in the <code>lockfile</code> account’s <code>~/.config/lockfile/config.toml</code>; there is no per-project config. <code>lockfile profile add</code> appends one, validated:</p>
+  <p class="prose">Profiles live in the workspace’s <code>.lockfile/config.toml</code>, yours: <code>lox up</code> reviews it and copies it, read-only, to the console’s <code>~/.config/lockfile</code>. <code>lockfile profile add</code>, run from the workspace, appends one, validated:</p>
   <pre tabindex="0" class="term"><code><span class="cmt"># S3 (or an S3-compatible endpoint), credentials from Vault, production</span>
 lockfile profile add docs --source s3 --bucket documents --region eu-west-1 --prefix invoices/ \
   --credentials vault --vault-path secret/data/lockfile/docs --production
@@ -104,22 +104,24 @@ answer_quantum = "5s"         <span class="cmt"># results leave the console only
   <p class="prose">No file ever holds a secret: it is typed at console start (<code>ask</code>), read from the console account’s keychain, or read from Vault. <code>lockfile forget --profile P</code> deletes a keychain secret. The full list of keys is in the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/usage.md#profiles-console-account">usage guide</a>.</p>
 </section>
 
-<section aria-labelledby="plugins">
-  <h2 id="plugins">3. Plugins (console account)</h2>
-  <pre tabindex="0" class="term"><code>lockfile plugin install file.non-empty@1.0.0     <span class="cmt"># exact versions only; signatures checked with cosign</span>
-lockfile plugin install format.is-pdf@1.0.0
-lockfile plugin install pdf.parses@1.0.0
-lockfile plugin list</code></pre>
-  <p class="prose">The official marketplace’s signer is pinned in the binary. See <a href="../plugins/">Plugins</a> for the catalogue, updates, unofficial marketplaces and how to write your own.</p>
-</section>
-
 <section aria-labelledby="console">
-  <h2 id="console">4. The console, with its hub</h2>
+  <h2 id="console">3. The console, with its hub</h2>
   <pre tabindex="0" class="term"><code>lox add lockfile samples --profile samples
 lox up
 lox attach samples   <span class="cmt"># the policy review (detach: Ctrl-P Ctrl-Q)</span>
 lox approve          <span class="cmt"># the agent’s plans</span></code></pre>
   <p class="prose">The console runs attached to lockhub only: lockhub’s <code>lox</code> CLI declares the lock and starts it with its hub (<code>lockfile console</code> on its own refuses to start). It runs in a container of its own, under the shipped seccomp profile (never <code>seccomp=unconfined</code>), without capabilities, on a read-only root. It checks the isolation, asks for the secret, connects and serves the profile’s socket. Every plan waits for your approval on lockhub.</p>
+</section>
+
+<section aria-labelledby="plugins">
+  <h2 id="plugins">4. Plugins (the console’s home)</h2>
+  <pre tabindex="0" class="term"><code>lockfile plugin install file.non-empty@1.0.0     <span class="cmt"># exact versions only; signatures checked with cosign</span>
+lockfile plugin install format.is-pdf@1.0.0
+lockfile plugin install pdf.parses@1.0.0
+lockfile plugin list
+lox attach samples   <span class="cmt"># :review applies them (detach: Ctrl-P Ctrl-Q)</span></code></pre>
+  <p class="prose">They go in the home of the console <code>lox up</code> runs, so install them after <code>lox up</code>; with several lockfile locks, <code>--instance NAME</code> picks one. A running console applies a new plugin after <code>:review</code>.</p>
+  <p class="prose">The official marketplace’s signer is pinned in the binary. See <a href="../plugins/">Plugins</a> for the catalogue, updates, unofficial marketplaces and how to write your own.</p>
 </section>
 
 <section aria-labelledby="wire">

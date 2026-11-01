@@ -133,17 +133,19 @@ V=vX.Y.Z
 curl -fsSLO "https://raw.githubusercontent.com/DavidGodefroid/lockfile/$V/scripts/install.sh"
 less install.sh && LOCKFILE_VERSION=$V sh install.sh
 
-# 2. The console account's setup, in its home volume: a profile on a directory
-#    mounted read-only, and the plugins (signatures checked with cosign, in the image).
+# 2. From the workspace: the lock's profile, in .lockfile/ (lox up reviews it
+#    and copies it, read-only, to the console), then the lock and its hub
+#    (lockhub's lox CLI), then the console's own questions (policy review).
 lockfile profile add samples --source local --path /srv/lockfile/samples --prefix invoices/
-lockfile plugin install file.non-empty@1.0.0
-lockfile plugin install format.is-pdf@1.0.0
-
-# 3. Declare the lock and start it with its hub (lockhub's lox CLI), then
-#    answer the console's own questions (policy review) and approve plans.
 lox add lockfile samples --profile samples
 lox up
 lox attach samples  # the policy review (detach: Ctrl-P Ctrl-Q)
+
+# 3. The plugins, in the home of the console lox up runs (signatures checked
+#    with cosign, in the image); the console applies them after :review.
+lockfile plugin install file.non-empty@1.0.0
+lockfile plugin install format.is-pdf@1.0.0
+lox attach samples  # :review (detach: Ctrl-P Ctrl-Q)
 
 # 4. Your agent: wire it (from the project root), then ask. The plan waits
 #    for your approval on lockhub (lox approve), then its ticket runs.

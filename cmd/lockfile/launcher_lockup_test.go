@@ -75,6 +75,12 @@ func (f *launcherFixture) loxUp(t *testing.T, ws string, locks map[string]string
 		}
 		s.Locks[name] = l
 		f.dockerVolume(t, l.Socket, volumeLabels(p, name, typ, ws))
+		if typ == "lockfile" {
+			// The console's home and the reviewed profile copy (compose's
+			// labels only, as lox up makes them).
+			f.dockerVolume(t, p+"_"+name+"-home", composeLabels(p, name+"-home"))
+			f.dockerVolume(t, p+"_profile-lockfile", composeLabels(p, "profile-lockfile"))
+		}
 		h := sha256.Sum256([]byte(name))
 		id := hex.EncodeToString(h[:])
 		f.dockerContainers(t, l.Socket, map[string]string{id: containerLabels(p, f.stateDir(p), "-", "rw ")})
@@ -125,6 +131,22 @@ func volumeLabels(project, name, typ, ws string) string {
 		out = append(out, jsonString(v))
 	}
 	return strings.Join(out, "\n") + "\n"
+}
+
+// composeLabels is what the launcher's docker volume inspect prints for a
+// volume compose made in project as vol (no lockfamily label).
+func composeLabels(project, vol string) string {
+	return jsonString(project) + "\n" + jsonString(vol) + "\n"
+}
+
+// homeMounts are the console account's mounts of lox up's lock name in
+// the workspace ws: its home, and its profile copy read-only.
+func homeMounts(ws, name string) [][]string {
+	p := loxProject(ws)
+	return [][]string{
+		{"--mount", "type=volume,src=" + p + "_" + name + "-home,dst=/home/lockfile"},
+		{"--mount", "type=volume,src=" + p + "_profile-lockfile,dst=/home/lockfile/.config/lockfile,readonly"},
+	}
 }
 
 // containerLabels is what the launcher's docker inspect prints for a
@@ -493,10 +515,132 @@ func TestLauncherDoctorWithoutLockUp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
-	if run := strings.Join(lastRun(t, calls), " "); strings.Contains(run, "/run/lockfile") {
-		t.Errorf("a socket: %s", run)
+	if run := strings.Join(lastRun(t, calls), " "); strings.Contains(run, "/run/lockfile") || strings.Contains(run, "/home/lockfile") {
+		t.Errorf("a socket or a home: %s", run)
 	}
 	if !strings.Contains(out, "no .lockfamily/up.json in "+f.project) || !strings.Contains(out, "lox up") {
 		t.Errorf("output:\n%s", out)
+	}
+}
+
+// The console account's commands (plugin, audit, forget) work on the
+// console lox up runs: its home and its profile copy, which lox up made
+// (compose's labels); without them, nothing runs (exit 2, saying why).
+func TestLauncherConsoleHome(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		setup func(t *testing.T, f *launcherFixture)
+		want  string
+	}{
+		{"no lox up", func(t *testing.T, f *launcherFixture) {
+			if err := os.RemoveAll(filepath.Join(f.root, ".lockfamily")); err != nil {
+				t.Fatal(err)
+			}
+		}, "no .lockfamily/up.json"},
+		{"no home volume", func(t *testing.T, f *launcherFixture) {
+			if err := os.Remove(filepath.Join(f.fake, "volume-"+loxProject(f.root)+"_files-home")); err != nil {
+				t.Fatal(err)
+			}
+		}, "_files-home: run `lox up`"},
+		{"no profile copy", func(t *testing.T, f *launcherFixture) {
+			if err := os.Remove(filepath.Join(f.fake, "volume-"+loxProject(f.root)+"_profile-lockfile")); err != nil {
+				t.Fatal(err)
+			}
+		}, "_profile-lockfile: run `lox up`"},
+		{"home of another project", func(t *testing.T, f *launcherFixture) {
+			f.dockerVolume(t, loxProject(f.root)+"_files-home", composeLabels("other", "files-home"))
+		}, "is not lox up's (its labels)"},
+		{"home of another volume", func(t *testing.T, f *launcherFixture) {
+			f.dockerVolume(t, loxProject(f.root)+"_files-home", composeLabels(loxProject(f.root), "files-run"))
+		}, "is not lox up's (its labels)"},
+		{"no labels", func(t *testing.T, f *launcherFixture) {
+			f.dockerVolume(t, loxProject(f.root)+"_profile-lockfile", "null\nnull\n")
+		}, "is not lox up's (its labels)"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, args := range [][]string{{"plugin", "install", "file.non-empty@1.0.0"}, {"audit"}, {"forget", "--profile", "p"}} {
+				f := newLauncherFixture(t)
+				tc.setup(t, f)
+				out, calls, err := f.run(t, f.project, nil, args...)
+				if exitCode(err) != 2 || !strings.Contains(out, tc.want) || !strings.Contains(out, "works on the console that `lox up` runs") {
+					t.Errorf("%v: %v\n%s", args, err, out)
+				}
+				if hasRun(calls) {
+					t.Errorf("%v: docker run: %q", args, calls)
+				}
+			}
+		})
+	}
+}
+
+// --instance picks the home of one of several lockfile locks.
+func TestLauncherConsoleHomeInstance(t *testing.T) {
+	f := newLauncherFixture(t)
+	f.loxUp(t, f.root, map[string]string{"files": "lockfile", "archive": "lockfile"})
+	out, calls, err := f.run(t, f.project, nil, "plugin", "install", "x@1.0.0")
+	if exitCode(err) != 2 || !strings.Contains(out, "(archive files): name one with --instance NAME") || hasRun(calls) {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	out, calls, err = f.run(t, f.project, nil, "plugin", "--instance", "archive", "install", "x@1.0.0")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	run := lastRun(t, calls)
+	for _, seq := range homeMounts(f.root, "archive") {
+		if !hasSeq(run, seq...) {
+			t.Errorf("lacks %q: %q", seq, run)
+		}
+	}
+	if got := strings.Join(imageArgs(run, "lockfile")[1:], " "); got != "plugin install x@1.0.0" {
+		t.Errorf("command %q", got)
+	}
+}
+
+// profile and marketplace write the profile directory of the workspace
+// the agent commands reach, else of the nearest .lockfamily, else of this
+// directory; never through a link.
+func TestLauncherProfileDirectory(t *testing.T) {
+	bind := func(dir string) []string {
+		return []string{"--mount", "type=bind,src=" + filepath.Join(dir, ".lockfile") + ",dst=" + filepath.Join(dir, ".lockfile")}
+	}
+	f := newLauncherFixture(t)
+	// A sub-project's .lockfamily without up.json: the workspace lox up runs wins.
+	if err := os.MkdirAll(filepath.Join(f.project, ".lockfamily"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if out, calls, err := f.run(t, filepath.Join(f.project, "sub"), nil, "profile", "add", "p", "--source", "local", "--path", "/x"); err != nil || !hasSeq(lastRun(t, calls), bind(f.root)...) {
+		t.Errorf("%v\n%s\n%q", err, out, calls)
+	}
+	// No lox up yet: the nearest .lockfamily.
+	if err := os.Remove(filepath.Join(f.root, ".lockfamily", "up.json")); err != nil {
+		t.Fatal(err)
+	}
+	if out, calls, err := f.run(t, filepath.Join(f.project, "sub"), nil, "marketplace", "list"); err != nil || !hasSeq(lastRun(t, calls), bind(f.project)...) ||
+		!hasSeq(lastRun(t, calls), "-e", "LOCKFILE_WORKSPACE="+f.project) {
+		t.Errorf("%v\n%s\n%q", err, out, calls)
+	}
+	// No .lockfamily at all: this directory.
+	other := filepath.Join(f.root, "elsewhere")
+	if err := os.MkdirAll(other, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(filepath.Join(f.root, ".lockfamily")); err != nil {
+		t.Fatal(err)
+	}
+	if out, calls, err := f.run(t, other, nil, "marketplace", "list"); err != nil || !hasSeq(lastRun(t, calls), bind(other)...) {
+		t.Errorf("%v\n%s\n%q", err, out, calls)
+	}
+	// A link is refused, before anything runs.
+	if err := os.Symlink(t.TempDir(), filepath.Join(f.project, "link")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(filepath.Join(f.project, ".lockfile")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(f.project, "link"), filepath.Join(f.project, ".lockfile")); err != nil {
+		t.Fatal(err)
+	}
+	if out, calls, err := f.run(t, f.project, nil, "profile", "add", "p", "--source", "local", "--path", "/x"); err == nil || !strings.Contains(out, "is a link") || hasRun(calls) {
+		t.Errorf("%v\n%s\n%q", err, out, calls)
 	}
 }

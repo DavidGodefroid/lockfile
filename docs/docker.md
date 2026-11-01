@@ -23,10 +23,13 @@ only the socket volume:
   volume of the lock (`lockfamily-<hash>_<instance>-run`, named in
   `.lockfamily/up.json`). The kernel checks every peer on the socket as on
   a host;
-- the console account's home is a named volume, `lockfile-home`: the config
-  and profiles, the plugin store and `plugins.lock`, the approved policies,
-  the audit log, the fetched files (`work_dir`), SFTP keys and `known_hosts`,
-  cosign's trust root cache.
+- the console's configuration is the workspace's `.lockfile/` directory
+  (`config.toml`: profiles and marketplaces; SFTP keys and `known_hosts`):
+  `lox up` reviews it and copies it, read-only, to the console's
+  `~/.config/lockfile` (the volume `lockfamily-<hash>_profile-lockfile`);
+- the console's home is `lox up`'s volume `lockfamily-<hash>_<instance>-home`:
+  the plugin store and `plugins.lock`, the approved policies, the audit log,
+  the fetched files (`work_dir`), the Vault token, cosign's trust root cache.
 
 ## Requirements
 
@@ -83,8 +86,9 @@ does.
 | Command | Runs as | Volumes, mounts |
 |---|---|---|
 | `console` | `lockfile`, in a container of its own per profile (`lockfile-console-<n>`; `LOCKFILE_CONSOLE_NAME` names it), under the seccomp profile, with no capability, `no-new-privileges`, a read-only root with a 64 MB `/tmp`, at most 512 processes and 4 GB of memory, no log driver, `--add-host=host.docker.internal:host-gateway` | `lockfile-run`, `lockfile-home` |
-| `profile`, `plugin`, `marketplace`, `audit`, `forget` | `lockfile` | `lockfile-home` |
-| `doctor` | `lockfile`, under the seccomp profile | lox up's socket volume of the lock, read-only, when there is one; `lockfile-home` |
+| `profile`, `marketplace` | you (your uid and gid): they write the workspace's configuration | the workspace's `.lockfile/` only, at its own path ([below](#the-console-of-lox-up)) |
+| `plugin`, `audit`, `forget` | `lockfile` | the home of the console `lox up` runs, and its profile copy, read-only (`--instance NAME` picks one of several); none without `lox up`: they exit 2 and say why |
+| `doctor` | `lockfile`, under the seccomp profile | lox up's socket volume of the lock, read-only, its home and its profile copy, read-only, when there is one; none otherwise |
 | `init`, `doctor --fix` | you (your uid and gid): they write your agents' files | your home, and the project (the nearest directory up holding `.lockfile/`, or else `.git`), each at its own path |
 | the agent commands: `mcp`, `status`, `sources`, `plugins`, `plan`, `run`, `answers`, `release` | `agent` | the socket volume of the workspace's lockfile lock that `lox up` runs, read-only, only ([below](#the-socket-of-lox-ups-lock)) |
 | everything else: `help`... | `agent` | none |
@@ -201,6 +205,12 @@ docker run --rm --security-opt seccomp=/usr/local/share/lockfile/seccomp.json \
 An agent in a container of its own that reached the console through the gid
 10000 now needs gid 10030; `ALLOWED_UIDS` is unchanged.
 
+From a release before 0.6: `profile`, `plugin` and `marketplace` worked in
+the `lockfile-home` volume, which the console `lox up` runs never reads. Add
+the profiles again from the workspace (`lockfile profile add`, or copy the
+`config.toml` into `.lockfile/`, yours, `0600`), run `lox up`, then install
+the plugins again; `lockfile-home` can then go (`docker volume rm lockfile-home`).
+
 From a host install (a release binary, then `sudo lockfile install`):
 `install.sh` replaces the binary with the launcher, and the image refuses
 `lockfile install` and `lockfile update`. What the host install created stays
@@ -212,14 +222,33 @@ plugins, approved policies, audit log): copy what you keep into the
 
 ## Set up the console
 
-The launcher runs the setup commands as the console account in throwaway
-containers, on the `lockfile-home` volume. Docker creates the volumes on
-first use, with the image's owner and mode.
+### The console of lox up
+
+`lox up` (lockhub) runs the console and never mounts your workspace in it.
+The launcher's setup commands write where `lox up` reads:
+
+- **`profile`, `marketplace`** edit the workspace's `.lockfile/config.toml`,
+  as you, in a container that mounts only `.lockfile/` (made `0700` when
+  missing; the file `0600`). The workspace is the one the agent commands
+  reach: the nearest directory up from here whose `.lockfamily/` holds
+  `up.json`, else, before the first `lox up`, the nearest one with
+  `.lockfamily/`, else this directory (where `lox add` makes it). They
+  refuse a `.lockfile` or `config.toml` that is a link, is not yours, or
+  that others may write: `lox up` would copy none of it. `lox up` shows the
+  directory's files and every line of `config.toml` in its review, and
+  copies them to the console's `~/.config/lockfile`, read-only; a change
+  reaches the console at the next `lox up`.
+- **`plugin`, `audit`, `forget`** run as the console account with the home
+  of the console `lox up` runs (`lockfamily-<hash>_<instance>-home`) and its
+  profile copy, read-only, once Docker shows both are `lox up`'s (compose's
+  labels). Run them after `lox up`; with several lockfile locks,
+  `--instance NAME` picks one. A running console applies an installed
+  plugin after `:review` (`lox attach INSTANCE`).
 
 ### Profiles
 
-`lockfile profile add` appends a validated profile to the console's
-`~/.config/lockfile/config.toml` (see [usage.md](usage.md#profiles-console-account)
+`lockfile profile add` appends a validated profile to the workspace's
+`.lockfile/config.toml` (see [usage.md](usage.md#profiles-console-account)
 for every key):
 
 ```sh
@@ -249,20 +278,23 @@ Inside a container, a few things differ from a host:
 - **No keychain.** `credentials = "keychain"` needs an OS keychain, which the
   container does not have: use `credentials = "ask"` (typed in the console at
   each start), or `"vault"` with the `vault` image below.
-- **SFTP keys** (`auth = "key"`) and `known_hosts` live in `lockfile-home`,
-  owned by `lockfile`, the key mode 0600:
+- **SFTP keys** (`auth = "key"`) and `known_hosts` go in the workspace's
+  `.lockfile/`, yours, the key mode 0600 (`lox up` keeps it owner-only in
+  the copy, owned by the console):
 
   ```sh
-  docker run --rm --user lockfile -v lockfile-home:/home/lockfile -v "$PWD/keys:/keys:ro" \
-    --entrypoint sh ghcr.io/davidgodefroid/lockfile:X.Y.Z -c 'install -d -m 0700 ~/.ssh && install -m 0600 /keys/partner_ed25519 ~/.ssh/'
+  install -m 0600 keys/partner_ed25519 .lockfile/
   ```
 
-  then `--key ~/.ssh/partner_ed25519` is `/home/lockfile/.ssh/partner_ed25519`.
+  then `--key /home/lockfile/.config/lockfile/partner_ed25519` (the copy's
+  path in the console).
 
 ### Plugins and marketplaces
 
-They are installed as the console account, in its home volume. cosign is in
-the image; signatures are checked as on a host:
+They are installed as the console account, in the home of the console
+`lox up` runs; marketplaces are added to the workspace's `.lockfile/config.toml`
+(a new one reaches the console, and `plugin install` from it, after the next
+`lox up`). cosign is in the image; signatures are checked as on a host:
 
 ```sh
 lockfile plugin install file.non-empty@1.0.0
@@ -322,12 +354,12 @@ mounts read-only at the same path:
 LOCKFILE_VAULT=1 VAULT_ADDR=https://vault.example.com lockfile console --profile docs
 ```
 
-Log in once as the console account; the token stays in `lockfile-home`, out
-of the agents' reach:
+Log in once as the console account; the token stays in the console's home
+(`lox up`'s `lockfamily-<hash>_<instance>-home`), out of the agents' reach:
 
 ```sh
 docker run -it --rm --user lockfile -e VAULT_ADDR=https://vault.example.com \
-  -v lockfile-home:/home/lockfile --entrypoint vault \
+  -v lockfamily-<hash>_<instance>-home:/home/lockfile --entrypoint vault \
   ghcr.io/davidgodefroid/lockfile:X.Y.Z-vault login -method=oidc
 ```
 
@@ -451,7 +483,7 @@ paragraph).
 
 **Your own account** is another matter. Whoever can run `docker` commands can
 `docker attach` to the console and type an approval, `docker exec` into it
-and read its memory or the fetched files, or open the `lockfile-home` volume.
+and read its memory or the fetched files, or open its home volume.
 An agent that runs shell commands in your account usually can: the launcher
 it runs for the MCP server is itself a `docker run`. The console cannot see this (its
 terminal belongs to the container), so treat this setup as keeping the

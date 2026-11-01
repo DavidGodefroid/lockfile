@@ -57,7 +57,7 @@ func marketplaceAdd(e env, args []string) int {
 	if len(pos) != 1 || *index == "" || (*identity == "" && *key == "") {
 		return usageErr(e, marketplaceUsage)
 	}
-	if err := serviceAccount(); err != nil {
+	if err := configAccount(); err != nil {
 		return failHuman(e, "marketplace add", err)
 	}
 	raw := profile.RawMarketplace{Name: pos[0], IndexURL: *index, IdentityRegexp: *identity, OIDCIssuer: *issuer, PublicKey: *key}
@@ -93,7 +93,7 @@ func marketplaceRemove(e env, args []string) int {
 	if len(args) != 1 {
 		return usageErr(e, marketplaceUsage)
 	}
-	if err := serviceAccount(); err != nil {
+	if err := configAccount(); err != nil {
 		return failHuman(e, "marketplace remove", err)
 	}
 	path, err := configPath()
@@ -111,7 +111,7 @@ func marketplaceList(e env, args []string) int {
 	if len(args) != 0 {
 		return usageErr(e, marketplaceUsage)
 	}
-	if err := serviceAccount(); err != nil {
+	if err := configAccount(); err != nil {
 		return failHuman(e, "marketplace list", err)
 	}
 	fmt.Fprintf(e.stdout, "official  %s  (signer %s)\n", marketplace.OfficialIndexURL, verify.Official.IdentityRegexp)
