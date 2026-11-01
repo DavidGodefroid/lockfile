@@ -8,10 +8,19 @@
 #                    shipped seccomp profile, confined (no capability,
 #                    read-only root, bounded processes and memory), with
 #                    the socket and home volumes
-#   profile, plugin, marketplace, audit, forget, doctor
-#                    as the console account, with its home volume (doctor
-#                    also under the seccomp profile, with lox up's socket
-#                    volume, read-only, as below)
+#   profile, marketplace
+#                    as you, with the workspace's profile directory
+#                    (<workspace>/.lockfile, the nearest directory up from
+#                    here that holds .lockfamily/, else this one): `lox up`
+#                    reviews it and copies it, read-only, to the console's
+#                    ~/.config/lockfile
+#   plugin, audit, forget, doctor
+#                    as the console account, with the home volume of the
+#                    console `lox up` runs (--instance NAME picks one of
+#                    several) and its reviewed profile copy, read-only
+#                    (doctor also under the seccomp profile, with lox up's
+#                    socket volume, read-only, as below; without lox up it
+#                    runs without them and says why)
 #   init, doctor --fix
 #                    as you, with your home and the project: they write
 #                    your agents' files
@@ -405,6 +414,10 @@ lockup_parse() {
 lockup_volume() {
 	lockup_vol= lockup_why=
 	lu_inst=${1:-}
+	if [ -z "$here" ]; then
+		lockup_why="the current directory no longer exists: cd to the workspace"
+		return 1
+	fi
 	# The workspace: the nearest directory up from here whose .lockfamily
 	# holds up.json (a sub-project's own .lockfamily may hold none).
 	lu_ws=
@@ -578,12 +591,81 @@ EOF_STATE
 }
 lockup_vol= lockup_why=
 
+# lockup_home: after lockup_volume, the home volume of that lock's console
+# and the volume of its reviewed profile copy, as lox up made them
+# (compose's project and volume labels), in $lockup_home and
+# $lockup_profile; else why, in $lockup_why. The console runs its plugins
+# from that home and reads its config from that copy (lockhub's
+# internal/family/compose.go): what plugin, audit and forget change or
+# read there is the console's own.
+lockup_home() {
+	lockup_home= lockup_profile=
+	for lu_v in "$lu_name-home" profile-lockfile; do
+		lu_got=$(docker volume inspect --format '{{json (index .Labels "com.docker.compose.project")}}
+{{json (index .Labels "com.docker.compose.volume")}}' "${lu_project}_$lu_v" 2>/dev/null) || {
+			lockup_why="lock $lu_name: no volume ${lu_project}_$lu_v: run \`lox up\`"
+			return 1
+		}
+		if [ "$lu_got" != "\"$lu_project\"
+\"$lu_v\"" ]; then
+			lockup_why="lock $lu_name: volume ${lu_project}_$lu_v is not lox up's (its labels): lockfile trusts none of it; run \`lox up\`"
+			return 1
+		fi
+	done
+	lockup_home=${lu_project}_$lu_name-home
+	lockup_profile=${lu_project}_profile-lockfile
+}
+
+# console_mounts: the --mount arguments of the console account's commands:
+# lox up's home of the lock and its profile copy, read-only (exit 2 with
+# why when there is none).
+console_mounts() {
+	command -v docker >/dev/null 2>&1 || die "docker is required: lockfile runs in Docker (docs/docker.md)"
+	if ! lockup_volume "$instance" || ! lockup_home; then
+		say "$lockup_why"
+		say "$cmd works on the console that \`lox up\` runs: its plugins, audit and secrets are in that console's home"
+		exit 2
+	fi
+}
+
+# as_workspace ARGS...: run as you, with the workspace's profile directory
+# <workspace>/.lockfile only (made 0700 when missing), at its own path. The
+# workspace is the one the agent commands reach (the nearest directory up
+# from here whose .lockfamily holds up.json), else, before the first lox
+# up, the nearest one that holds .lockfamily/ (where lox add wrote
+# lockfamily.yaml), else this directory, where lox add would make it.
+as_workspace() {
+	[ -n "$here" ] || die "the current directory no longer exists: cd to the workspace"
+	ws=
+	for want in up.json ""; do
+		d=$here
+		while :; do
+			if [ -e "$d/.lockfamily/$want" ] || [ -L "$d/.lockfamily/$want" ] || [ -L "$d/.lockfamily" ]; then
+				ws=$d
+				break 2
+			fi
+			[ "$d" = / ] && break
+			d=$(dirname "$d")
+		done
+	done
+	[ -n "$ws" ] || ws=$here
+	pd=$ws/.lockfile
+	[ ! -L "$pd" ] || die "$pd is a link: lox up copies none; remove it"
+	if [ ! -e "$pd" ]; then
+		(umask 077 && mkdir "$pd") || die "cannot make $pd"
+	fi
+	[ -d "$pd" ] || die "$pd is not a directory: lox up copies none"
+	mountable "$pd"
+	docker_run "$tty" --user "$(id -u):$(id -g)" -e LOCKFILE_WORKSPACE="$ws" \
+		--mount "type=bind,src=$pd,dst=$pd" -w / "$image" "$@"
+}
+
 # --instance NAME (or --instance=NAME): the launcher's own option of the
 # agent commands, which of lox up's lockfile locks when the workspace has
 # several. Taken out of the command line ("--" ends the options).
 instance=
 case "${1:-}" in
-mcp | doctor | status | sources | plugins | plan | run | answers | release)
+mcp | doctor | status | sources | plugins | plan | run | answers | release | plugin | audit | forget)
 	n=$#
 	take=
 	done_opts=
@@ -675,19 +757,25 @@ doctor)
 		as_you "$@"
 	fi
 	seccomp
-	migrate_ids -v lockfile-home:/home/lockfile
-	# The checks run without lox up's socket too: then they say so.
-	if command -v docker >/dev/null 2>&1 && lockup_volume "$instance"; then
+	# The checks of the console lox up runs: its socket, its home and its
+	# profile copy. Without lox up they run without them and say so.
+	if command -v docker >/dev/null 2>&1 && lockup_volume "$instance" && lockup_home; then
 		docker_run "$tty" --user lockfile --security-opt seccomp="$seccomp_profile" \
-			--mount "type=volume,src=$lockup_vol,dst=/run/lockfile,readonly" -v lockfile-home:/home/lockfile "$image" "$@"
+			--mount "type=volume,src=$lockup_vol,dst=/run/lockfile,readonly" \
+			--mount "type=volume,src=$lockup_home,dst=/home/lockfile" \
+			--mount "type=volume,src=$lockup_profile,dst=/home/lockfile/.config/lockfile,readonly" "$image" "$@"
 	fi
 	[ -z "$lockup_why" ] || say "$lockup_why"
-	docker_run "$tty" --user lockfile --security-opt seccomp="$seccomp_profile" \
-		-v lockfile-home:/home/lockfile "$image" "$@"
+	docker_run "$tty" --user lockfile --security-opt seccomp="$seccomp_profile" "$image" "$@"
 	;;
-profile | plugin | marketplace | audit | forget)
-	migrate_ids -v lockfile-home:/home/lockfile
-	docker_run "$tty" --user lockfile -v lockfile-home:/home/lockfile "$image" "$@"
+profile | marketplace)
+	as_workspace "$@"
+	;;
+plugin | audit | forget)
+	console_mounts
+	docker_run "$tty" --user lockfile \
+		--mount "type=volume,src=$lockup_home,dst=/home/lockfile" \
+		--mount "type=volume,src=$lockup_profile,dst=/home/lockfile/.config/lockfile,readonly" "$image" "$@"
 	;;
 init)
 	as_you "$@"

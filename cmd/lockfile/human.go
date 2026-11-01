@@ -48,12 +48,72 @@ func hooks() humanHooks {
 	return humanHooks{}
 }
 
-// configPath is the lockfile account's config file.
+// configPath is the config file the human commands edit: the
+// workspace's profile (workspaceEnv), else the lockfile account's.
 func configPath() (string, error) {
 	if h := hooks(); h.configPath != "" {
 		return h.configPath, nil
 	}
+	if ws := os.Getenv(workspaceEnv); ws != "" {
+		return workspaceConfig(ws)
+	}
 	return config.UserConfigPath(product.P)
+}
+
+// workspaceEnv names the workspace whose profile the commands that write
+// the configuration (profile add, marketplace add|remove|list) edit:
+// <workspace>/.lockfile/config.toml. lox up never mounts that directory:
+// it reviews it and copies it, read-only, to the console's
+// ~/.config/lockfile (lockhub's internal/family/profile.go). The launcher
+// sets it and runs these commands as you, from the workspace.
+const workspaceEnv = "LOCKFILE_WORKSPACE"
+
+// workspaceConfig is the config file of the workspace ws, once its
+// profile directory is one lox up copies: no link, yours, that neither
+// your group nor others may write (lox up refuses any other).
+func workspaceConfig(ws string) (string, error) {
+	if !filepath.IsAbs(ws) {
+		return "", fmt.Errorf("%s: the workspace must be an absolute path", workspaceEnv)
+	}
+	dir := filepath.Join(ws, product.P.ProjectDir())
+	euid := hooks().euid
+	if euid == nil {
+		euid = os.Geteuid
+	}
+	file := filepath.Join(dir, config.ConfigFile)
+	for _, p := range []string{dir, file} {
+		fi, err := os.Lstat(p)
+		if errors.Is(err, os.ErrNotExist) {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+		switch {
+		case p == dir && !fi.IsDir():
+			return "", fmt.Errorf("%s: not a directory (a link?): lox up copies none", p)
+		case p == file && !fi.Mode().IsRegular():
+			return "", fmt.Errorf("%s: not a regular file (a link?): lox up copies none", p)
+		}
+		if uid, _, ok := fileOwner(fi); ok && uid != euid() {
+			return "", fmt.Errorf("%s: owned by uid %d, not by you: lox up copies none", p, uid)
+		}
+		if fi.Mode().Perm()&0o022 != 0 {
+			return "", fmt.Errorf("%s: mode %04o: writable by others than you, lox up copies none (chmod go-w %s)", p, fi.Mode().Perm(), p)
+		}
+	}
+	return file, nil
+}
+
+// configAccount refuses a command that writes the configuration where
+// the console would not read it: the workspace's profile (workspaceEnv)
+// is yours to write; the lockfile account's needs that account.
+func configAccount() error {
+	if ws := os.Getenv(workspaceEnv); ws != "" {
+		_, err := workspaceConfig(ws)
+		return err
+	}
+	return serviceAccount()
 }
 
 // stateHome is <state base>/lockfile, where plugins, the approved policies

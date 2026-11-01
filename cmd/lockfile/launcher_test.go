@@ -44,7 +44,7 @@ func newLauncherFixture(t *testing.T) *launcherFixture {
 	if err := os.WriteFile(f.seccomp, []byte("{}"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	for _, tool := range []string{"sh", "dirname", "id", "cat", "printf", "awk", "sha256sum", "shasum", "tar", "gzip", "install", "mktemp", "rm", "uname", "sed", "tr", "tail", "grep", "cksum", "wc", "find", "ls", "sort"} {
+	for _, tool := range []string{"sh", "dirname", "id", "cat", "printf", "awk", "sha256sum", "shasum", "tar", "gzip", "install", "mktemp", "rm", "uname", "sed", "tr", "tail", "grep", "cksum", "wc", "find", "ls", "sort", "mkdir"} {
 		if p, err := exec.LookPath(tool); err == nil {
 			if err := os.Symlink(p, filepath.Join(f.bin, tool)); err != nil {
 				t.Fatal(err)
@@ -258,6 +258,12 @@ func TestLauncherAccountsPerCommand(t *testing.T) {
 	// fixed one of a console the launcher started.
 	run, fixed, homeVol := mountOf(f.root, "files"), []string{"-v", "lockfile-run:/run/lockfile"}, []string{"-v", "lockfile-home:/home/lockfile"}
 	asYou := [][]string{{"--user", me}, {"-e", "HOME=" + home}, {"-v", home + ":" + home}, {"-v", f.project + ":" + f.project}, {"-w", filepath.Join(f.project, "sub")}}
+	// The console account's commands: lox up's home of the lock and its
+	// profile copy, never the fixed lockfile-home.
+	console := append([][]string{{"--user", "lockfile"}}, homeMounts(f.root, "files")...)
+	// The configuration's commands: as you, the workspace's .lockfile only.
+	pd := filepath.Join(f.root, ".lockfile")
+	asWS := [][]string{{"--user", me}, {"-e", "LOCKFILE_WORKSPACE=" + f.root}, {"--mount", "type=bind,src=" + pd + ",dst=" + pd}}
 	for _, tc := range []struct {
 		args       []string
 		want, deny [][]string
@@ -266,14 +272,14 @@ func TestLauncherAccountsPerCommand(t *testing.T) {
 		{[]string{"mcp"}, [][]string{{"-i"}, run}, [][]string{{"-it"}, {"--user"}, homeVol, fixed}, false},
 		{[]string{"status", "--json"}, [][]string{run}, [][]string{{"--user"}, homeVol, fixed}, false},
 		{[]string{"plan", "--key", "a.pdf", "--plugin", "file.non-empty", "--run"}, [][]string{run}, [][]string{{"--user"}, homeVol, fixed}, false},
-		{[]string{"doctor"}, [][]string{{"--user", "lockfile"}, {"--security-opt", "seccomp=" + f.seccomp}, run, homeVol}, [][]string{fixed}, false},
+		{[]string{"doctor"}, append([][]string{{"--security-opt", "seccomp=" + f.seccomp}, run}, console...), [][]string{fixed, homeVol}, false},
 		{[]string{"doctor", "--fix"}, asYou, [][]string{run, fixed, homeVol}, true},
 		{[]string{"init", "claude"}, asYou, [][]string{run, fixed, homeVol}, true},
-		{[]string{"profile", "add", "samples", "--source", "local", "--path", "/srv/lockfile/samples"}, [][]string{{"--user", "lockfile"}, homeVol}, [][]string{run, fixed}, false},
-		{[]string{"plugin", "install", "file.non-empty@1.0.0"}, [][]string{{"--user", "lockfile"}, homeVol}, [][]string{run, fixed}, false},
-		{[]string{"marketplace", "list"}, [][]string{{"--user", "lockfile"}, homeVol}, [][]string{run, fixed}, false},
-		{[]string{"audit", "--since", "24h"}, [][]string{{"--user", "lockfile"}, homeVol}, [][]string{run, fixed}, false},
-		{[]string{"forget", "--profile", "p"}, [][]string{{"--user", "lockfile"}, homeVol}, [][]string{run, fixed}, false},
+		{[]string{"profile", "add", "samples", "--source", "local", "--path", "/srv/lockfile/samples"}, asWS, [][]string{run, fixed, homeVol, {"-v"}}, false},
+		{[]string{"marketplace", "list"}, asWS, [][]string{run, fixed, homeVol, {"-v"}}, false},
+		{[]string{"plugin", "install", "file.non-empty@1.0.0"}, console, [][]string{run, fixed, homeVol}, false},
+		{[]string{"audit", "--since", "24h"}, console, [][]string{run, fixed, homeVol}, false},
+		{[]string{"forget", "--profile", "p"}, console, [][]string{run, fixed, homeVol}, false},
 		{nil, nil, [][]string{{"--user"}, run, fixed}, false},
 	} {
 		out, calls, err := f.run(t, filepath.Join(f.project, "sub"), nil, tc.args...)
@@ -298,6 +304,10 @@ func TestLauncherAccountsPerCommand(t *testing.T) {
 			t.Errorf("%v: command %q", tc.args, got)
 		}
 	}
+	// profile add made the profile directory lox up copies: yours, 0700.
+	if fi, err := os.Lstat(pd); err != nil || !fi.IsDir() || fi.Mode().Perm() != 0o700 {
+		t.Fatalf("%s: %v %v", pd, fi, err)
+	}
 }
 
 // The commands that mount lockfile's volumes first run migrate-ids on
@@ -313,9 +323,9 @@ func TestLauncherMigratesTheAccountIDs(t *testing.T) {
 		volumes [][]string // nil: no migrate-ids
 	}{
 		{[]string{"console", "--profile", "p"}, [][]string{run, homeVol}},
-		{[]string{"doctor"}, [][]string{homeVol}},
-		{[]string{"profile", "list"}, [][]string{homeVol}},
-		{[]string{"audit"}, [][]string{homeVol}},
+		{[]string{"doctor"}, nil},
+		{[]string{"profile", "list"}, nil},
+		{[]string{"audit"}, nil},
 		{[]string{"mcp"}, nil},
 		{[]string{"status"}, nil},
 		{[]string{"init", "claude"}, nil},

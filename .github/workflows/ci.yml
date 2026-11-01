@@ -76,15 +76,49 @@ jobs:
           sh "$GITHUB_WORKSPACE/scripts/lockfile" init claude
           grep -Eq '"command": ?"lockfile"' .mcp.json
           test "$(stat -c %u .mcp.json)" = "$(id -u)"
-          sh "$GITHUB_WORKSPACE/scripts/lockfile" plugin list
           sh "$GITHUB_WORKSPACE/scripts/lockfile" doctor | grep -q 'sandbox'
           # No lox up here: no console's socket to mount (exit 2, as a client
-          # that finds no console), never the fixed lockfile-run instead.
+          # that finds no console), never the fixed lockfile-run instead; no
+          # console home for the plugins either.
           code=0; sh "$GITHUB_WORKSPACE/scripts/lockfile" sources 2>err || code=$?
+          test "$code" = 2 && grep -q 'no .lockfamily/up.json' err
+          code=0; sh "$GITHUB_WORKSPACE/scripts/lockfile" plugin list 2>err || code=$?
           test "$code" = 2 && grep -q 'no .lockfamily/up.json' err
           code=0; sh "$GITHUB_WORKSPACE/scripts/lockfile" install 2>err || code=$?
           test "$code" = 1 && grep -q 'runs in Docker' err
-          docker volume rm lockfile-home
+      - name: the profile and the plugins reach the console lox up runs (lockfile#44)
+        # lox up's side, as lockhub's internal/family makes it: up.json, the
+        # volumes with compose's labels, the reviewed profile copy unpacked
+        # by root for the console's account (its profile-lockfile service).
+        run: |
+          set -x
+          mkdir -p "$RUNNER_TEMP/ws/.lockfamily" && cd "$RUNNER_TEMP/ws" && ws=$(pwd -P)
+          lf="$GITHUB_WORKSPACE/scripts/lockfile"
+          sh "$lf" profile add samples --source local --path /srv/lockfile/samples | grep -q "$ws/.lockfile/config.toml"
+          test "$(stat -c '%u %a' .lockfile)" = "$(id -u) 700"
+          test "$(stat -c '%u %a' .lockfile/config.toml)" = "$(id -u) 600"
+          grep -qx '\[profiles.samples\]' .lockfile/config.toml
+          p="lockfamily-$(printf '%s' "$ws" | sha256sum | cut -c1-8)"
+          docker volume create --label com.docker.compose.project="$p" --label com.docker.compose.volume=files-run \
+            --label dev.lockfamily.role=socket --label dev.lockfamily.instance=files --label dev.lockfamily.type=lockfile \
+            --label dev.lockfamily.workspace="$ws" "${p}_files-run"
+          for v in files-home profile-lockfile; do
+            docker volume create --label com.docker.compose.project="$p" --label com.docker.compose.volume="$v" "${p}_$v"
+          done
+          tar -C .lockfile -c . | docker run --rm -i --user 0:0 --network none -v "${p}_profile-lockfile:/p" --entrypoint /bin/sh lockfile \
+            -c 'tar -x -C /p && chown -R 10031:10030 /p && chmod 0700 /p'
+          printf '{\n  "version": 1,\n  "project": "%s",\n  "workspace": "%s",\n  "hub_network": "%s_lockhub",\n  "hub_url": "http://lockhub:8443",\n  "hub_key": "",\n  "lockhttp_gate": 1,\n  "locks": {\n    "files": {\n      "type": "lockfile",\n      "socket_volume": "%s_files-run",\n      "client_gid": "10030"\n    }\n  }\n}\n' \
+            "$p" "$ws" "$p" "$p" > .lockfamily/up.json
+          # The console account's commands see the profile lox up copied, and
+          # keep their state in the console's own home.
+          sh "$lf" doctor | grep -q '1 profile(s)'
+          sh "$lf" plugin list | grep -q 'no plugin installed'
+          docker run --rm --user lockfile --network none -v "${p}_files-home:/home/lockfile" --entrypoint /bin/sh lockfile -c 'test -w /home/lockfile'
+          # A lock's home that lox up did not make is refused.
+          docker volume rm "${p}_files-home" && docker volume create "${p}_files-home"
+          code=0; sh "$lf" plugin list 2>err || code=$?
+          test "$code" = 2 && grep -q "is not lox up's" err
+          docker volume rm "${p}_files-run" "${p}_files-home" "${p}_profile-lockfile"
       - name: end to end (docs/docker.md)
         run: go test -count=1 -v -tags docker ./test/docker/...
 

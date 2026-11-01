@@ -157,15 +157,16 @@ V=vX.Y.Z
 curl -fsSLO "https://raw.githubusercontent.com/DavidGodefroid/lockfile/$V/scripts/install.sh"
 less install.sh &amp;&amp; LOCKFILE_VERSION=$V sh install.sh
 
-<span class="cmt"># 2. The console account's setup, in its home volume</span>
+<span class="cmt"># 2. From the workspace: the lock's profile (.lockfile/, which lox up reviews and copies), the lock and its hub (lockhub's lox CLI)</span>
 lockfile profile add samples --source local --path /srv/lockfile/samples --prefix invoices/
-lockfile plugin install file.non-empty@1.0.0
-lockfile plugin install format.is-pdf@1.0.0
-
-<span class="cmt"># 3. Declare the lock and start it with its hub (lockhub's lox CLI)</span>
 lox add lockfile samples --profile samples
 lox up
 lox attach samples   <span class="cmt"># the policy review</span>
+
+<span class="cmt"># 3. The plugins, in the home of the console lox up runs; :review applies them</span>
+lockfile plugin install file.non-empty@1.0.0
+lockfile plugin install format.is-pdf@1.0.0
+lox attach samples   <span class="cmt"># :review</span>
 
 <span class="cmt"># 4. Wire your agent, from the project root</span>
 lockfile init claude</code></pre>
