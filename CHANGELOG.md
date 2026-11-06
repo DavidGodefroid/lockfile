@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.8.0 (2026-11-06)
+
+Builds on lockkit v0.13.0 (from v0.11.0); lockhub as v0.6.0. No lockfile code change; what
+the console's users will see:
+
+- **Production profiles: the profile name typed instead of `y`** for every widening the
+  console decides itself: the policy review at start and a loosening at `:review` (`Type the
+  profile name "prod" to apply them:`; turning `production` off is such a loosening) and
+  `:unmask` (`Type the profile name "prod" to allow it:`). Outside production they still take
+  `y`. When the start-up review was approved with the name, the second `Type the profile name
+  "P" to continue:` prompt is no longer asked (DavidGodefroid/lockkit#8).
+- **Idle timeout**: only the human's input and the backend's methods count as activity. An
+  agent polling `status` (or `hello`, `pii.list`, `pii.add`, `change.request`) no longer keeps
+  an unattended console open until `max_session` (DavidGodefroid/lockkit#10).
+- **`pii.add` audited with the peer**: the `tightened` record (and any `failed`/`unsaved`
+  record of that change) carries `peer_uid`, `peer_pid`, `peer_user` and the `pattern` added,
+  so an agent's addition is told apart from a tightening made in the files
+  (DavidGodefroid/lockkit#6).
+- A policy change of the credentials mode or Vault path ends the console session, a
+  tightening as well as an approved loosening, instead of keeping the old setting live
+  (DavidGodefroid/lockkit#7).
+- From lockkit v0.12.1: a plain restart of an approved, unchanged production profile no longer
+  asks its name again; the console records the question it waits for next to its socket, so
+  `lox attach` and lea show it.
+
 ## v0.7.0 (2026-11-01)
 
 - Each release tag bumps the `lockfile` formula of the
