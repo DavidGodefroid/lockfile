@@ -3,41 +3,45 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>lockfile — Your AI asks about the file. It never reads it.</title>
-  <meta name="description" content="lockfile lets an AI agent ask yes/no questions about a file it must never read. A human-held console runs signed, sandboxed plugins on it; the agent only ever sees 1s and 0s.">
+  <title>lockfile: your agent asks about the file, it never reads it</title>
+  <meta name="description" content="lockfile lets any AI agent ask yes/no questions about a file in S3, on SFTP or on disk. Signed, sandboxed plugins answer; the agent only gets 1s and 0s, and every plan waits for you.">
   <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f4efe4" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#16140f" media="(prefers-color-scheme: dark)">
   <link rel="canonical" href="https://davidgodefroid.github.io/lockfile/">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="lockfile">
-  <meta property="og:title" content="lockfile — Your AI asks about the file. It never reads it.">
-  <meta property="og:description" content="lockfile lets an AI agent ask yes/no questions about a file it must never read. A human-held console runs signed, sandboxed plugins on it; the agent only ever sees 1s and 0s.">
+  <meta property="og:title" content="lockfile: your agent asks about the file, it never reads it">
+  <meta property="og:description" content="lockfile lets any AI agent ask yes/no questions about a file in S3, on SFTP or on disk. Signed, sandboxed plugins answer; the agent only gets 1s and 0s, and every plan waits for you.">
   <meta property="og:url" content="https://davidgodefroid.github.io/lockfile/">
   <meta property="og:image" content="https://davidgodefroid.github.io/lockfile/assets/og.png">
   <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="lockfile — Your AI asks about the file. It never reads it.">
+  <meta property="og:image:alt" content="lockfile: your agent asks about the file. It never reads it.">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="lockfile — Your AI asks about the file. It never reads it.">
-  <meta name="twitter:description" content="lockfile lets an AI agent ask yes/no questions about a file it must never read. A human-held console runs signed, sandboxed plugins on it; the agent only ever sees 1s and 0s.">
+  <meta name="twitter:title" content="lockfile: your agent asks about the file, it never reads it">
+  <meta name="twitter:description" content="lockfile lets any AI agent ask yes/no questions about a file in S3, on SFTP or on disk. Signed, sandboxed plugins answer; the agent only gets 1s and 0s, and every plan waits for you.">
   <meta name="twitter:image" content="https://davidgodefroid.github.io/lockfile/assets/og.png">
-  <meta name="twitter:image:alt" content="lockfile — Your AI asks about the file. It never reads it.">
+  <meta name="twitter:image:alt" content="lockfile: your agent asks about the file. It never reads it.">
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-  <link rel="stylesheet" href="assets/style.css">
+  <link rel="preload" href="assets/fonts/zilla-slab-700.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/source-serif-4-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="assets/tokens.css">
+  <link rel="stylesheet" href="assets/lock-site.css">
   <script src="assets/anchors.js" defer></script>
+  <script src="assets/copy.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header">
     <div class="wrap">
-      <a class="brand" href="./"><img src="assets/logo.svg" alt="" width="32" height="32"><span class="wordmark">lock<span>file</span></span></a>
+      <a class="brand" href="./"><img src="assets/logo.svg" alt="" width="32" height="32"><span class="wordmark">lockfile</span></a>
       <nav class="site-nav" aria-label="Main">
         <ul>
-          <li><a href="./" aria-current="page">Home</a></li>
+          <li><a href="./">Home</a></li>
           <li><a href="install/">Install</a></li>
           <li><a href="how-it-works/">How it works</a></li>
           <li><a href="plugins/">Plugins</a></li>
@@ -52,50 +56,71 @@
     <div class="wrap">
 
 <section class="hero" aria-labelledby="hero-title">
-  <p class="eyebrow"><a href="install/"><span class="badge">v0.x</span> Pre-release · open source, Apache 2.0</a></p>
-  <h1 id="hero-title">Your AI asks about the file. <br><span class="key">It never reads it.</span></h1>
-  <p class="lead">Let Claude Code, Codex, Cursor or Gemini CLI check a file it must never see: the agent only ever gets 1s and 0s.</p>
-  <p class="intro">lockfile puts a <strong>human-held console</strong> between your AI agent and the files in S3, on an SFTP server or in a local directory. The agent asks fixed yes/no questions: is this file empty, does it start like a PDF, does it parse, does it have a blank page, does it look truncated? The console, running in a separate OS account, waits for <strong>your</strong> approval, fetches the file, runs signed, sandboxed plugins on it, and returns each plugin’s answer: <code>1</code>, <code>0</code>, or no answer. No byte of the file, its size, type or path ever reaches the agent.</p>
-  <div class="actions">
-    <a class="button primary" href="install/">Install</a>
-    <a class="button" href="how-it-works/">How it works</a>
-    <a class="button" href="https://github.com/DavidGodefroid/lockfile">View on GitHub</a>
+  <div class="hero-text">
+    <p class="eyebrow"><span class="badge">v0.8 pre-release</span>A Lock of the Lock&nbsp;Family · open&nbsp;source · Apache&nbsp;2.0</p>
+    <h1 id="hero-title">Your agent asks about the file. <span class="key">It never reads it.</span></h1>
+    <p class="lead">Any AI agent can ask yes/no questions about a file in S3, on SFTP or on disk. Signed, sandboxed plugins answer, and the agent only ever gets 1s and 0s.</p>
+    <div class="install">
+      <div class="install-head"><span>Install with Homebrew</span></div>
+      <pre tabindex="0" aria-label="Install commands"><code><span class="cmd">brew trust davidgodefroid/tap</span>
+<span class="cmd">brew install davidgodefroid/tap/lox davidgodefroid/tap/lockfile</span></code></pre>
+      <p class="install-note">Linux only (the plugin sandbox needs Landlock and seccomp), with Docker. Then <code>lox add lockfile</code> and <code>lox run</code>. The whole family: <code>brew install davidgodefroid/tap/lockfamily</code>.</p>
+    </div>
+    <div class="actions">
+      <a class="button primary" href="install/">Install guide</a>
+      <a class="button" href="how-it-works/">How it works</a>
+      <a class="button" href="https://github.com/DavidGodefroid/lockfile">GitHub</a>
+    </div>
+    <p class="hub-line">Part of the <a href="https://lockfamily.dev">Lock Family</a>: one hub (<code>lox run</code>) approves for every Lock.</p>
   </div>
-  <ul class="facts" aria-label="At a glance">
-    <li>Console on Linux (Landlock, seccomp)</li>
-    <li>Agent side on Linux and macOS</li>
-    <li>amd64 and arm64</li>
-    <li>S3, SFTP, local directory</li>
-    <li>Apache 2.0</li>
-  </ul>
+  <figure class="hero-aside ticket" aria-labelledby="ticket-caption">
+    <div class="ticket-face">
+      <p class="ticket-head"><span>lockfile · profile files</span><span>lox run · ticket</span></p>
+      <dl class="ticket-fields">
+        <div class="wide"><dt>Plan · 2 answers</dt><dd><span class="status asked">asked</span><code>invoices/2026/10/abc123.pdf</code><span class="note"><code>file.non-empty</code> and <code>format.is-pdf</code>, with their signed questions. Every plan waits for you.</span></dd></div>
+        <div class="wide"><dt>Answers</dt><dd><code>file.non-empty: 1</code> · <code>format.is-pdf: 0</code><span class="note">Not empty, not a PDF. No byte, name, size or type of the file.</span></dd></div>
+      </dl>
+      <p class="stamp">Approved · <kbd>y</kbd></p>
+    </div>
+    <div class="ticket-stub">
+      <p><span class="label">What the agent gets</span></p>
+      <p>One bit per plugin, or no answer. Never the file.</p>
+    </div>
+    <figcaption id="ticket-caption">A plan as you approve it in <code>lox run</code>, and all the agent gets back.</figcaption>
+  </figure>
 </section>
 
 <section class="demo-section" aria-labelledby="demo">
   <h2 id="demo" class="visually-hidden">See it run</h2>
   <figure class="demo">
-    <a class="demo-link" href="assets/demo.svg"><img src="assets/demo.svg" alt="An AI agent asks three yes/no questions about an invoice. You approve the plan in the lockfile console, signed plugins run sandboxed on the file, and only their answers, 1, 1 and 1, reach the agent." width="1200" height="640" aria-describedby="demo-caption"></a>
-    <figcaption id="demo-caption">Claude Code (left, in its own account) asks whether an invoice reported as blank is non-empty, parses as a PDF and has a blank page. The lockfile console (right, in the <code>lockfile</code> account) shows you the plan and waits for your <code>y</code>, fetches the file into the sandbox, and sends back one bit per plugin. The agent never gets the file, its name, size, type or path.</figcaption>
+    <a class="demo-link" href="assets/demo.svg"><img src="assets/demo.svg" alt="An agent asks three yes/no questions about an invoice. The plan is approved, signed plugins run sandboxed on the file, and only their answers, 1, 1 and 1, reach the agent." width="1200" height="640" aria-describedby="demo-caption"></a>
+    <figcaption id="demo-caption">An agent (here Claude Code, left, in its own account) asks three questions about an invoice. The lockfile console (right) fetches the file into the sandbox and sends back one bit per plugin. Drawn before approvals moved to lockhub: today you approve the plan in <code>lox run</code>.</figcaption>
   </figure>
 </section>
 
 <section aria-labelledby="answer">
   <h2 id="answer">What the agent gets</h2>
-  <p class="prose">One plan, two questions about one file. The agent names the key it was given and the plugins it wants; this is the whole answer:</p>
+  <p class="prose">One plan, two questions about one file. The agent names the key it was given and the plugins it wants. This is the whole answer:</p>
   <pre tabindex="0" class="term"><code>$ lockfile plan --key invoices/2026/10/abc123.pdf \
     --plugin file.non-empty --plugin format.is-pdf --run --json
 {"handle":"f_8Kq2xR","answers":[
  {"plugin":"file.non-empty","version":"1.0.0","official":true,"result":1},
  {"plugin":"format.is-pdf","version":"1.0.0","official":true,"result":0}]}</code></pre>
-  <p class="prose">The file is not empty and does not start like a PDF. <code>"result": null</code> with <code>"error": "plugin_error"</code> means the plugin gave no answer: it is <strong>not</strong> a 0. The exit code depends on the outcome only, never on an answer.</p>
+  <div class="prose">
+    <p>The file is not empty and does not start like a PDF.</p>
+    <p><code>"result": null</code> with <code>"error": "plugin_error"</code> means the plugin gave no answer: it is <strong>not</strong> a 0. The exit code depends on the outcome only, never on an answer.</p>
+  </div>
 </section>
 
 <section aria-labelledby="why">
   <h2 id="why">Why lockfile?</h2>
   <div class="prose">
-    <p>Some files must not reach a model: invoices, contracts, medical letters, anything with personal data. Yet an agent debugging a pipeline often needs to know one thing about one of them: did it arrive empty, is it a broken PDF, is a page blank? Giving the agent read access answers that and leaks everything else. lockfile answers the question and nothing else.</p>
+    <p>Some files must not reach a model: invoices, contracts, medical letters, anything with personal data.</p>
+    <p>Yet an agent debugging a pipeline often needs one fact about one of them. Did it arrive empty? Is it a broken PDF? Is a page blank?</p>
+    <p>Read access answers that and leaks everything else. lockfile answers the question and nothing else.</p>
   </div>
 <div class="table-wrap" role="region" aria-label="Agent file access compared with lockfile" tabindex="0">
-<table>
+<table class="compare">
 <caption>Agent file access compared with lockfile</caption>
 <thead><tr><th scope="col"><span class="visually-hidden">Property</span></th><th scope="col">Agent reads the file</th><th scope="col">lockfile</th></tr></thead>
 <tbody>
@@ -110,14 +135,17 @@
 </tbody>
 </table>
 </div>
-  <blockquote class="prose"><p>The agent only ever sees 1s and 0s about a file.</p></blockquote>
+  <blockquote><p>The agent only ever sees 1s and 0s about a file.</p></blockquote>
 </section>
 
 <section aria-labelledby="approve">
   <h2 id="approve">See what you approve</h2>
-  <p class="prose">Before anything is fetched, the console shows you the plan and waits. The screen holds the agent’s own request and the plugins’ signed questions, never anything about the file: at this point no source has been touched.</p>
+  <div class="prose">
+    <p>Before anything is fetched, the console draws the plan: the agent’s own request and the plugins’ signed questions. Nothing about the file is on it: no source has been touched yet.</p>
+    <p>The same screen goes to <a href="https://github.com/DavidGodefroid/lockhub">lockhub</a> as a ticket. Every lockfile plan waits there until you answer it in <code>lox run</code>.</p>
+  </div>
   <figure>
-    <pre tabindex="0" class="term"><code>╭─ SAMPLES · file plan · 2 answers ─────
+    <pre tabindex="0" class="term" aria-label="The console's screen of a plan"><code>╭─ SAMPLES · file plan · 2 answers ─────
 │ requested by uid 1000 (alice) · pid 48211 · exe /usr/local/bin/lockfile
 │ agent: check the invoice reported as blank
 │
@@ -129,17 +157,17 @@
 │   ? Does the file start like a PDF?   1 = `%PDF-` appears within the first 1024 bytes   0 = no PDF header
 │
 │ this plan reveals at most 2 answers about the file
-╰─ Approve? [y/N]</code></pre>
+╰─ pending: ticket 01J…</code></pre>
     <figcaption>On approval the console fetches the file into a private workspace, runs each plugin in its own sandbox, checks each answer and releases them together on the next answer quantum.</figcaption>
   </figure>
-  <p class="prose">On a production profile you type the profile name, not <code>y</code>. <code>n &lt;reason&gt;</code> denies; the reason is never forwarded to the agent.</p>
+  <p class="prose"><code>n</code> denies; a reason you type is never forwarded to the agent. A production profile flags its tickets, and the console’s own widenings (its policy review, a plugin added) need the profile name typed.</p>
 </section>
 
 <section aria-labelledby="highlights">
   <h2 id="highlights">Highlights</h2>
   <ul class="cards">
     <li><span class="icon" aria-hidden="true">🔢</span><h3>Only 1s and 0s</h3><p>Everything the console sends the agent comes from a closed list, checked end to end over the socket. No size, type, hash, name, listing or error text.</p></li>
-    <li><span class="icon" aria-hidden="true">👤</span><h3>Human in the loop</h3><p>Every plan is approved in a console the agent cannot drive, in an OS account it cannot read. The screen says how many answers the plan reveals.</p></li>
+    <li><span class="icon" aria-hidden="true">👤</span><h3>Human in the loop</h3><p>Every plan is a ticket you answer in <code>lox run</code>, outside the agent. The screen says how many answers the plan reveals.</p></li>
     <li><span class="icon" aria-hidden="true">✍️</span><h3>Signed questions</h3><p>Each plugin answers one question fixed in its signed manifest. No parameters: a parameter would let the agent aim the bit at the content.</p></li>
     <li><span class="icon" aria-hidden="true">🧱</span><h3>Sandboxed plugins</h3><p>Landlock, seccomp and rlimits: the file as a read-only fd 3, no path, no network, an empty environment, stdout capped at 3 bytes.</p></li>
     <li><span class="icon" aria-hidden="true">🔏</span><h3>cosign everywhere</h3><p>Plugins, the marketplace index and lockfile’s own releases are checked against keyless cosign signatures. There is no unsigned mode.</p></li>
@@ -151,51 +179,31 @@
 
 <section aria-labelledby="quick-start">
   <h2 id="quick-start">Quick start</h2>
-  <p class="prose">The shortest path is the Lock Family’s (Linux only for lockfile): install it with Homebrew, then let <a href="https://github.com/DavidGodefroid/lockhub/blob/main/docs/lox-add.md"><code>lox add lockfile</code></a> ask for your file store (S3, SFTP or a local directory), set up its lock and start its console:</p>
-  <pre tabindex="0" class="term"><code>brew trust davidgodefroid/tap                <span class="cmt"># Homebrew asks you to trust a third-party tap once</span>
-brew install davidgodefroid/tap/lockfamily   <span class="cmt"># or only this tool: brew install davidgodefroid/tap/lockfile</span>
-cd ~/projects                                 <span class="cmt"># with lea: its projects directory; with claude: the project</span>
-lox add lockfile                              <span class="cmt"># asks about the file store, sets up the lock, runs lox up</span>
-lea                                           <span class="cmt"># or: claude, then lox approve</span></code></pre>
-  <p class="prose">By hand, with Docker on Linux (a kernel with Landlock) and <a href="https://docs.sigstore.dev/cosign/system_config/installation/">cosign</a> installed:</p>
-  <pre tabindex="0" class="term"><code><span class="cmt"># 1. The launcher and the console's seccomp profile (cosign checks the release and its image)</span>
-V=vX.Y.Z
-curl -fsSLO "https://raw.githubusercontent.com/DavidGodefroid/lockfile/$V/scripts/install.sh"
-less install.sh &amp;&amp; LOCKFILE_VERSION=$V sh install.sh
-
-<span class="cmt"># 2. From the workspace: the lock's profile (.lockfile/, which lox up reviews and copies), the lock and its hub (lockhub's lox CLI)</span>
-lockfile profile add --profile samples --source local --path /srv/lockfile/samples --prefix invoices/
-lox add lockfile samples --profile samples
-lox up
-lox attach samples   <span class="cmt"># the policy review</span>
-
-<span class="cmt"># 3. The plugins, in the home of the console lox up runs; :review applies them</span>
-lockfile plugin install file.non-empty@1.0.0
+  <ol class="steps prose">
+    <li><p>Install with Homebrew (the box above), on Linux. Docker must be running.</p></li>
+    <li><p>In your project, <code>lox add lockfile</code> asks where your files are (S3, SFTP or a local directory), sets up the lock and starts its console.</p>
+      <pre tabindex="0"><code>cd your-project
+lox add lockfile</code></pre></li>
+    <li><p>Install the plugins you want. The console applies them after <code>:review</code> (<code>lox attach files</code>, where <code>files</code> is the name you gave the lock).</p>
+      <pre tabindex="0"><code>lockfile plugin install file.non-empty@1.0.0
 lockfile plugin install format.is-pdf@1.0.0
-lox attach samples   <span class="cmt"># :review</span>
-
-<span class="cmt"># 4. Wire your agent, from the project root</span>
-lockfile init claude</code></pre>
-  <p class="prose">Then ask your agent about a file by its exact key. Each plan waits for your approval on lockhub (<code>lox approve</code>).</p>
-  <p class="link-line"><a href="install/">The Docker setup, step by step</a></p>
-</section>
-
-<section aria-labelledby="family">
-  <h2 id="family">The lock family</h2>
-  <p class="prose">One idea, one console per kind of data: the agent proposes, a human-held console in a separate account holds the key and decides.</p>
-  <ul class="cards family">
-    <li><h3><a href="https://github.com/DavidGodefroid/locksql">locksql</a></h3><p>Databases. The agent writes the SQL; the console holds the credentials, weighs every statement, masks personal data and waits for your approval.</p></li>
-    <li><h3><a href="https://github.com/DavidGodefroid/lockmq">lockmq</a></h3><p>Message queues. The agent inspects your RabbitMQ brokers through a console that holds the credentials and waits for your approval.</p></li>
-    <li aria-current="true"><h3><a href="https://github.com/DavidGodefroid/lockfile">lockfile</a></h3><p>Files. The agent asks fixed yes/no questions about a file and only ever gets 1s and 0s.</p><span class="here">You are here</span></li>
-    <li><h3><a href="https://github.com/DavidGodefroid/lockhttp">lockhttp</a></h3><p>HTTP(S). Every request the agent sends goes through a proxy; reads of trusted hosts pass, anything that sends data or reaches an unknown host waits for your approval. Pre-release.</p></li>
-    <li><h3><a href="https://github.com/DavidGodefroid/lockkit">lockkit</a></h3><p>The shared framework: the separated account, the socket and its peer checks, the console, the approval screen, the audit and signed updates.</p></li>
-  </ul>
+lox attach files</code></pre></li>
+    <li><p>In a terminal of its own, outside any agent, keep <code>lox run</code> open. Every plan shows up there for your decision.</p>
+      <pre tabindex="0"><code>lox run</code></pre></li>
+    <li><p>Start your agent in the project (<code>claude</code>, <code>codex</code>, <code>gemini</code>, …) and ask about a file by its exact key.</p></li>
+  </ol>
+  <div class="prose">
+    <p><code>lox add</code> wires Claude Code. For Codex, Cursor or Gemini CLI, also run <code>lockfile init codex</code> (or <code>cursor</code>, <code>gemini</code>).</p>
+    <p class="link-line"><a href="install/">Without Homebrew, or step by step: the install guide</a></p>
+  </div>
 </section>
 
 <section aria-labelledby="limits">
   <h2 id="limits">Know the limits</h2>
   <div class="prose">
-    <p>The console is the enforcement point. Plugins answer one bit each, but a plugin whose code does not match its question is mitigated by review and signing, not prevented. A missing answer (<code>plugin_error</code>) and a failed fetch (<code>fetch_failed</code>) each carry one symbol that depends on the file. Since v0.3.0 the plugin sandbox also denies System V IPC, POSIX message queues and signals to other processes, and the console runs plugins only where no other account can see their processes in <code>/proc</code> (the host’s own accounts aside: see the security page).</p>
+    <p>The console is the enforcement point. Plugins answer one bit each, but a plugin whose code does not match its question is mitigated by review and signing, not prevented.</p>
+    <p>A missing answer (<code>plugin_error</code>) and a failed fetch (<code>fetch_failed</code>) each carry one symbol that depends on the file.</p>
+    <p>The host’s own accounts can read a running plugin’s <code>/proc</code> entries unless the host mounts <code>/proc</code> with <code>hidepid=invisible</code>.</p>
     <p class="link-line"><a href="security/">Read the security model</a></p>
   </div>
 </section>
@@ -203,16 +211,41 @@ lockfile init claude</code></pre>
     </div>
   </main>
   <footer class="site-footer">
-    <div class="wrap">
-      <ul>
-        <li><a href="https://github.com/DavidGodefroid/lockfile">Source on GitHub</a></li>
-        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/README.md">README</a></li>
-        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/usage.md">Usage guide</a></li>
-        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/security-model.md">Security model (full)</a></li>
-        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/plugin-contract.md">Plugin contract</a></li>
-      </ul>
-      <p>Pre-release (<code>v0.x</code>). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
-      <p class="family-line">Part of the lock family: <a href="https://github.com/DavidGodefroid/locksql">locksql</a> · <a href="https://github.com/DavidGodefroid/lockmq">lockmq</a> · <a href="https://github.com/DavidGodefroid/lockfile">lockfile</a> · <a href="https://github.com/DavidGodefroid/lockhttp">lockhttp</a> · <a href="https://github.com/DavidGodefroid/lockkit">lockkit</a></p>
+    <div class="wrap footer-grid">
+      <div class="footer-about">
+        <a class="brand" href="./"><img src="assets/logo.svg" alt="" width="32" height="32"><span class="wordmark">lockfile</span></a>
+        <p>Files for AI agents, in S3, on SFTP or on disk: the agent asks yes/no questions about a file it never reads, and only gets 1s and 0s.</p>
+        <p class="family-link">Part of the <a href="https://lockfamily.dev">Lock Family</a>, harness security for AI agents.</p>
+      </div>
+      <nav aria-labelledby="footer-lock">
+        <h2 id="footer-lock">lockfile</h2>
+        <ul>
+          <li><a href="https://github.com/DavidGodefroid/lockfile">Source on GitHub</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/README.md">README</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/usage.md">Usage guide</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/security-model.md">Security model</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/plugin-contract.md">Plugin contract</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/CHANGELOG.md">Changelog</a></li>
+        </ul>
+      </nav>
+      <nav class="family-strip" aria-labelledby="footer-family">
+        <h2 id="footer-family">The Lock Family</h2>
+        <ul>
+          <li data-lock="locksql"><a href="https://github.com/DavidGodefroid/locksql">locksql</a><span>SQL databases, PII masked</span></li>
+          <li data-lock="lockmq"><a href="https://github.com/DavidGodefroid/lockmq">lockmq</a><span>RabbitMQ queues</span></li>
+          <li data-lock="lockfile" aria-current="true"><a href="https://github.com/DavidGodefroid/lockfile">lockfile</a><span>Files: S3, SFTP, disk</span></li>
+          <li data-lock="lockhttp"><a href="https://github.com/DavidGodefroid/lockhttp">lockhttp</a><span>Outbound HTTP(S)</span></li>
+          <li data-lock="locklog"><a href="https://github.com/DavidGodefroid/locklog">locklog</a><span>Logs, masked search</span></li>
+          <li data-lock="lockssh"><a href="https://github.com/DavidGodefroid/lockssh">lockssh</a><span>Commands over SSH</span></li>
+          <li data-lock="lockhub"><a href="https://github.com/DavidGodefroid/lockhub">lockhub</a><span>The approval hub and <code>lox</code></span></li>
+          <li data-lock="lockkit"><a href="https://github.com/DavidGodefroid/lockkit">lockkit</a><span>The shared Go core</span></li>
+          <li data-lock="lea"><a href="https://github.com/DavidGodefroid/lea">lea</a><span>Agents in containers</span></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="wrap footer-bottom">
+      <p>Pre-release (v0.8.x). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
+      <p><a href="https://lockfamily.dev">lockfamily.dev</a> · <a href="https://github.com/DavidGodefroid/lockfamily">the family on GitHub</a></p>
     </div>
   </footer>
 </body>

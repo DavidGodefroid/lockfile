@@ -16,8 +16,10 @@ remark is the only prose.
 
 LOOP = 14.0
 END = 13.4  # everything fades out here, then the loop restarts
-C = dict(crust="#0B1120", base="#0F172A", mantle="#131C2E", s0="#1E293B", s1="#334155",
-         ov="#64748B", sub="#94A3B8", text="#E2E8F0", blue="#60A5FA", deep="#3B82F6",
+# The Lock Family's terminal: warm carbon backgrounds (lockfamily assets/tokens.css,
+# --term-bg) and its dim text; the accents stay as they were.
+C = dict(crust="#1a1814", base="#221f1a", mantle="#2a2620", s0="#38332b", s1="#4a443a",
+         ov="#8a8273", sub="#a8a090", text="#E2E8F0", blue="#60A5FA", deep="#3B82F6",
          teal="#5EEAD4", red="#F87171", green="#4ADE80", amber="#FBBF24")
 FONT = "'JetBrains Mono','SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace"
 SANS = "Inter,'Segoe UI',system-ui,-apple-system,Helvetica,Arial,sans-serif"
@@ -84,7 +86,7 @@ def label(x, y, s, col=C["ov"]):
 
 
 W, H = 1200, 640
-body.append(f'<rect width="{W}" height="{H}" rx="24" fill="{C["crust"]}"/>')
+body.append(f'<rect width="{W}" height="{H}" fill="{C["crust"]}"/>')
 
 # --- The agent's account (left) --------------------------------------------------------------
 AX, AY, AW, AH = 30, 96, 450, 444
@@ -236,7 +238,7 @@ print(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}
       f'role="img" aria-label="lockfile: an AI agent asks three yes/no questions about an invoice; '
       f'you approve the plan in the lockfile console, signed plugins run sandboxed on the file, '
       f'and only their answers, 1, 1 and 1, reach the agent.">')
-print("<title>lockfile: your AI asks about the file, it never reads it</title>")
+print("<title>lockfile: your agent asks about the file, it never reads it</title>")
 print("<style>" + "\n".join(css) +
       "\n@media (prefers-reduced-motion: reduce){*{animation-delay:-10s!important;"
       "animation-play-state:paused!important}}</style>")

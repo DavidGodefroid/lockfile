@@ -3,38 +3,42 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Install lockfile — launcher, signed Docker image</title>
-  <meta name="description" content="Install lockfile from a cosign-signed release, set up the separated console account, add a source profile, install plugins and wire your AI agent.">
+  <title>Install lockfile: Homebrew, lox add, or by hand</title>
+  <meta name="description" content="Install lockfile with Homebrew, set up a file store with lox add, install signed plugins and wire any MCP client. Linux, Docker, cosign.">
   <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f4efe4" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#16140f" media="(prefers-color-scheme: dark)">
   <link rel="canonical" href="https://davidgodefroid.github.io/lockfile/install/">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="lockfile">
-  <meta property="og:title" content="Install lockfile — launcher, signed Docker image">
-  <meta property="og:description" content="Install lockfile from a cosign-signed release, set up the separated console account, add a source profile, install plugins and wire your AI agent.">
+  <meta property="og:title" content="Install lockfile: Homebrew, lox add, or by hand">
+  <meta property="og:description" content="Install lockfile with Homebrew, set up a file store with lox add, install signed plugins and wire any MCP client. Linux, Docker, cosign.">
   <meta property="og:url" content="https://davidgodefroid.github.io/lockfile/install/">
   <meta property="og:image" content="https://davidgodefroid.github.io/lockfile/assets/og.png">
   <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="lockfile — Your AI asks about the file. It never reads it.">
+  <meta property="og:image:alt" content="lockfile: your agent asks about the file. It never reads it.">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Install lockfile — launcher, signed Docker image">
-  <meta name="twitter:description" content="Install lockfile from a cosign-signed release, set up the separated console account, add a source profile, install plugins and wire your AI agent.">
+  <meta name="twitter:title" content="Install lockfile: Homebrew, lox add, or by hand">
+  <meta name="twitter:description" content="Install lockfile with Homebrew, set up a file store with lox add, install signed plugins and wire any MCP client. Linux, Docker, cosign.">
   <meta name="twitter:image" content="https://davidgodefroid.github.io/lockfile/assets/og.png">
-  <meta name="twitter:image:alt" content="lockfile — Your AI asks about the file. It never reads it.">
+  <meta name="twitter:image:alt" content="lockfile: your agent asks about the file. It never reads it.">
   <link rel="icon" href="../assets/logo.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
-  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="preload" href="../assets/fonts/zilla-slab-700.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/source-serif-4-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/tokens.css">
+  <link rel="stylesheet" href="../assets/lock-site.css">
   <script src="../assets/anchors.js" defer></script>
+  <script src="../assets/copy.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header">
     <div class="wrap">
-      <a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="32" height="32"><span class="wordmark">lock<span>file</span></span></a>
+      <a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="32" height="32"><span class="wordmark">lockfile</span></a>
       <nav class="site-nav" aria-label="Main">
         <ul>
           <li><a href="../">Home</a></li>
@@ -51,34 +55,57 @@
   <main id="main" tabindex="-1">
     <div class="wrap">
 
+<p class="eyebrow">Install</p>
 <h1>Install lockfile</h1>
 <div class="prose">
-  <p class="lead">lockfile runs in Docker. On your machine: Docker, one <code>lockfile</code> command (a launcher that runs every command in the signed release image, with the account it needs) and the seccomp profile of the console’s container.</p>
-  <p>The image holds the separated setup: the console as <code>lockfile</code>, the agent as <code>agent</code> in <code>lockfile-clients</code>, the socket directory shared through the <code>lockfile-run</code> volume, the console’s configuration in the workspace’s <code>.lockfile/</code> (which <code>lox up</code> reviews and copies to it, read-only), its state in the home volume <code>lox up</code> gives it. Its images are published for amd64 and arm64 and signed with cosign by lockfile’s release workflow.</p>
-  <p>The shortest path is the Lock Family’s (Linux only for lockfile): <code>brew trust davidgodefroid/tap</code> (Homebrew asks you to trust a third-party tap once), then <code>brew install davidgodefroid/tap/lockfamily</code> (or <code>brew install davidgodefroid/tap/lockfile</code> for this launcher alone), then <code>lox add lockfile</code> (with lea, in its projects directory; with <code>claude</code>, in your project), which asks for your file store and sets up its lock (<a href="https://github.com/DavidGodefroid/lockhub/blob/main/docs/lox-add.md">lox add</a>); if lea already runs, <code>lea stop</code>, then <code>lea</code> brings it in. The steps below do it by hand.</p>
+  <p class="lead">lockfile runs in Docker on Linux. You install one <code>lockfile</code> command, a launcher that runs every command in the signed release image, and the seccomp profile of the console’s container.</p>
 </div>
+
+<section aria-labelledby="homebrew">
+  <h2 id="homebrew">With Homebrew</h2>
+  <div class="install">
+    <div class="install-head"><span>Install with Homebrew</span></div>
+    <pre tabindex="0" aria-label="Install commands"><code><span class="cmd">brew trust davidgodefroid/tap</span>
+<span class="cmd">brew install davidgodefroid/tap/lox davidgodefroid/tap/lockfile</span></code></pre>
+    <p class="install-note">Homebrew asks you to trust a third-party tap once. The whole family instead: <code>brew install davidgodefroid/tap/lockfamily</code>.</p>
+  </div>
+  <div class="prose">
+    <p>The <code>lockfile</code> formula is Linux only. It installs the same launcher and seccomp profile as the install script, pinned to the same image digests. <code>lox</code> is <a href="https://github.com/DavidGodefroid/lockhub">lockhub</a>’s CLI.</p>
+    <p>Then, in your project (with lea: in its projects directory), let <a href="https://github.com/DavidGodefroid/lockhub/blob/main/docs/lox-add.md"><code>lox add lockfile</code></a> ask for your file store, set up the lock and start its console:</p>
+  </div>
+  <pre tabindex="0"><code>lox add lockfile    <span class="cmt"># S3, SFTP or a local directory; the lock is named files by default</span>
+lox run             <span class="cmt"># in a terminal of its own: serves the decisions</span></code></pre>
+  <p class="prose">If lea already runs, <code>lea stop</code>, then <code>lea</code> brings the new lock in. Then install the <a href="#plugins">plugins</a>.</p>
+</section>
 
 <section aria-labelledby="requirements">
   <h2 id="requirements">Requirements</h2>
   <ul class="prose">
-    <li><strong>Docker on Linux</strong>, on a kernel with Landlock and seccomp, which sandbox the plugins (Landlock also denies TCP from kernel ABI 4). <code>lockfile doctor</code> reports what the kernel offers; without them, plans are refused with <code>E_SANDBOX_UNAVAILABLE</code>. On Windows, WSL 2 with Docker Desktop.</li>
+    <li><strong>Docker on Linux</strong>, on a kernel with Landlock and seccomp, which sandbox the plugins (Landlock also denies TCP from kernel ABI 4). <code>lockfile doctor</code> reports what the kernel offers. Without them, plans are refused with <code>E_SANDBOX_UNAVAILABLE</code>.</li>
+    <li><strong>On Windows</strong>, WSL 2 with Docker Desktop.</li>
     <li><strong><a href="https://docs.sigstore.dev/cosign/system_config/installation/">cosign</a></strong> on <code>PATH</code>, for the install script and <code>lockfile update</code>. Without it nothing is installed: there is no unsigned mode. The image has its own cosign for the plugins.</li>
   </ul>
 </section>
 
 <section aria-labelledby="launcher">
-  <h2 id="launcher">1. The launcher</h2>
+  <h2 id="launcher">By hand: the launcher</h2>
   <pre tabindex="0" class="term"><code>V=vX.Y.Z
 curl -fsSLO "https://raw.githubusercontent.com/DavidGodefroid/lockfile/$V/scripts/install.sh"
 less install.sh                     <span class="cmt"># read it first</span>
 LOCKFILE_VERSION=$V sh install.sh</code></pre>
-  <p class="prose">It checks the signatures of <code>checksums.txt</code> and of the images against lockfile’s release workflow run on that exact tag, then the archive against <code>checksums.txt</code>, and installs <code>/usr/local/bin/lockfile</code> and <code>/usr/local/share/lockfile/seccomp.json</code>, root-owned, with <code>sudo</code> if needed. The launcher runs the image by its verified digest. <code>lockfile version</code> prints the launcher’s and the image’s versions.</p>
-  <p class="prose">The launcher runs <code>console</code> as <code>lockfile</code>, confined under the seccomp profile; <code>profile</code>, <code>plugin</code>, <code>marketplace</code>, <code>audit</code>, <code>forget</code> and <code>doctor</code> as <code>lockfile</code> on its home volume; <code>init</code> and <code>doctor --fix</code> as you; the agent’s commands as <code>agent</code> with the socket volume only. <a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/docker.md#what-runs-where">What runs where</a>.</p>
+  <div class="prose">
+    <p>The script checks the signatures of <code>checksums.txt</code> and of the images against lockfile’s release workflow run on that exact tag. Then it checks the archive against <code>checksums.txt</code>.</p>
+    <p>It installs <code>/usr/local/bin/lockfile</code> and <code>/usr/local/share/lockfile/seccomp.json</code>, root-owned, with <code>sudo</code> if needed. The launcher runs the image by its verified digest; <code>lockfile version</code> prints both versions.</p>
+    <p>Each command runs with the account it needs. <code>console</code> runs as <code>lockfile</code> under the seccomp profile. <code>init</code> and <code>doctor --fix</code> run as you. The agent’s commands run as <code>agent</code>, with the socket volume only. <a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/docker.md#what-runs-where">What runs where</a>.</p>
+  </div>
 </section>
 
 <section aria-labelledby="profile">
-  <h2 id="profile">2. A source profile (console account)</h2>
-  <p class="prose">Profiles live in the workspace’s <code>.lockfile/config.toml</code>, yours: <code>lox up</code> reviews it and copies it, read-only, to the console’s <code>~/.config/lockfile</code>. <code>lockfile profile add</code>, run from the workspace, appends one, validated:</p>
+  <h2 id="profile">A source profile</h2>
+  <div class="prose">
+    <p>Profiles live in the workspace’s <code>.lockfile/config.toml</code>, which is yours. When the lock starts, lockhub reviews it and copies it, read-only, to the console’s <code>~/.config/lockfile</code>.</p>
+    <p><code>lockfile profile add</code>, run from the workspace, appends one, validated:</p>
+  </div>
   <pre tabindex="0" class="term"><code><span class="cmt"># S3 (or an S3-compatible endpoint), credentials from Vault, production</span>
 lockfile profile add --profile docs --source s3 --bucket documents --region eu-west-1 --prefix invoices/ \
   --credentials vault --vault-path secret/data/lockfile/docs --production
@@ -95,70 +122,106 @@ bucket = "documents"
 region = "eu-west-1"
 endpoint = ""                 <span class="cmt"># S3-compatible server; https:// (http:// only for localhost)</span>
 prefix = "invoices/"          <span class="cmt"># keys outside the prefix are refused</span>
-credentials = "vault"         <span class="cmt"># ask | keychain | vault</span>
+credentials = "vault"         <span class="cmt"># ask | vault</span>
 vault_path = "secret/data/lockfile/docs"
-production = true             <span class="cmt"># the profile name is typed for every approval</span>
+production = true             <span class="cmt"># tickets flagged production; widenings need the name typed</span>
 max_object_bytes = "50MiB"    <span class="cmt"># larger objects are not fetched</span>
 max_plugins_per_handle = 16   <span class="cmt"># answers revealed about one fetched file, at most</span>
 handle_ttl = "30m"            <span class="cmt"># a fetched file is deleted after this</span>
 answer_quantum = "5s"         <span class="cmt"># results leave the console only on multiples of this</span></code></pre>
-  <p class="prose">No file ever holds a secret: it is typed at console start (<code>ask</code>), read from the console account’s keychain, or read from Vault. <code>lockfile forget --profile P</code> deletes a keychain secret. The full list of keys is in the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/usage.md#profiles-console-account">usage guide</a>.</p>
+  <div class="prose">
+    <p>No file ever holds a secret. It is typed at console start (<code>ask</code>) or read from Vault (<code>vault</code>).</p>
+    <p>The full list of keys is in the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/usage.md#profiles-console-account">usage guide</a>.</p>
+  </div>
 </section>
 
 <section aria-labelledby="console">
-  <h2 id="console">3. The console, with its hub</h2>
-  <pre tabindex="0" class="term"><code>lox add lockfile samples --profile samples
-lox up
-lox attach samples   <span class="cmt"># the policy review (detach: Ctrl-P Ctrl-Q)</span>
-lox approve          <span class="cmt"># the agent’s plans</span></code></pre>
-  <p class="prose">The console runs attached to lockhub only: lockhub’s <code>lox</code> CLI declares the lock and starts it with its hub (<code>lockfile console</code> on its own refuses to start). It runs in a container of its own, under the shipped seccomp profile (never <code>seccomp=unconfined</code>), without capabilities, on a read-only root. It checks the isolation, asks for the secret, connects and serves the profile’s socket. Every plan waits for your approval on lockhub.</p>
+  <h2 id="console">The console, with its hub</h2>
+  <pre tabindex="0" class="term"><code>lox add lockfile samples --profile samples   <span class="cmt"># declares the lock in lockfamily.yaml</span>
+lox run                                      <span class="cmt"># its own terminal: starts the hub and the lock, serves decisions</span>
+lox attach samples                           <span class="cmt"># the policy review (detach: Ctrl-P Ctrl-Q)</span></code></pre>
+  <div class="prose">
+    <p>The console runs attached to lockhub only: <code>lockfile console</code> on its own refuses to start. lockhub’s <code>lox</code> declares the lock and starts it with its hub.</p>
+    <p>It runs in a container of its own, under the shipped seccomp profile (never <code>seccomp=unconfined</code>), without capabilities, on a read-only root.</p>
+    <p>It checks the isolation, asks for the secret, connects and serves the profile’s socket. Every plan waits for your answer in <code>lox run</code>.</p>
+  </div>
 </section>
 
 <section aria-labelledby="plugins">
-  <h2 id="plugins">4. Plugins (the console’s home)</h2>
+  <h2 id="plugins">Plugins</h2>
   <pre tabindex="0" class="term"><code>lockfile plugin install file.non-empty@1.0.0     <span class="cmt"># exact versions only; signatures checked with cosign</span>
 lockfile plugin install format.is-pdf@1.0.0
 lockfile plugin install pdf.parses@1.0.0
 lockfile plugin list
-lox attach samples   <span class="cmt"># :review applies them (detach: Ctrl-P Ctrl-Q)</span></code></pre>
-  <p class="prose">They go in the home of the console <code>lox up</code> runs, so install them after <code>lox up</code>; with several lockfile locks, <code>--instance NAME</code> picks one. A running console applies a new plugin after <code>:review</code>.</p>
-  <p class="prose">The official marketplace’s signer is pinned in the binary. See <a href="../plugins/">Plugins</a> for the catalogue, updates, unofficial marketplaces and how to write your own.</p>
+lox attach samples                               <span class="cmt"># :review applies them (detach: Ctrl-P Ctrl-Q)</span></code></pre>
+  <div class="prose">
+    <p>Plugins go in the home of the running console, so install them once it has started. With several lockfile locks, <code>--instance NAME</code> picks one. A running console applies a new plugin after <code>:review</code>.</p>
+    <p>The official marketplace’s signer is pinned in the binary. <a href="../plugins/">Plugins</a> covers the catalogue, updates, unofficial marketplaces and writing your own.</p>
+  </div>
 </section>
 
 <section aria-labelledby="wire">
-  <h2 id="wire">5. Wire your agent (your account)</h2>
-  <pre tabindex="0" class="term"><code>lockfile init claude                <span class="cmt"># or codex, cursor, gemini; this project</span>
-lockfile init claude --user         <span class="cmt"># every project of this account</span>
+  <h2 id="wire">Wire your agent</h2>
+  <pre tabindex="0" class="term"><code>lockfile init codex                 <span class="cmt"># or claude, cursor, gemini; this project</span>
+lockfile init codex --user          <span class="cmt"># every project of this account</span>
 lockfile doctor --fix               <span class="cmt"># wires the installed agents not wired yet (asks; --yes does not)</span></code></pre>
-  <p class="prose"><code>lockfile mcp</code>, the MCP command it writes, runs through the launcher in a throwaway container. Claude Code may call <code>lockfile_status</code>, <code>lockfile_sources</code> and <code>lockfile_plugins</code> without a prompt; plans and runs always go through Claude Code’s permission prompt and the console.</p>
+  <div class="prose">
+    <p><code>lockfile init</code> writes the MCP command, <code>lockfile mcp</code>, which runs through the launcher in a throwaway container. Any MCP client works; <code>init</code> wires Claude Code, Codex, Cursor and Gemini CLI.</p>
+    <p>In Claude Code, <code>lockfile_status</code>, <code>lockfile_sources</code> and <code>lockfile_plugins</code> run without a prompt; plans and runs go through its permission prompt. Whatever the agent, every plan still waits for your answer in <code>lox run</code>.</p>
+  </div>
 </section>
 
 <section aria-labelledby="update">
   <h2 id="update">Upgrade</h2>
   <pre tabindex="0" class="term"><code>lockfile update [vX.Y.Z]</code></pre>
-  <p class="prose">Checks the release’s and the image’s signatures as the install script does, replaces the launcher and the seccomp profile, then pulls the image. Restart the console afterwards; the volumes keep its state.</p>
+  <p class="prose">It checks the release’s and the image’s signatures as the install script does, replaces the launcher and the seccomp profile, then pulls the image. Restart the console afterwards; the volumes keep its state. With Homebrew: <code>brew upgrade</code>.</p>
 </section>
 
 <section aria-labelledby="build">
   <h2 id="build">Build</h2>
   <pre tabindex="0" class="term"><code>docker build -t lockfile https://github.com/DavidGodefroid/lockfile.git
 LOCKFILE_IMAGE=lockfile lockfile version</code></pre>
-  <p class="prose">Your own image; from a clone, <code>sh scripts/lockfile …</code> runs it with the clone’s <code>seccomp.json</code>.</p>
+  <p class="prose">Your own image. From a clone, <code>sh scripts/lockfile …</code> runs it with the clone’s <code>seccomp.json</code>.</p>
 </section>
 
     </div>
   </main>
   <footer class="site-footer">
-    <div class="wrap">
-      <ul>
-        <li><a href="https://github.com/DavidGodefroid/lockfile">Source on GitHub</a></li>
-        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/README.md">README</a></li>
-        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/usage.md">Usage guide</a></li>
-        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/security-model.md">Security model (full)</a></li>
-        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/plugin-contract.md">Plugin contract</a></li>
-      </ul>
-      <p>Pre-release (<code>v0.x</code>). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
-      <p class="family-line">Part of the lock family: <a href="https://github.com/DavidGodefroid/locksql">locksql</a> · <a href="https://github.com/DavidGodefroid/lockmq">lockmq</a> · <a href="https://github.com/DavidGodefroid/lockfile">lockfile</a> · <a href="https://github.com/DavidGodefroid/lockhttp">lockhttp</a> · <a href="https://github.com/DavidGodefroid/lockkit">lockkit</a></p>
+    <div class="wrap footer-grid">
+      <div class="footer-about">
+        <a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="32" height="32"><span class="wordmark">lockfile</span></a>
+        <p>Files for AI agents, in S3, on SFTP or on disk: the agent asks yes/no questions about a file it never reads, and only gets 1s and 0s.</p>
+        <p class="family-link">Part of the <a href="https://lockfamily.dev">Lock Family</a>, harness security for AI agents.</p>
+      </div>
+      <nav aria-labelledby="footer-lock">
+        <h2 id="footer-lock">lockfile</h2>
+        <ul>
+          <li><a href="https://github.com/DavidGodefroid/lockfile">Source on GitHub</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/README.md">README</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/usage.md">Usage guide</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/security-model.md">Security model</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/plugin-contract.md">Plugin contract</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/CHANGELOG.md">Changelog</a></li>
+        </ul>
+      </nav>
+      <nav class="family-strip" aria-labelledby="footer-family">
+        <h2 id="footer-family">The Lock Family</h2>
+        <ul>
+          <li data-lock="locksql"><a href="https://github.com/DavidGodefroid/locksql">locksql</a><span>SQL databases, PII masked</span></li>
+          <li data-lock="lockmq"><a href="https://github.com/DavidGodefroid/lockmq">lockmq</a><span>RabbitMQ queues</span></li>
+          <li data-lock="lockfile" aria-current="true"><a href="https://github.com/DavidGodefroid/lockfile">lockfile</a><span>Files: S3, SFTP, disk</span></li>
+          <li data-lock="lockhttp"><a href="https://github.com/DavidGodefroid/lockhttp">lockhttp</a><span>Outbound HTTP(S)</span></li>
+          <li data-lock="locklog"><a href="https://github.com/DavidGodefroid/locklog">locklog</a><span>Logs, masked search</span></li>
+          <li data-lock="lockssh"><a href="https://github.com/DavidGodefroid/lockssh">lockssh</a><span>Commands over SSH</span></li>
+          <li data-lock="lockhub"><a href="https://github.com/DavidGodefroid/lockhub">lockhub</a><span>The approval hub and <code>lox</code></span></li>
+          <li data-lock="lockkit"><a href="https://github.com/DavidGodefroid/lockkit">lockkit</a><span>The shared Go core</span></li>
+          <li data-lock="lea"><a href="https://github.com/DavidGodefroid/lea">lea</a><span>Agents in containers</span></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="wrap footer-bottom">
+      <p>Pre-release (v0.8.x). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
+      <p><a href="https://lockfamily.dev">lockfamily.dev</a> · <a href="https://github.com/DavidGodefroid/lockfamily">the family on GitHub</a></p>
     </div>
   </footer>
 </body>

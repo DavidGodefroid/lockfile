@@ -3,38 +3,42 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>lockfile FAQ — short answers</title>
-  <meta name="description" content="Short answers about lockfile: sources, platforms, agents, what the agent sees, plugins, timing, the audit log and what it does not do yet.">
+  <title>lockfile FAQ: short answers</title>
+  <meta name="description" content="Short answers about lockfile: sources, platforms, AI agents, what the agent sees, plugins, timing, the audit log and what it does not do yet.">
   <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f4efe4" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#16140f" media="(prefers-color-scheme: dark)">
   <link rel="canonical" href="https://davidgodefroid.github.io/lockfile/faq/">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="lockfile">
-  <meta property="og:title" content="lockfile FAQ — short answers">
-  <meta property="og:description" content="Short answers about lockfile: sources, platforms, agents, what the agent sees, plugins, timing, the audit log and what it does not do yet.">
+  <meta property="og:title" content="lockfile FAQ: short answers">
+  <meta property="og:description" content="Short answers about lockfile: sources, platforms, AI agents, what the agent sees, plugins, timing, the audit log and what it does not do yet.">
   <meta property="og:url" content="https://davidgodefroid.github.io/lockfile/faq/">
   <meta property="og:image" content="https://davidgodefroid.github.io/lockfile/assets/og.png">
   <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="lockfile — Your AI asks about the file. It never reads it.">
+  <meta property="og:image:alt" content="lockfile: your agent asks about the file. It never reads it.">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="lockfile FAQ — short answers">
-  <meta name="twitter:description" content="Short answers about lockfile: sources, platforms, agents, what the agent sees, plugins, timing, the audit log and what it does not do yet.">
+  <meta name="twitter:title" content="lockfile FAQ: short answers">
+  <meta name="twitter:description" content="Short answers about lockfile: sources, platforms, AI agents, what the agent sees, plugins, timing, the audit log and what it does not do yet.">
   <meta name="twitter:image" content="https://davidgodefroid.github.io/lockfile/assets/og.png">
-  <meta name="twitter:image:alt" content="lockfile — Your AI asks about the file. It never reads it.">
+  <meta name="twitter:image:alt" content="lockfile: your agent asks about the file. It never reads it.">
   <link rel="icon" href="../assets/logo.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
-  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="preload" href="../assets/fonts/zilla-slab-700.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/source-serif-4-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/tokens.css">
+  <link rel="stylesheet" href="../assets/lock-site.css">
   <script src="../assets/anchors.js" defer></script>
+  <script src="../assets/copy.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header">
     <div class="wrap">
-      <a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="32" height="32"><span class="wordmark">lock<span>file</span></span></a>
+      <a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="32" height="32"><span class="wordmark">lockfile</span></a>
       <nav class="site-nav" aria-label="Main">
         <ul>
           <li><a href="../">Home</a></li>
@@ -51,24 +55,28 @@
   <main id="main" tabindex="-1">
     <div class="wrap">
 
+<p class="eyebrow">FAQ</p>
 <h1>Frequently asked questions</h1>
 <p class="lead prose">Short answers, each drawn from the README and the docs. For anything not covered here, see the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/usage.md">usage guide</a>.</p>
 <div class="faq prose">
 <section aria-labelledby="sources">
   <h2 id="sources">Where can the files be?</h2>
-  <p>In an S3 bucket (or an S3-compatible server), on an SFTP server, or in a local directory of the console’s machine. Each profile names one source, and keys outside its <code>prefix</code> are refused. <a href="../install/#profile">Source profiles</a>.</p>
+  <p>In an S3 bucket (or an S3-compatible server), on an SFTP server, or in a local directory of the console’s machine.</p>
+  <p>Each profile names one source, and keys outside its <code>prefix</code> are refused. <a href="../install/#profile">Source profiles</a>.</p>
 </section>
 <section aria-labelledby="os">
   <h2 id="os">Which operating systems?</h2>
-  <p>The console needs Linux, since Landlock and seccomp sandbox the plugins. The agent side (CLI and MCP server) also runs on macOS. Binaries are built for amd64 and arm64. <a href="../install/#requirements">Requirements</a>.</p>
+  <p>The console needs Linux, with Docker: Landlock and seccomp sandbox the plugins. On Windows, WSL 2 with Docker Desktop. The agent side (CLI and MCP server) also runs on macOS. Builds are for amd64 and arm64. <a href="../install/#requirements">Requirements</a>.</p>
 </section>
 <section aria-labelledby="agents">
   <h2 id="agents">Which AI agents does it work with?</h2>
-  <p>Claude Code, Codex, Cursor and Gemini CLI, wired by <code>lockfile init</code>. An agent talks to the console through the MCP server (<code>lockfile mcp</code>, seven tools) or through the <code>lockfile</code> CLI from a shell; every command takes <code>--json</code>.</p>
+  <p>Any MCP client. <code>lockfile init</code> wires Claude Code, Codex, Cursor and Gemini CLI.</p>
+  <p>An agent talks to the console through the MCP server (<code>lockfile mcp</code>, seven tools) or through the <code>lockfile</code> CLI from a shell; every command takes <code>--json</code>.</p>
 </section>
 <section aria-labelledby="sees">
   <h2 id="sees">What exactly does the agent see?</h2>
-  <p>Per plugin: <code>1</code>, <code>0</code>, or no answer (<code>result: null</code> with <code>plugin_error</code>). Around that, only items from closed lists: random handles and plan ids, plugin metadata from signed manifests, profile names, approval outcomes, refusal codes and the console state. Never the file’s bytes, size, type, hash, name or a listing. <a href="../security/#visible">The exhaustive list</a>.</p>
+  <p>Per plugin: <code>1</code>, <code>0</code>, or no answer (<code>result: null</code> with <code>plugin_error</code>).</p>
+  <p>Around that, only items from closed lists: random handles and plan ids, plugin metadata from signed manifests, profile names, approval outcomes, refusal codes and the console state. Never the file’s bytes, size, type, hash, name or a listing. <a href="../security/#visible">The exhaustive list</a>.</p>
 </section>
 <section aria-labelledby="key">
   <h2 id="key">How does the agent know which file to ask about?</h2>
@@ -76,15 +84,18 @@
 </section>
 <section aria-labelledby="null">
   <h2 id="null">Is “no answer” the same as 0?</h2>
-  <p>No. <code>plugin_error</code> means the plugin failed on the file (a crash, a timeout, a wrong output) and gave no answer. Treat it as unknown. The precise cause is in the audit, which only the console account reads.</p>
+  <p>No. <code>plugin_error</code> means the plugin failed on the file (a crash, a timeout, a wrong output) and gave no answer. Treat it as unknown.</p>
+  <p>The precise cause is in the audit, which only the console account reads.</p>
 </section>
 <section aria-labelledby="self-approve">
   <h2 id="self-approve">Can the agent approve its own plans, or turn approval off?</h2>
-  <p>No. Plans are approved only by you, on lockhub (<code>lox approve</code>), and the console’s own decisions only at its terminal, in a separate account and session; no socket method approves, installs a plugin or loosens the policy. An unofficial plugin is never auto-approved.</p>
+  <p>No. Every plan is a ticket that you answer in <code>lox run</code> (or <code>lox approve</code>), outside the agent. The console’s own decisions stay at its terminal, in a separate account and container.</p>
+  <p>No socket method approves, installs a plugin or loosens the policy. An unofficial plugin is never auto-approved.</p>
 </section>
 <section aria-labelledby="ask-anything">
   <h2 id="ask-anything">Can a plugin answer any question, like “is the amount above 10 000”?</h2>
-  <p>The official marketplace refuses such questions at review: questions are about format, structure, integrity or rendering, never about what the content means or says, and plugins take no parameters. An unofficial marketplace may not apply the same review, which is why its plugins are flagged in red and never auto-approved. <a href="../plugins/">Plugins</a>.</p>
+  <p>The official marketplace refuses such questions at review. Questions are about format, structure, integrity or rendering, never about what the content means or says, and plugins take no parameters.</p>
+  <p>An unofficial marketplace may not apply the same review. That is why its plugins are flagged in red and never auto-approved. <a href="../plugins/">Plugins</a>.</p>
 </section>
 <section aria-labelledby="many">
   <h2 id="many">Could many questions add up to reading the file?</h2>
@@ -96,7 +107,8 @@
 </section>
 <section aria-labelledby="where">
   <h2 id="where">Where does the file go, and for how long?</h2>
-  <p>Into a random <code>0700</code> workspace in the console account, deleted on <code>lockfile release</code>, after <code>handle_ttl</code> (30 minutes by default), on console exit, and swept at start. Deletion is an unlink, not a secure erase.</p>
+  <p>Into a random <code>0700</code> workspace in the console account. It is deleted on <code>lockfile release</code>, after <code>handle_ttl</code> (30 minutes by default), on console exit, and swept at start.</p>
+  <p>Deletion is an unlink, not a secure erase.</p>
 </section>
 <section aria-labelledby="audit">
   <h2 id="audit">What is logged?</h2>
@@ -108,27 +120,53 @@
 </section>
 <section aria-labelledby="not-yet">
   <h2 id="not-yet">What does lockfile not do yet?</h2>
-  <p>There is no onboarding wizard (<code>setup</code>), no macOS console, and no public-key trust roots for unofficial marketplaces (keyless signers only). These are on the roadmap, not in the release.</p>
+  <p>There is no onboarding wizard of its own (<code>setup</code>; <code>lox add lockfile</code> asks the questions), no macOS console, and no public-key trust roots for unofficial marketplaces (keyless signers only). These are on the roadmap, not in the release.</p>
 </section>
 <section aria-labelledby="family">
-  <h2 id="family">How does it relate to locksql and lockmq?</h2>
-  <p>They are siblings built on the same idea and the same framework, <a href="https://github.com/DavidGodefroid/lockkit">lockkit</a>: <a href="https://github.com/DavidGodefroid/locksql">locksql</a> for databases, <a href="https://github.com/DavidGodefroid/lockmq">lockmq</a> for message queues, lockfile for files, <a href="https://github.com/DavidGodefroid/lockhttp">lockhttp</a> for outbound HTTP(S). Each runs its own console in its own account.</p>
+  <h2 id="family">How does it relate to the other Locks?</h2>
+  <p>They are siblings in the <a href="https://lockfamily.dev">Lock Family</a>, built on the same idea and the same Go core, <a href="https://github.com/DavidGodefroid/lockkit">lockkit</a>. Each runs its own console in its own account.</p>
+  <p><a href="https://github.com/DavidGodefroid/locksql">locksql</a> covers SQL databases, <a href="https://github.com/DavidGodefroid/lockmq">lockmq</a> RabbitMQ, <a href="https://github.com/DavidGodefroid/lockhttp">lockhttp</a> outbound HTTP(S), <a href="https://github.com/DavidGodefroid/locklog">locklog</a> logs and <a href="https://github.com/DavidGodefroid/lockssh">lockssh</a> commands over SSH. One hub, <a href="https://github.com/DavidGodefroid/lockhub">lockhub</a>, approves for all of them.</p>
 </section>
 </div>
 
     </div>
   </main>
   <footer class="site-footer">
-    <div class="wrap">
-      <ul>
-        <li><a href="https://github.com/DavidGodefroid/lockfile">Source on GitHub</a></li>
-        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/README.md">README</a></li>
-        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/usage.md">Usage guide</a></li>
-        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/security-model.md">Security model (full)</a></li>
-        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/plugin-contract.md">Plugin contract</a></li>
-      </ul>
-      <p>Pre-release (<code>v0.x</code>). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
-      <p class="family-line">Part of the lock family: <a href="https://github.com/DavidGodefroid/locksql">locksql</a> · <a href="https://github.com/DavidGodefroid/lockmq">lockmq</a> · <a href="https://github.com/DavidGodefroid/lockfile">lockfile</a> · <a href="https://github.com/DavidGodefroid/lockhttp">lockhttp</a> · <a href="https://github.com/DavidGodefroid/lockkit">lockkit</a></p>
+    <div class="wrap footer-grid">
+      <div class="footer-about">
+        <a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="32" height="32"><span class="wordmark">lockfile</span></a>
+        <p>Files for AI agents, in S3, on SFTP or on disk: the agent asks yes/no questions about a file it never reads, and only gets 1s and 0s.</p>
+        <p class="family-link">Part of the <a href="https://lockfamily.dev">Lock Family</a>, harness security for AI agents.</p>
+      </div>
+      <nav aria-labelledby="footer-lock">
+        <h2 id="footer-lock">lockfile</h2>
+        <ul>
+          <li><a href="https://github.com/DavidGodefroid/lockfile">Source on GitHub</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/README.md">README</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/usage.md">Usage guide</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/security-model.md">Security model</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/plugin-contract.md">Plugin contract</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/CHANGELOG.md">Changelog</a></li>
+        </ul>
+      </nav>
+      <nav class="family-strip" aria-labelledby="footer-family">
+        <h2 id="footer-family">The Lock Family</h2>
+        <ul>
+          <li data-lock="locksql"><a href="https://github.com/DavidGodefroid/locksql">locksql</a><span>SQL databases, PII masked</span></li>
+          <li data-lock="lockmq"><a href="https://github.com/DavidGodefroid/lockmq">lockmq</a><span>RabbitMQ queues</span></li>
+          <li data-lock="lockfile" aria-current="true"><a href="https://github.com/DavidGodefroid/lockfile">lockfile</a><span>Files: S3, SFTP, disk</span></li>
+          <li data-lock="lockhttp"><a href="https://github.com/DavidGodefroid/lockhttp">lockhttp</a><span>Outbound HTTP(S)</span></li>
+          <li data-lock="locklog"><a href="https://github.com/DavidGodefroid/locklog">locklog</a><span>Logs, masked search</span></li>
+          <li data-lock="lockssh"><a href="https://github.com/DavidGodefroid/lockssh">lockssh</a><span>Commands over SSH</span></li>
+          <li data-lock="lockhub"><a href="https://github.com/DavidGodefroid/lockhub">lockhub</a><span>The approval hub and <code>lox</code></span></li>
+          <li data-lock="lockkit"><a href="https://github.com/DavidGodefroid/lockkit">lockkit</a><span>The shared Go core</span></li>
+          <li data-lock="lea"><a href="https://github.com/DavidGodefroid/lea">lea</a><span>Agents in containers</span></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="wrap footer-bottom">
+      <p>Pre-release (v0.8.x). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
+      <p><a href="https://lockfamily.dev">lockfamily.dev</a> · <a href="https://github.com/DavidGodefroid/lockfamily">the family on GitHub</a></p>
     </div>
   </footer>
 </body>

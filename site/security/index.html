@@ -3,38 +3,42 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>lockfile security model — the agent only ever sees 1s and 0s</title>
-  <meta name="description" content="The boundaries lockfile enforces, the exhaustive list of what the agent can see, the side channels and the residual risks.">
+  <title>lockfile security model: the agent only sees 1s and 0s</title>
+  <meta name="description" content="lockfile's security model: the boundaries and what enforces them, the exhaustive list of what the agent can see, side channels, data at rest and residual risks.">
   <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f4efe4" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#16140f" media="(prefers-color-scheme: dark)">
   <link rel="canonical" href="https://davidgodefroid.github.io/lockfile/security/">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="lockfile">
-  <meta property="og:title" content="lockfile security model — the agent only ever sees 1s and 0s">
-  <meta property="og:description" content="The boundaries lockfile enforces, the exhaustive list of what the agent can see, the side channels and the residual risks.">
+  <meta property="og:title" content="lockfile security model: the agent only sees 1s and 0s">
+  <meta property="og:description" content="lockfile's security model: the boundaries and what enforces them, the exhaustive list of what the agent can see, side channels, data at rest and residual risks.">
   <meta property="og:url" content="https://davidgodefroid.github.io/lockfile/security/">
   <meta property="og:image" content="https://davidgodefroid.github.io/lockfile/assets/og.png">
   <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="lockfile — Your AI asks about the file. It never reads it.">
+  <meta property="og:image:alt" content="lockfile: your agent asks about the file. It never reads it.">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="lockfile security model — the agent only ever sees 1s and 0s">
-  <meta name="twitter:description" content="The boundaries lockfile enforces, the exhaustive list of what the agent can see, the side channels and the residual risks.">
+  <meta name="twitter:title" content="lockfile security model: the agent only sees 1s and 0s">
+  <meta name="twitter:description" content="lockfile's security model: the boundaries and what enforces them, the exhaustive list of what the agent can see, side channels, data at rest and residual risks.">
   <meta name="twitter:image" content="https://davidgodefroid.github.io/lockfile/assets/og.png">
-  <meta name="twitter:image:alt" content="lockfile — Your AI asks about the file. It never reads it.">
+  <meta name="twitter:image:alt" content="lockfile: your agent asks about the file. It never reads it.">
   <link rel="icon" href="../assets/logo.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
-  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="preload" href="../assets/fonts/zilla-slab-700.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/source-serif-4-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/tokens.css">
+  <link rel="stylesheet" href="../assets/lock-site.css">
   <script src="../assets/anchors.js" defer></script>
+  <script src="../assets/copy.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header">
     <div class="wrap">
-      <a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="32" height="32"><span class="wordmark">lock<span>file</span></span></a>
+      <a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="32" height="32"><span class="wordmark">lockfile</span></a>
       <nav class="site-nav" aria-label="Main">
         <ul>
           <li><a href="../">Home</a></li>
@@ -51,10 +55,12 @@
   <main id="main" tabindex="-1">
     <div class="wrap">
 
+<p class="eyebrow">Security</p>
 <h1>Security model</h1>
 <div class="prose">
   <p class="lead">The rule: the agent only ever sees 1s and 0s about a file.</p>
-  <p>The human approves every plan in a console the agent cannot drive, in an account the agent cannot read. Skills, rules and MCP tool descriptions only guide the agent; the console’s checks are the guarantee. This page summarises the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/security-model.md">full security model</a>.</p>
+  <p>You approve every plan in <code>lox run</code>, a terminal outside the agent. The console runs in an account and a container the agent cannot read or drive.</p>
+  <p>Skills, rules and MCP tool descriptions only guide the agent; the console’s checks are the guarantee. This page summarises the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/security-model.md">full security model</a>.</p>
 </div>
 
 <section aria-labelledby="boundaries">
@@ -65,7 +71,7 @@
   <thead><tr><th scope="col">Boundary</th><th scope="col">Enforced by</th></tr></thead>
   <tbody>
   <tr><td>The agent cannot read the file, the credentials, the plugins or the audit</td><td>a separate OS account <code>lockfile</code> (home <code>0700</code>); <code>lockfile doctor</code> checks from the agent’s side that opening it fails</td></tr>
-  <tr><td>The agent cannot drive the console</td><td>lockkit’s isolation checks: the console runs in a container of its own, as its own account, on its container’s terminal, which <code>lox up</code> starts and <code>lox attach</code> reaches; X11 refused, relays refused. Residual: whoever runs <code>docker</code> commands can attach or exec into it (<a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/docker.md#what-docker-does-and-does-not-separate">what Docker does and does not separate</a>)</td></tr>
+  <tr><td>The agent cannot drive the console</td><td>lockkit’s isolation checks: the console runs in a container of its own, as its own account, on its container’s terminal, which lockhub’s <code>lox</code> starts and <code>lox attach</code> reaches; X11 refused, relays refused. Residual: whoever runs <code>docker</code> commands can attach or exec into it (<a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/docker.md#what-docker-does-and-does-not-separate">what Docker does and does not separate</a>)</td></tr>
   <tr><td>Only the clients group reaches the console</td><td>socket directory <code>/run/lockfile</code> (<code>2750</code>, setgid group <code>lockfile-clients</code>), socket <code>0660</code>, kernel peer credentials checked on every connection</td></tr>
   <tr><td>The agent cannot replace what the console runs</td><td>the console runs the release image by its cosign-verified digest; the launcher <code>/usr/local/bin/lockfile</code> and its seccomp profile are owned by root</td></tr>
   <tr><td>A plugin cannot read anything but its input, nor talk to the network</td><td>Landlock (execute and read its own binary only; TCP denied with ABI ≥ 4), seccomp (no sockets, <code>ptrace</code>, <code>mount</code>, <code>bpf</code>, <code>keyctl</code>, <code>execveat</code> and <code>memfd_create</code> (only its own binary executes, by Landlock), System V IPC, POSIX message queues, signals to other processes including through a descriptor owner, shared anonymous memory), rlimits, empty environment, input as a read-only fd 3, stdout capped at 3 bytes, stderr discarded; no other account in the console’s pid namespace sees the plugins’ processes in <code>/proc</code> (see the <a href="#sandbox-hardening">sandbox hardening</a>)</td></tr>
@@ -97,14 +103,19 @@
   </tbody>
   </table>
   </div>
-  <p class="prose"><strong>Never sent:</strong> size, media type, sha256, key listings, file or path names, page or byte counts, library or OS error text, per-plugin timing, progress during a run, stderr. The client also refuses to forward any console text it does not recognise: an unknown error becomes <code>console error</code>.</p>
+  <div class="prose">
+    <p><strong>Never sent:</strong> size, media type, sha256, key listings, file or path names, page or byte counts, library or OS error text, per-plugin timing, progress during a run, stderr.</p>
+    <p>The client also refuses to forward any console text it does not recognise: an unknown error becomes <code>console error</code>.</p>
+  </div>
 </section>
 
 <section aria-labelledby="side-channels">
   <h2 id="side-channels">Side channels</h2>
   <ul class="prose">
     <li><strong>Timing.</strong> A run’s response leaves the console only at the next multiple of <code>answer_quantum</code> (default 5 s) after the run started; a fetch failure after approval too. Residual: a plan that takes longer than one quantum shows it took longer.</li>
-    <li><strong>The console window.</strong> At desktop security level 1 the agent’s account can read the console’s window. It shows the agent’s own request, the plugin metadata and the outcome codes; causes, sizes and hashes go to the audit only (a plan’s content sha256 and size, or that it could not be fetched, also go to the hub’s masked screen for you, never to the window). Residual: the start-up lines show the profile’s location, and a reason you type with a denial (<code>n &lt;reason&gt;</code>) is echoed in the window: do not type file details there.</li>
+    <li><strong>The console window.</strong> At desktop security level 1 the agent’s account can read the console’s window. It shows the agent’s own request, the plugin metadata and the outcome codes. Causes, sizes and hashes go to the audit only.</li>
+    <li><strong>The hub’s screen.</strong> A plan’s content sha256 and size, or that it could not be fetched, also go to the hub’s masked screen for you, never to the console window.</li>
+    <li><strong>What the window still shows.</strong> Residual: the start-up lines show the profile’s location, and a reason you type with a denial is echoed in the window. Do not type file details there.</li>
     <li><strong>Exit codes</strong> depend on the outcome only, never on an answer.</li>
   </ul>
 </section>
@@ -112,7 +123,7 @@
 <section aria-labelledby="at-rest">
   <h2 id="at-rest">Data at rest</h2>
   <ul class="prose">
-    <li><strong>Fetched files</strong> live in a random <code>0700</code> workspace in the console account, deleted on <code>release</code>, on handle expiry, on console exit, and swept at start. Deletion is an unlink, not a secure erase.</li>
+    <li><strong>Fetched files</strong> live in a random <code>0700</code> workspace in the console account. They are deleted on <code>release</code>, on handle expiry, on console exit, and swept at start. Deletion is an unlink, not a secure erase.</li>
     <li><strong>Credentials</strong>: the S3 SDK keeps the secret access key in the console’s memory for the session; core dumps are disabled.</li>
     <li><strong>The audit log</strong> (<code>~lockfile/.local/state/lockfile/audit.log</code>, <code>0600</code>) is the one place file metadata exists: key, size, sha256, fetch cause, each plugin’s precise outcome, stderr byte count. Never file bytes. <code>lockfile audit</code> reads it, in the console account only.</li>
   </ul>
@@ -121,12 +132,16 @@
 <section aria-labelledby="sandbox-hardening">
   <h2 id="sandbox-hardening">Sandbox hardening (since v0.3.0)</h2>
   <div class="prose">
-    <p>“The agent only ever sees 1s and 0s” is the design goal and what the wire carries. A review of the v0.2.0 sandbox found side channels a plugin could use to pass more than its bit to another process on the machine. Since v0.3.0:</p>
+    <p>“The agent only ever sees 1s and 0s” is the design goal and what the wire carries.</p>
+    <p>A review of the v0.2.0 sandbox found side channels a plugin could use to pass more than its bit to another process on the machine. Since v0.3.0:</p>
     <ul>
       <li>System V IPC (<code>shm*</code>, <code>msg*</code>, <code>sem*</code>) and POSIX message queues (<code>mq_*</code>) are denied to plugins by seccomp;</li>
       <li>signals to any process but the plugin itself are denied, including through a descriptor owner (<code>fcntl</code> <code>F_SETOWN</code>/<code>F_SETSIG</code>, <code>ioctl</code> <code>FIOSETOWN</code>/<code>SIOCSPGRP</code>), whatever the Landlock ABI;</li>
-      <li>a running plugin’s <code>/proc</code> entries (command line, thread names, memory counters), which it writes itself, are kept from other accounts: the console runs plugins only where no other account can see their processes in <code>/proc</code>. On a host, <code>/proc</code> mounted with <code>hidepid=invisible</code>; in the release container, which Docker cannot mount so, a pid namespace of its own, not the host’s, that lists no process of an account other than root and the console’s, under a seccomp filter. Checked at start, when a plan arrives and just before it runs; refused otherwise (<code>proc_not_hidden</code>), and reported by <code>lockfile doctor</code>.</li>
+      <li>a running plugin’s <code>/proc</code> entries (command line, thread names, memory counters), which it writes itself, are kept from other accounts.</li>
     </ul>
+    <p>For the last one, the console runs plugins only where no other account can see their processes in <code>/proc</code>. On a host, that is <code>/proc</code> mounted with <code>hidepid=invisible</code>.</p>
+    <p>In the release container, which Docker cannot mount so, it is a pid namespace of its own that lists no process of an account other than root and the console’s, under a seccomp filter.</p>
+    <p>This is checked at start, when a plan arrives and just before it runs, and refused otherwise (<code>proc_not_hidden</code>). <code>lockfile doctor</code> reports it.</p>
     <p>Residual: the host’s pid namespace lists every container’s processes, so the host’s own accounts can read a plugin’s entries unless the host’s <code>/proc</code> has <code>hidepid=invisible</code>. Whoever has Docker on the host is outside the boundary anyway.</p>
   </div>
 </section>
@@ -134,7 +149,7 @@
 <section class="limits" aria-labelledby="residual">
   <h2 id="residual">Residual risks</h2>
   <ul class="prose">
-    <li>A plugin whose code does not match its question (it lies, or answers a content question under a structural name) is mitigated by review, build from reviewed source, signing and the unofficial-marketplace warnings; it is not prevented.</li>
+    <li>A plugin whose code does not match its question (it lies, or answers a content question under a structural name) is mitigated by review, build from reviewed source, signing and the unofficial-marketplace warnings. It is not prevented.</li>
     <li>Many plugins over one file combine bits: bounded by <code>max_plugins_per_handle</code> and by the per-plan approval that states how many answers the plan reveals.</li>
     <li>A question can itself be about content (“is the amount above 10 000?”): the official marketplace’s review refuses such questions; an unofficial marketplace may not.</li>
     <li><code>fetch_failed</code> and <code>plugin_error</code> each carry one symbol that depends on the file.</li>
@@ -154,16 +169,41 @@
     </div>
   </main>
   <footer class="site-footer">
-    <div class="wrap">
-      <ul>
-        <li><a href="https://github.com/DavidGodefroid/lockfile">Source on GitHub</a></li>
-        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/README.md">README</a></li>
-        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/usage.md">Usage guide</a></li>
-        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/security-model.md">Security model (full)</a></li>
-        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/plugin-contract.md">Plugin contract</a></li>
-      </ul>
-      <p>Pre-release (<code>v0.x</code>). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
-      <p class="family-line">Part of the lock family: <a href="https://github.com/DavidGodefroid/locksql">locksql</a> · <a href="https://github.com/DavidGodefroid/lockmq">lockmq</a> · <a href="https://github.com/DavidGodefroid/lockfile">lockfile</a> · <a href="https://github.com/DavidGodefroid/lockhttp">lockhttp</a> · <a href="https://github.com/DavidGodefroid/lockkit">lockkit</a></p>
+    <div class="wrap footer-grid">
+      <div class="footer-about">
+        <a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="32" height="32"><span class="wordmark">lockfile</span></a>
+        <p>Files for AI agents, in S3, on SFTP or on disk: the agent asks yes/no questions about a file it never reads, and only gets 1s and 0s.</p>
+        <p class="family-link">Part of the <a href="https://lockfamily.dev">Lock Family</a>, harness security for AI agents.</p>
+      </div>
+      <nav aria-labelledby="footer-lock">
+        <h2 id="footer-lock">lockfile</h2>
+        <ul>
+          <li><a href="https://github.com/DavidGodefroid/lockfile">Source on GitHub</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/README.md">README</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/usage.md">Usage guide</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/security-model.md">Security model</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/plugin-contract.md">Plugin contract</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/CHANGELOG.md">Changelog</a></li>
+        </ul>
+      </nav>
+      <nav class="family-strip" aria-labelledby="footer-family">
+        <h2 id="footer-family">The Lock Family</h2>
+        <ul>
+          <li data-lock="locksql"><a href="https://github.com/DavidGodefroid/locksql">locksql</a><span>SQL databases, PII masked</span></li>
+          <li data-lock="lockmq"><a href="https://github.com/DavidGodefroid/lockmq">lockmq</a><span>RabbitMQ queues</span></li>
+          <li data-lock="lockfile" aria-current="true"><a href="https://github.com/DavidGodefroid/lockfile">lockfile</a><span>Files: S3, SFTP, disk</span></li>
+          <li data-lock="lockhttp"><a href="https://github.com/DavidGodefroid/lockhttp">lockhttp</a><span>Outbound HTTP(S)</span></li>
+          <li data-lock="locklog"><a href="https://github.com/DavidGodefroid/locklog">locklog</a><span>Logs, masked search</span></li>
+          <li data-lock="lockssh"><a href="https://github.com/DavidGodefroid/lockssh">lockssh</a><span>Commands over SSH</span></li>
+          <li data-lock="lockhub"><a href="https://github.com/DavidGodefroid/lockhub">lockhub</a><span>The approval hub and <code>lox</code></span></li>
+          <li data-lock="lockkit"><a href="https://github.com/DavidGodefroid/lockkit">lockkit</a><span>The shared Go core</span></li>
+          <li data-lock="lea"><a href="https://github.com/DavidGodefroid/lea">lea</a><span>Agents in containers</span></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="wrap footer-bottom">
+      <p>Pre-release (v0.8.x). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
+      <p><a href="https://lockfamily.dev">lockfamily.dev</a> · <a href="https://github.com/DavidGodefroid/lockfamily">the family on GitHub</a></p>
     </div>
   </footer>
 </body>
