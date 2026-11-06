@@ -33,8 +33,10 @@
 
 ---
 
-lockfile lets an AI agent ask **yes/no questions about a file it must never
-read**: is this invoice empty, a PDF, does it parse, does it have a blank page,
+A Lock of the [Lock Family](https://github.com/DavidGodefroid/lockfamily),
+harness security for AI agents: lockfile lets an AI agent ask **yes/no
+questions about a file it must never read**: is this invoice empty, a PDF,
+does it parse, does it have a blank page,
 does it look truncated? A **human-held console**, running in a separate OS
 account, fetches the file from S3, SFTP or a local directory, runs signed,
 sandboxed plugins on it, and returns only each plugin's answer: `1`, `0`, or
