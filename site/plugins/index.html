@@ -3,38 +3,42 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>lockfile plugins — one signed question, one bit</title>
-  <meta name="description" content="The official lockfile plugin marketplace, the 13 questions it answers about files and PDFs, unofficial marketplaces, and how to write a plugin.">
+  <title>lockfile plugins: one signed yes/no question each</title>
+  <meta name="description" content="lockfile plugins answer one signed yes/no question about a file: the official marketplace, installing and updating, unofficial marketplaces, and writing your own.">
   <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f4efe4" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#16140f" media="(prefers-color-scheme: dark)">
   <link rel="canonical" href="https://davidgodefroid.github.io/lockfile/plugins/">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="lockfile">
-  <meta property="og:title" content="lockfile plugins — one signed question, one bit">
-  <meta property="og:description" content="The official lockfile plugin marketplace, the 13 questions it answers about files and PDFs, unofficial marketplaces, and how to write a plugin.">
+  <meta property="og:title" content="lockfile plugins: one signed yes/no question each">
+  <meta property="og:description" content="lockfile plugins answer one signed yes/no question about a file: the official marketplace, installing and updating, unofficial marketplaces, and writing your own.">
   <meta property="og:url" content="https://davidgodefroid.github.io/lockfile/plugins/">
   <meta property="og:image" content="https://davidgodefroid.github.io/lockfile/assets/og.png">
   <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="lockfile — Your AI asks about the file. It never reads it.">
+  <meta property="og:image:alt" content="lockfile: your agent asks about the file. It never reads it.">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="lockfile plugins — one signed question, one bit">
-  <meta name="twitter:description" content="The official lockfile plugin marketplace, the 13 questions it answers about files and PDFs, unofficial marketplaces, and how to write a plugin.">
+  <meta name="twitter:title" content="lockfile plugins: one signed yes/no question each">
+  <meta name="twitter:description" content="lockfile plugins answer one signed yes/no question about a file: the official marketplace, installing and updating, unofficial marketplaces, and writing your own.">
   <meta name="twitter:image" content="https://davidgodefroid.github.io/lockfile/assets/og.png">
-  <meta name="twitter:image:alt" content="lockfile — Your AI asks about the file. It never reads it.">
+  <meta name="twitter:image:alt" content="lockfile: your agent asks about the file. It never reads it.">
   <link rel="icon" href="../assets/logo.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
-  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="preload" href="../assets/fonts/zilla-slab-700.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/source-serif-4-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/tokens.css">
+  <link rel="stylesheet" href="../assets/lock-site.css">
   <script src="../assets/anchors.js" defer></script>
+  <script src="../assets/copy.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header">
     <div class="wrap">
-      <a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="32" height="32"><span class="wordmark">lock<span>file</span></span></a>
+      <a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="32" height="32"><span class="wordmark">lockfile</span></a>
       <nav class="site-nav" aria-label="Main">
         <ul>
           <li><a href="../">Home</a></li>
@@ -51,15 +55,20 @@
   <main id="main" tabindex="-1">
     <div class="wrap">
 
+<p class="eyebrow">Plugins</p>
 <h1>Plugins</h1>
 <div class="prose">
   <p class="lead">A plugin answers one yes/no question about one file, fixed in its signed manifest. The only thing that leaves it is <code>1</code> or <code>0</code>.</p>
-  <p>Questions are about format, structure, integrity or rendering, <strong>never about what the content means or says</strong>. Plugins take no parameters: with one bit of output, a parameter is the way to aim that bit at the content (“does page 2 contain X?”). A variant is another plugin, with its own question and its own review.</p>
+  <p>Questions are about format, structure, integrity or rendering, <strong>never about what the content means or says</strong>.</p>
+  <p>Plugins take no parameters. With one bit of output, a parameter is the way to aim that bit at the content (“does page 2 contain X?”). A variant is another plugin, with its own question and its own review.</p>
 </div>
 
 <section aria-labelledby="official">
   <h2 id="official">The official marketplace</h2>
-  <p class="prose">The <a href="https://github.com/DavidGodefroid/lockfile-marketplace">lockfile-marketplace</a> repository holds the official plugins, one Go module each, with the SDK and the conformance harness they are tested with. Its signer is pinned in the lockfile binary. Its source holds these 13 plugins, all at version <code>1.0.0</code>:</p>
+  <div class="prose">
+    <p>The <a href="https://github.com/DavidGodefroid/lockfile-marketplace">lockfile-marketplace</a> repository holds the official plugins, one Go module each, with the SDK and the conformance harness they are tested with. Its signer is pinned in the lockfile binary.</p>
+    <p>Its source holds these 13 plugins, all at version <code>1.0.0</code>:</p>
+  </div>
   <div class="table-wrap" role="region" aria-label="Official plugins" tabindex="0">
   <table>
   <caption>Official plugins</caption>
@@ -81,17 +90,23 @@
   </tbody>
   </table>
   </div>
-  <p class="prose">The exact wording of each question and of both answers is in the plugin’s <code>plugin.toml</code>, and <code>lockfile plugins</code> shows it to the agent. A plugin becomes installable once its tag is released and listed in the marketplace’s signed index.</p>
+  <div class="prose">
+    <p>The exact wording of each question and of both answers is in the plugin’s <code>plugin.toml</code>, and <code>lockfile plugins</code> shows it to the agent.</p>
+    <p>A plugin becomes installable once its tag is released and listed in the marketplace’s signed index.</p>
+  </div>
 </section>
 
 <section aria-labelledby="manage">
-  <h2 id="manage">Installing and updating (console account)</h2>
+  <h2 id="manage">Installing and updating</h2>
   <pre tabindex="0" class="term"><code>lockfile plugin install pdf.parses@1.0.0        <span class="cmt"># exact versions only; signatures checked with cosign</span>
 lockfile plugin update pdf.parses@1.1.0         <span class="cmt"># shows the manifest diff; a changed question needs the name typed</span>
 lockfile plugin list
 lockfile plugin verify [NAME]
 lockfile plugin remove NAME</code></pre>
-  <p class="prose">An install checks the signed index, then the signed manifest and binary and their hashes. A running console treats a newly installed plugin as a policy loosening and applies it only after <code>:review</code>.</p>
+  <div class="prose">
+    <p>An install checks the signed index, then the signed manifest and binary and their hashes. These commands run in the console account’s home, through the launcher.</p>
+    <p>A running console treats a newly installed plugin as a policy loosening, and applies it only after <code>:review</code>.</p>
+  </div>
 </section>
 
 <section aria-labelledby="unofficial">
@@ -100,7 +115,10 @@ lockfile plugin remove NAME</code></pre>
   --identity-regexp '^https://github\.com/acme/lockfile-plugins/\.github/workflows/release\.yml@refs/tags/'
 lockfile marketplace list
 lockfile marketplace remove acme</code></pre>
-  <p class="prose">An unofficial marketplace publishes the same index format, signed keyless by its own CI identity. It needs its name typed when added, is flagged in red on every approval screen and in every agent result (<code>warning: unofficial_marketplace</code>), and is never auto-approved. Keyless signers only: <code>--public-key</code> is refused.</p>
+  <div class="prose">
+    <p>An unofficial marketplace publishes the same index format, signed keyless by its own CI identity. Keyless signers only: <code>--public-key</code> is refused.</p>
+    <p>It needs its name typed when added. It is flagged in red on every approval screen and in every agent result (<code>warning: unofficial_marketplace</code>), and is never auto-approved.</p>
+  </div>
 </section>
 
 <section aria-labelledby="write">
@@ -140,27 +158,62 @@ limits = { cpu_s = 20, memory = "512MiB", timeout_s = 30 }</code></pre>
 
   <h3 id="answer">The answer</h3>
   <div class="prose">
-    <p>Write exactly <code>1</code> or <code>0</code> on stdout (one trailing newline tolerated) <strong>and</strong> exit with status 0. Anything else is a failure: other or more bytes, nothing, a non-zero exit, a signal, the timeout, an rlimit. Every failure reaches the agent as <code>plugin_error</code> with <code>result: null</code>, which is <strong>not</strong> a 0; the precise cause goes to the audit only. Exit-code-only answers are not accepted: a panic must never read as an answer.</p>
+    <p>Write exactly <code>1</code> or <code>0</code> on stdout (one trailing newline tolerated) <strong>and</strong> exit with status 0.</p>
+    <p>Anything else is a failure: other or more bytes, nothing, a non-zero exit, a signal, the timeout, an rlimit. Every failure reaches the agent as <code>plugin_error</code> with <code>result: null</code>, which is <strong>not</strong> a 0. The precise cause goes to the audit only.</p>
+    <p>Exit-code-only answers are not accepted: a panic must never read as an answer.</p>
     <p>The marketplace’s <code>sdk/</code> module gives the fd-3 reader, the answer helpers and a test harness that runs a plugin under the same sandbox on synthetic fixtures.</p>
   </div>
 
   <h3 id="publish">Publishing</h3>
-  <p class="prose">Official plugins go through the marketplace pipeline: a pull request with synthetic fixtures for both answers (no real document is ever committed), CI (vet, staticcheck, govulncheck, contract tests under the sandbox, fuzzing, an import check), a maintainer’s review against <code>REVIEW.md</code>, then a tag <code>&lt;name&gt;/vX.Y.Z</code> whose release workflow builds, hashes and signs the binaries and the manifest with cosign keyless, and a signed <code>index.json</code>.</p>
+  <div class="prose">
+    <p>Official plugins go through the marketplace pipeline:</p>
+    <ul>
+      <li>a pull request with synthetic fixtures for both answers (no real document is ever committed);</li>
+      <li>CI: vet, staticcheck, govulncheck, contract tests under the sandbox, fuzzing, an import check;</li>
+      <li>a maintainer’s review against <code>REVIEW.md</code>;</li>
+      <li>a tag <code>&lt;name&gt;/vX.Y.Z</code>, whose release workflow builds, hashes and signs the binaries and the manifest with cosign keyless, and a signed <code>index.json</code>.</li>
+    </ul>
+  </div>
 </section>
 
     </div>
   </main>
   <footer class="site-footer">
-    <div class="wrap">
-      <ul>
-        <li><a href="https://github.com/DavidGodefroid/lockfile">Source on GitHub</a></li>
-        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/README.md">README</a></li>
-        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/usage.md">Usage guide</a></li>
-        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/security-model.md">Security model (full)</a></li>
-        <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/plugin-contract.md">Plugin contract</a></li>
-      </ul>
-      <p>Pre-release (<code>v0.x</code>). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
-      <p class="family-line">Part of the lock family: <a href="https://github.com/DavidGodefroid/locksql">locksql</a> · <a href="https://github.com/DavidGodefroid/lockmq">lockmq</a> · <a href="https://github.com/DavidGodefroid/lockfile">lockfile</a> · <a href="https://github.com/DavidGodefroid/lockhttp">lockhttp</a> · <a href="https://github.com/DavidGodefroid/lockkit">lockkit</a></p>
+    <div class="wrap footer-grid">
+      <div class="footer-about">
+        <a class="brand" href="../"><img src="../assets/logo.svg" alt="" width="32" height="32"><span class="wordmark">lockfile</span></a>
+        <p>Files for AI agents, in S3, on SFTP or on disk: the agent asks yes/no questions about a file it never reads, and only gets 1s and 0s.</p>
+        <p class="family-link">Part of the <a href="https://lockfamily.dev">Lock Family</a>, harness security for AI agents.</p>
+      </div>
+      <nav aria-labelledby="footer-lock">
+        <h2 id="footer-lock">lockfile</h2>
+        <ul>
+          <li><a href="https://github.com/DavidGodefroid/lockfile">Source on GitHub</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/README.md">README</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/usage.md">Usage guide</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/security-model.md">Security model</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/plugin-contract.md">Plugin contract</a></li>
+          <li><a href="https://github.com/DavidGodefroid/lockfile/blob/main/CHANGELOG.md">Changelog</a></li>
+        </ul>
+      </nav>
+      <nav class="family-strip" aria-labelledby="footer-family">
+        <h2 id="footer-family">The Lock Family</h2>
+        <ul>
+          <li data-lock="locksql"><a href="https://github.com/DavidGodefroid/locksql">locksql</a><span>SQL databases, PII masked</span></li>
+          <li data-lock="lockmq"><a href="https://github.com/DavidGodefroid/lockmq">lockmq</a><span>RabbitMQ queues</span></li>
+          <li data-lock="lockfile" aria-current="true"><a href="https://github.com/DavidGodefroid/lockfile">lockfile</a><span>Files: S3, SFTP, disk</span></li>
+          <li data-lock="lockhttp"><a href="https://github.com/DavidGodefroid/lockhttp">lockhttp</a><span>Outbound HTTP(S)</span></li>
+          <li data-lock="locklog"><a href="https://github.com/DavidGodefroid/locklog">locklog</a><span>Logs, masked search</span></li>
+          <li data-lock="lockssh"><a href="https://github.com/DavidGodefroid/lockssh">lockssh</a><span>Commands over SSH</span></li>
+          <li data-lock="lockhub"><a href="https://github.com/DavidGodefroid/lockhub">lockhub</a><span>The approval hub and <code>lox</code></span></li>
+          <li data-lock="lockkit"><a href="https://github.com/DavidGodefroid/lockkit">lockkit</a><span>The shared Go core</span></li>
+          <li data-lock="lea"><a href="https://github.com/DavidGodefroid/lea">lea</a><span>Agents in containers</span></li>
+        </ul>
+      </nav>
+    </div>
+    <div class="wrap footer-bottom">
+      <p>Pre-release (v0.8.x). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
+      <p><a href="https://lockfamily.dev">lockfamily.dev</a> · <a href="https://github.com/DavidGodefroid/lockfamily">the family on GitHub</a></p>
     </div>
   </footer>
 </body>
