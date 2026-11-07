@@ -12,25 +12,25 @@
 #                    as you, with the workspace's profile directory
 #                    (<workspace>/.lockfile, the nearest directory up from
 #                    here that holds .lockfamily/, else this one; profile
-#                    add --project DIR names another): `lox up`
+#                    add --project DIR names another): `lox run`
 #                    reviews it and copies it, read-only, to the console's
 #                    ~/.config/lockfile
 #   plugin, audit, forget, doctor
 #                    as the console account, with the home volume of the
-#                    console `lox up` runs (--instance NAME picks one of
+#                    console `lox run` starts (--instance NAME picks one of
 #                    several) and its reviewed profile copy, read-only
-#                    (doctor also under the seccomp profile, with lox up's
-#                    socket volume, read-only, as below; without lox up it
+#                    (doctor also under the seccomp profile, with lox run's
+#                    socket volume, read-only, as below; without lox run it
 #                    runs without them and says why)
 #   init, doctor --fix
 #                    as you, with your home and the project: they write
 #                    your agents' files
 #   mcp, status, sources, plugins, plan, run, answers, release
 #                    as the agent account (agent), with the socket volume of
-#                    the workspace's lockfile lock that `lox up` runs (read
+#                    the workspace's lockfile lock that `lox run` starts (read
 #                    from .lockfamily/up.json and checked with Docker;
 #                    --instance NAME picks one of several), read-only, and
-#                    nothing else; none without lox up (doctor then runs
+#                    nothing else; none without lox run (doctor then runs
 #                    without one and says why)
 #   anything else    as the agent account, with no volume: help...
 #
@@ -312,21 +312,21 @@ update() {
 	exec docker pull "$image"
 }
 
-# The agent commands look for lox up's state from here up.
+# The agent commands look for lox run's state from here up.
 here="$(pwd -P)"
 
-# Locks started by `lox up` (lockhub's docs/lox-up.md): `lox up` runs each
+# Locks started by `lox run` (lockhub's docs/lox-run.md): `lox run` starts each
 # lock's console under compose, with its socket in the volume
 # lockfamily-<sha256 of the workspace, 8 hex>_<instance>-run, and names it
 # in <workspace>/.lockfamily/up.json. The agent commands mount that volume
 # read-only on /run/lockfile (connecting needs no write), never a fixed one:
-# the consoles run hub-attached only, started by `lox up`. The checks are
+# the consoles run hub-attached only, started by `lox run`. The checks are
 # those of lea, which mounts the same volumes for its agents: up.json is
 # the user's own regular file (no link) that no one else can write, in a
 # .lockfamily of the same kind, of this very workspace; then Docker must
-# confirm the volume: lox up's labels (project, role socket, instance,
-# type, workspace), and every container that mounts it is lox up's (run
-# by compose from lox up's own state directory) or mounts it read-only.
+# confirm the volume: lox run's labels (project, role socket, instance,
+# type, workspace), and every container that mounts it is lox run's (run
+# by compose from lox run's own state directory) or mounts it read-only.
 # These checks catch mistakes and files others can write; an agent that
 # runs as you with Docker access gets past any of them (docs/launcher.md).
 # up.json only names the instance:
@@ -347,7 +347,7 @@ private() {
 		[ -z "$(find "$1" -prune \( -perm -0020 -o -perm -0002 \) -print)" ]
 }
 
-# sha8 S: the first 8 hex digits of the sha256 of S (lox up's project).
+# sha8 S: the first 8 hex digits of the sha256 of S (lox run's project).
 sha8() {
 	if command -v sha256sum >/dev/null 2>&1; then
 		printf '%s' "$1" | sha256sum
@@ -356,7 +356,7 @@ sha8() {
 	fi | awk '{ print substr($1, 1, 8) }'
 }
 
-# lockup_parse < up.json: lox up's state (version 1, written by Go's
+# lockup_parse < up.json: lox run's state (version 1, written by Go's
 # json.MarshalIndent with a two-space indent): a line Pproject, a line
 # Wworkspace, then a line Lname socket_volume client_gid per lock of type
 # lockfile. Fails on anything else, or on a value it would have to unescape.
@@ -409,7 +409,7 @@ lockup_parse() {
 }
 
 # lockup_volume [INSTANCE]: the socket volume of the lockfile lock (INSTANCE,
-# the only one without it) that `lox up` runs for the workspace of this
+# the only one without it) that `lox run` starts for the workspace of this
 # directory, in $lockup_vol; when there is none the agents can trust, why,
 # with what to do, in $lockup_why.
 lockup_volume() {
@@ -432,34 +432,34 @@ lockup_volume() {
 		lu_d=$(dirname "$lu_d")
 	done
 	if [ -z "$lu_ws" ]; then
-		lockup_why="no .lockfamily/up.json in $here or above it: start the workspace's locks with \`lox up\` (lockhub), then run lockfile from the workspace"
+		lockup_why="no .lockfamily/up.json in $here or above it: start the workspace's locks with \`lox run\` (lockhub), then run lockfile from the workspace"
 		return 1
 	fi
 	lu_lf=$lu_ws/.lockfamily
 	lu_f=$lu_lf/up.json
 	if [ -L "$lu_lf" ] || [ ! -d "$lu_lf" ]; then
-		lockup_why="$lu_lf is not a directory (a link?): it is not lox up's; run \`lox up\`"
+		lockup_why="$lu_lf is not a directory (a link?): it is not lox run's; run \`lox run\`"
 		return 1
 	fi
 	if ! private "$lu_lf"; then
-		lockup_why="$lu_lf is not yours, or others than you may write it: lockfile trusts none of it (chmod go-w it, then run \`lox up\`)"
+		lockup_why="$lu_lf is not yours, or others than you may write it: lockfile trusts none of it (chmod go-w it, then run \`lox run\`)"
 		return 1
 	fi
 	if [ -L "$lu_f" ] || [ ! -f "$lu_f" ]; then
-		lockup_why="$lu_f is not a regular file (a link?): it is not lox up's; run \`lox up\`"
+		lockup_why="$lu_f is not a regular file (a link?): it is not lox run's; run \`lox run\`"
 		return 1
 	fi
 	if ! private "$lu_f"; then
-		lockup_why="$lu_f is not yours, or others than you may write it: lockfile trusts none of it; run \`lox up\`"
+		lockup_why="$lu_f is not yours, or others than you may write it: lockfile trusts none of it; run \`lox run\`"
 		return 1
 	fi
 	if [ "$(wc -c <"$lu_f")" -gt 1048576 ]; then
-		lockup_why="$lu_f is larger than 1 MiB: it is not lox up's; run \`lox up\`"
+		lockup_why="$lu_f is larger than 1 MiB: it is not lox run's; run \`lox run\`"
 		return 1
 	fi
 	lu_ino=$(ls -di "$lu_f")
 	if ! lu_state=$(lockup_parse <"$lu_f") || [ -L "$lu_f" ] || [ "$(ls -di "$lu_f")" != "$lu_ino" ]; then
-		lockup_why="$lu_f is not lox up's state (version 1): run \`lox up\`"
+		lockup_why="$lu_f is not lox run's state (version 1): run \`lox run\`"
 		return 1
 	fi
 	lu_project= lu_wsf= lu_locks=
@@ -475,11 +475,11 @@ $lu_state
 EOF_STATE
 	lu_want="lockfamily-$(sha8 "$lu_ws")"
 	if [ "$lu_project" != "$lu_want" ] || [ "$lu_wsf" != "$lu_ws" ]; then
-		lockup_why="$lu_f: project $lu_project of $lu_wsf, not this workspace's ($lu_want of $lu_ws): run \`lox up\` in $lu_ws"
+		lockup_why="$lu_f: project $lu_project of $lu_wsf, not this workspace's ($lu_want of $lu_ws): run \`lox run\` in $lu_ws"
 		return 1
 	fi
 	if ! json_safe "$lu_ws"; then
-		lockup_why="the workspace's path $lu_ws holds a quote, a backslash or a control character: lockfile cannot check lox up's labels; move or rename it"
+		lockup_why="the workspace's path $lu_ws holds a quote, a backslash or a control character: lockfile cannot check lox run's labels; move or rename it"
 		return 1
 	fi
 	lu_names=$(printf '%s' "$lu_locks" | awk '{ print $1 }' | sort | tr '\n' ' ')
@@ -493,17 +493,17 @@ EOF_STATE
 		esac
 		lu_sel=$(printf '%s' "$lu_locks" | awk -v n="$lu_inst" '$1 == n')
 		if [ -z "$lu_sel" ]; then
-			lockup_why="lox up runs no lockfile lock $lu_inst in $lu_ws (its lockfile locks: ${lu_names:-none}): name one with --instance, or add it (lox add lockfile $lu_inst) and run \`lox up\`"
+			lockup_why="lox run starts no lockfile lock $lu_inst in $lu_ws (its lockfile locks: ${lu_names:-none}): name one with --instance, or add it (lox add lockfile $lu_inst) and run \`lox run\`"
 			return 1
 		fi
 	else
 		case "$lu_names" in
 		"")
-			lockup_why="lox up runs no lockfile lock in $lu_ws: add one (lox add lockfile <name>), then run \`lox up\`"
+			lockup_why="lox run starts no lockfile lock in $lu_ws: add one (lox add lockfile <name>), then run \`lox run\`"
 			return 1
 			;;
 		*" "*)
-			lockup_why="lox up runs several lockfile locks in $lu_ws ($lu_names): name one with --instance NAME"
+			lockup_why="lox run starts several lockfile locks in $lu_ws ($lu_names): name one with --instance NAME"
 			return 1
 			;;
 		esac
@@ -514,7 +514,7 @@ EOF_STATE
 	lu_name=$1 lu_sock=$2 lu_gid=${3:-}
 	lu_vol=${lu_project}_$lu_name-run
 	if [ "$lu_sock" != "$lu_vol" ]; then
-		lockup_why="$lu_f: lock $lu_name: socket volume $lu_sock is not lox up's $lu_vol: run \`lox up\`"
+		lockup_why="$lu_f: lock $lu_name: socket volume $lu_sock is not lox run's $lu_vol: run \`lox run\`"
 		return 1
 	fi
 	if [ -n "$lu_gid" ] && [ "$lu_gid" != 10030 ]; then
@@ -527,7 +527,7 @@ EOF_STATE
 {{json (index .Labels "dev.lockfamily.instance")}}
 {{json (index .Labels "dev.lockfamily.type")}}
 {{json (index .Labels "dev.lockfamily.workspace")}}' "$lu_vol" 2>/dev/null) || {
-		lockup_why="lock $lu_name: no volume $lu_vol: run \`lox up\`"
+		lockup_why="lock $lu_name: no volume $lu_vol: run \`lox run\`"
 		return 1
 	}
 	if [ "$lu_got" != "\"$lu_project\"
@@ -536,12 +536,12 @@ EOF_STATE
 \"$lu_name\"
 \"lockfile\"
 \"$lu_ws\"" ]; then
-		lockup_why="lock $lu_name: volume $lu_vol is not lox up's socket volume of it (its labels): lockfile trusts none of it; run \`lox up\`"
+		lockup_why="lock $lu_name: volume $lu_vol is not lox run's socket volume of it (its labels): lockfile trusts none of it; run \`lox run\`"
 		return 1
 	fi
 	# Every container that mounts the volume, running or not, must be lox
-	# up's own or unable to serve a socket there. lox up's: compose ran it
-	# from lox up's state directory, with the file on stdin or that
+	# up's own or unable to serve a socket there. lox run's: compose ran it
+	# from lox run's state directory, with the file on stdin or that
 	# directory's compose.yaml (compose's project label alone is anyone's: a
 	# compose file written in the workspace, run by you, would serve the
 	# socket from an image of its own). Any other container, compose's or
@@ -549,7 +549,7 @@ EOF_STATE
 	# a read-write mount it could listen on the socket's path.
 	lu_state_dir=$(printf '%s' "${XDG_STATE_HOME:-${HOME:-}/.local/state}/lockfamily/$lu_project" | sed -e 's#//*#/#g')
 	if ! json_safe "$lu_state_dir"; then
-		lockup_why="lox up's state directory $lu_state_dir holds a quote, a backslash or a control character: lockfile cannot check lox up's containers"
+		lockup_why="lox run's state directory $lu_state_dir holds a quote, a backslash or a control character: lockfile cannot check lox run's containers"
 		return 1
 	fi
 	lu_ids=$(docker ps -a --no-trunc --filter "volume=$lu_vol" --format '{{.ID}}' 2>/dev/null) || {
@@ -578,12 +578,12 @@ EOF_STATE
 \"-\"" ] || [ "$lu_c" = "\"$lu_project\"
 \"$lu_state_dir\"
 \"$lu_state_dir/compose.yaml\"" ]; then
-			continue # lox up's
+			continue # lox run's
 		fi
 		# Read-only mounts only (none listed: not one docker shows by name).
 		case " $lu_rw" in
 		" " | *" rw "*)
-			lockup_why="lock $lu_name: volume $lu_vol is mounted read-write by container $lu_id, which lox up did not start (not compose run from $lu_state_dir): lockfile trusts none of its socket; remove that container, then run \`lox up\`"
+			lockup_why="lock $lu_name: volume $lu_vol is mounted read-write by container $lu_id, which lox run did not start (not compose run from $lu_state_dir): lockfile trusts none of its socket; remove that container, then run \`lox run\`"
 			return 1
 			;;
 		esac
@@ -593,7 +593,7 @@ EOF_STATE
 lockup_vol= lockup_why=
 
 # lockup_home: after lockup_volume, the home volume of that lock's console
-# and the volume of its reviewed profile copy, as lox up made them
+# and the volume of its reviewed profile copy, as lox run made them
 # (compose's project and volume labels), in $lockup_home and
 # $lockup_profile; else why, in $lockup_why. The console runs its plugins
 # from that home and reads its config from that copy (lockhub's
@@ -604,12 +604,12 @@ lockup_home() {
 	for lu_v in "$lu_name-home" profile-lockfile; do
 		lu_got=$(docker volume inspect --format '{{json (index .Labels "com.docker.compose.project")}}
 {{json (index .Labels "com.docker.compose.volume")}}' "${lu_project}_$lu_v" 2>/dev/null) || {
-			lockup_why="lock $lu_name: no volume ${lu_project}_$lu_v: run \`lox up\`"
+			lockup_why="lock $lu_name: no volume ${lu_project}_$lu_v: run \`lox run\`"
 			return 1
 		}
 		if [ "$lu_got" != "\"$lu_project\"
 \"$lu_v\"" ]; then
-			lockup_why="lock $lu_name: volume ${lu_project}_$lu_v is not lox up's (its labels): lockfile trusts none of it; run \`lox up\`"
+			lockup_why="lock $lu_name: volume ${lu_project}_$lu_v is not lox run's (its labels): lockfile trusts none of it; run \`lox run\`"
 			return 1
 		fi
 	done
@@ -618,13 +618,13 @@ lockup_home() {
 }
 
 # console_mounts: the --mount arguments of the console account's commands:
-# lox up's home of the lock and its profile copy, read-only (exit 2 with
+# lox run's home of the lock and its profile copy, read-only (exit 2 with
 # why when there is none).
 console_mounts() {
 	command -v docker >/dev/null 2>&1 || die "docker is required: lockfile runs in Docker (docs/docker.md)"
 	if ! lockup_volume "$instance" || ! lockup_home; then
 		say "$lockup_why"
-		say "$cmd works on the console that \`lox up\` runs: its plugins, audit and secrets are in that console's home"
+		say "$cmd works on the console that \`lox run\` starts: its plugins, audit and secrets are in that console's home"
 		exit 2
 	fi
 }
@@ -685,18 +685,18 @@ as_workspace() {
 	done
 	[ -n "$ws" ] || ws=$here
 	pd=$ws/.lockfile
-	[ ! -L "$pd" ] || die "$pd is a link: lox up copies none; remove it"
+	[ ! -L "$pd" ] || die "$pd is a link: lox run copies none; remove it"
 	if [ ! -e "$pd" ]; then
 		(umask 077 && mkdir "$pd") || die "cannot make $pd"
 	fi
-	[ -d "$pd" ] || die "$pd is not a directory: lox up copies none"
+	[ -d "$pd" ] || die "$pd is not a directory: lox run copies none"
 	mountable "$pd"
 	docker_run "$tty" --user "$(id -u):$(id -g)" -e LOCKFILE_WORKSPACE="$ws" \
 		--mount "type=bind,src=$pd,dst=$pd" -w / "$image" "$@"
 }
 
 # --instance NAME (or --instance=NAME): the launcher's own option of the
-# agent commands, which of lox up's lockfile locks when the workspace has
+# agent commands, which of lox run's lockfile locks when the workspace has
 # several. Taken out of the command line ("--" ends the options).
 instance=
 case "${1:-}" in
@@ -728,11 +728,11 @@ mcp | doctor | status | sources | plugins | plan | run | answers | release | plu
 		set -- "$@" "$a"
 	done
 	shift "$n"
-	[ -z "$take" ] || die "--instance: name the lock (lox up's instance)"
+	[ -z "$take" ] || die "--instance: name the lock (lox run's instance)"
 	;;
 esac
 
-# lockup_mount: lox up's socket volume of this workspace's lockfile lock,
+# lockup_mount: lox run's socket volume of this workspace's lockfile lock,
 # as the agent commands mount it, or the reason there is none (exit 2, as
 # a client finding no console).
 lockup_mount() {
@@ -792,8 +792,8 @@ doctor)
 		as_you "$@"
 	fi
 	seccomp
-	# The checks of the console lox up runs: its socket, its home and its
-	# profile copy. Without lox up they run without them and say so.
+	# The checks of the console lox run starts: its socket, its home and its
+	# profile copy. Without lox run they run without them and say so.
 	if command -v docker >/dev/null 2>&1 && lockup_volume "$instance" && lockup_home; then
 		docker_run "$tty" --user lockfile --security-opt seccomp="$seccomp_profile" \
 			--mount "type=volume,src=$lockup_vol,dst=/run/lockfile,readonly" \

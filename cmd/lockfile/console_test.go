@@ -37,7 +37,7 @@ type consoleRun struct {
 	state string
 }
 
-// hubArgs are the hub flags lox up writes, for o.
+// hubArgs are the hub flags lox run writes, for o.
 func hubArgs(o console.HubOptions) []string {
 	return []string{"--hub", o.URL, "--hub-key-file", o.KeyFile, "--instance", o.Instance}
 }
@@ -133,7 +133,7 @@ func TestConsoleUsage(t *testing.T) {
 	if code, _, _ := runArgs(t, "", "console"); code != product.ExitUsage {
 		t.Fatalf("no profile: exit %d", code)
 	}
-	// Launched by lox up only: without the hub flags, or with only some,
+	// Launched by lox run only: without the hub flags, or with only some,
 	// refused before anything else.
 	for _, args := range [][]string{
 		{"console", "--profile", "samples"},
@@ -141,7 +141,7 @@ func TestConsoleUsage(t *testing.T) {
 		{"console", "--profile", "samples", "--hub-key-file", "/run/lockfamily/hub.pub", "--instance", "files"},
 	} {
 		code, _, errText := runArgs(t, "", args...)
-		if code != product.ExitUsage || !strings.Contains(errText, "launched by `lox up` only") || !strings.Contains(errText, "usage: lockfile console --profile NAME --hub URL") {
+		if code != product.ExitUsage || !strings.Contains(errText, "launched by `lox run` only") || !strings.Contains(errText, "usage: lockfile console --profile NAME --hub URL") {
 			t.Errorf("%v: exit %d: %s", args, code, errText)
 		}
 	}

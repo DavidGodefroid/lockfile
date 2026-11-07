@@ -28,8 +28,8 @@ func workspaceHooks(t *testing.T) string {
 }
 
 // profile add, in the workspace mode, writes <workspace>/.lockfile/config.toml,
-// where lox up reads the lock's profile (lockhub's profileDir), with
-// owner-only modes lox up keeps, and never the lockfile account's file.
+// where lox run reads the lock's profile (lockhub's profileDir), with
+// owner-only modes lox run keeps, and never the lockfile account's file.
 func TestProfileAddWorkspace(t *testing.T) {
 	ws := workspaceHooks(t)
 	code, out, errText := runArgs(t, "", "profile", "add", "--profile", "samples", "--source", "local", "--path", "/srv/lockfile/samples")
@@ -86,7 +86,7 @@ func TestMarketplaceWorkspace(t *testing.T) {
 	}
 }
 
-// A profile directory lox up would refuse is refused before anything is
+// A profile directory lox run would refuse is refused before anything is
 // written: a link, one others may write, one that is not yours.
 func TestProfileAddWorkspaceRefuses(t *testing.T) {
 	add := func(t *testing.T) (int, string) {

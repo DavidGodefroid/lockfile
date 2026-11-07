@@ -185,7 +185,7 @@ func TestCLIExitCodes(t *testing.T) {
 	// unknown_profile is a refusal (2) whether the client or the console
 	// detects it.
 	out = check("no console for the profile", product.ExitRefused, "plugins", "--profile", "other")
-	if !strings.Contains(out, "lox add lockfile INSTANCE --profile other") || !strings.Contains(out, "`lox up`") ||
+	if !strings.Contains(out, "lox add lockfile INSTANCE --profile other") || !strings.Contains(out, "`lox run`") ||
 		strings.Contains(out, "lockfile console") || !strings.Contains(out, "E_UNKNOWN_PROFILE") {
 		t.Fatalf("no hint: %s", out)
 	}

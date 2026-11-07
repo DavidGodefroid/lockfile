@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.8.1 (2026-11-07)
+
+Builds on lockkit v0.14.1 (from v0.13.0). No behavior change: container labels, files
+(`up.json`, `.lockfamily/`) and flags stay the same.
+
+- **`lox run` replaces `lox up`** (deprecated since lockhub v0.10.0) in every user- and
+  agent-facing text: the docs, the agent assets the binary wires (skill, `AGENTS.md`
+  instructions, Cursor rule, MCP instructions), the launcher's help and errors, the Go
+  messages (`console`, `doctor`, `profile add`) and lockkit's shared hints (`StartHint`,
+  `ErrNoHub`). A wired agent now asks the user to run `lox run`
+  (DavidGodefroid/lockfile#57).
+
 ## v0.8.0 (2026-11-06)
 
 Builds on lockkit v0.13.0 (from v0.11.0); lockhub as v0.6.0. No lockfile code change; what
@@ -80,7 +92,7 @@ later.
   runs (`lockfamily-<hash>_<instance>-home`) and its profile copy, read-only, once Docker shows
   both are lox up's (compose's labels), with `--instance NAME` for one of several; without
   `lox up`, `plugin`, `audit` and `forget` exit 2 and say why. The fixed `lockfile-home`
-  volume is no longer used by them ([docs/docker.md](docs/docker.md#the-console-of-lox-up)).
+  volume is no longer used by them ([docs/docker.md](docs/docker.md#the-console-of-lox-run)).
   The quick start installs the plugins after `lox up`.
 - The agent commands no longer hang when the current directory was removed: they exit 2.
 - **The agent commands reach the console `lox up` runs** (lockhub#78). The launcher's `mcp`,
@@ -90,7 +102,7 @@ later.
   start may mount it read-write), and no longer the fixed `lockfile-run`: without `lox up` they
   exit 2 and say to run it (`doctor` runs without a socket and says why). With several lockfile
   locks, `--instance NAME` picks one (in `.mcp.json`: `"args": ["mcp", "--instance", "NAME"]`).
-  `.mcp.json` is unchanged ([docs/docker.md](docs/docker.md#the-socket-of-lox-ups-lock)).
+  `.mcp.json` is unchanged ([docs/docker.md](docs/docker.md#the-socket-of-lox-runs-lock)).
 - `lockfile console` is launched by `lox up` only: `--hub`, `--hub-key-file` and `--instance`
   are required, and without them (or with only some) it refuses before the config, the
   plugin store or the terminal is touched ("the console is launched by `lox up` only", exit

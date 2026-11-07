@@ -74,7 +74,7 @@ var dial = func(profile string) (caller, error) {
 }
 
 // StartCommand is the command that starts the consoles: lockkit's, `lox
-// up`, the same for every profile (a console is launched by `lox up` only).
+// up`, the same for every profile (a console is launched by `lox run` only).
 func StartCommand() string { return client.StartCommand(product.P, "", "") }
 
 // profileWord is profile when it is a valid profile name, else NAME: a
@@ -87,7 +87,7 @@ func profileWord(profile string) string {
 }
 
 // unknownProfile is the refusal for a profile no running console serves:
-// most often a profile whose console is not running (`lox up`), but `lox
+// most often a profile whose console is not running (`lox run`), but `lox
 // up` alone does not make a profile that does not exist, so the hint also
 // points at the listed profiles and at declaring the profile the agent
 // passed (named only when it is a valid profile name).

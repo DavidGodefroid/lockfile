@@ -14,14 +14,14 @@ import (
 	"testing"
 )
 
-// The agent commands reach the lockfile lock `lox up` runs for the
-// workspace (lockhub's docs/lox-up.md): its socket volume, named in
+// The agent commands reach the lockfile lock `lox run` starts for the
+// workspace (lockhub's docs/lox-run.md): its socket volume, named in
 // <workspace>/.lockfamily/up.json, mounted read-only once Docker confirms
-// it is lox up's. These tests fake Docker's answers for that volume and
+// it is lox run's. These tests fake Docker's answers for that volume and
 // the containers that mount it.
 
-// upLock and upState are lox up's up.json (lockhub's family.UpState),
-// with members the launcher does not read, nested as lox up writes them.
+// upLock and upState are lox run's up.json (lockhub's family.UpState),
+// with members the launcher does not read, nested as lox run writes them.
 type upLock struct {
 	Type          string   `json:"type"`
 	Profile       string   `json:"profile,omitempty"`
@@ -44,7 +44,7 @@ type upState struct {
 	Locks        map[string]upLock `json:"locks"`
 }
 
-// loxProject is lox up's compose project of the workspace ws.
+// loxProject is lox run's compose project of the workspace ws.
 func loxProject(ws string) string {
 	h := sha256.Sum256([]byte(ws))
 	return "lockfamily-" + hex.EncodeToString(h[:4])
@@ -59,10 +59,10 @@ func jsonString(s string) string {
 	return strings.TrimSpace(b.String())
 }
 
-// loxUp makes ws a workspace whose locks (instance: type) lox up runs:
+// loxUp makes ws a workspace whose locks (instance: type) lox run starts:
 // its up.json (the user's, 0644 in a 0755 .lockfamily) and Docker's view
-// of each socket volume (lox up's labels; one console container, run by
-// compose from lox up's state directory).
+// of each socket volume (lox run's labels; one console container, run by
+// compose from lox run's state directory).
 func (f *launcherFixture) loxUp(t *testing.T, ws string, locks map[string]string) upState {
 	t.Helper()
 	p := loxProject(ws)
@@ -77,7 +77,7 @@ func (f *launcherFixture) loxUp(t *testing.T, ws string, locks map[string]string
 		f.dockerVolume(t, l.Socket, volumeLabels(p, name, typ, ws))
 		if typ == "lockfile" {
 			// The console's home and the reviewed profile copy (compose's
-			// labels only, as lox up makes them).
+			// labels only, as lox run makes them).
 			f.dockerVolume(t, p+"_"+name+"-home", composeLabels(p, name+"-home"))
 			f.dockerVolume(t, p+"_profile-lockfile", composeLabels(p, "profile-lockfile"))
 		}
@@ -89,7 +89,7 @@ func (f *launcherFixture) loxUp(t *testing.T, ws string, locks map[string]string
 	return s
 }
 
-// writeUpState writes s as lox up does (json.MarshalIndent, two spaces).
+// writeUpState writes s as lox run does (json.MarshalIndent, two spaces).
 func (f *launcherFixture) writeUpState(t *testing.T, ws string, s upState) {
 	t.Helper()
 	b, err := json.MarshalIndent(s, "", "  ")
@@ -117,14 +117,14 @@ func (f *launcherFixture) writeUpFile(t *testing.T, ws string, b []byte) {
 	}
 }
 
-// stateDir is lox up's state directory of project, for the fixture's
+// stateDir is lox run's state directory of project, for the fixture's
 // HOME (no XDG_STATE_HOME).
 func (f *launcherFixture) stateDir(project string) string {
 	return filepath.Join(f.root, "home", ".local", "state", "lockfamily", project)
 }
 
 // volumeLabels is what the launcher's docker volume inspect prints for a
-// volume with lox up's labels of the lock name.
+// volume with lox run's labels of the lock name.
 func volumeLabels(project, name, typ, ws string) string {
 	var out []string
 	for _, v := range []string{project, name + "-run", "socket", name, typ, ws} {
@@ -139,7 +139,7 @@ func composeLabels(project, vol string) string {
 	return jsonString(project) + "\n" + jsonString(vol) + "\n"
 }
 
-// homeMounts are the console account's mounts of lox up's lock name in
+// homeMounts are the console account's mounts of lox run's lock name in
 // the workspace ws: its home, and its profile copy read-only.
 func homeMounts(ws, name string) [][]string {
 	p := loxProject(ws)
@@ -183,7 +183,7 @@ func (f *launcherFixture) dockerContainers(t *testing.T, vol string, cs map[stri
 	}
 }
 
-// mountOf is the read-only mount of lox up's socket volume of lock name in
+// mountOf is the read-only mount of lox run's socket volume of lock name in
 // the workspace ws.
 func mountOf(ws, name string) []string {
 	return []string{"--mount", "type=volume,src=" + loxProject(ws) + "_" + name + "-run,dst=/run/lockfile,readonly"}
@@ -199,7 +199,7 @@ func hasRun(calls [][]string) bool {
 	return false
 }
 
-// The agent commands mount lox up's socket volume read-only on
+// The agent commands mount lox run's socket volume read-only on
 // /run/lockfile, from the workspace or any directory below it, and never
 // the fixed lockfile-run; the command line the image gets is unchanged.
 func TestLauncherLockUpSocket(t *testing.T) {
@@ -212,7 +212,7 @@ func TestLauncherLockUpSocket(t *testing.T) {
 			}
 			run := lastRun(t, calls)
 			if !hasSeq(run, mountOf(f.root, "files")...) {
-				t.Errorf("%v from %s: no read-only mount of lox up's socket volume:\n%q", args, dir, run)
+				t.Errorf("%v from %s: no read-only mount of lox run's socket volume:\n%q", args, dir, run)
 			}
 			if strings.Contains(strings.Join(run, " "), "lockfile-run") {
 				t.Errorf("%v: the fixed socket volume: %q", args, run)
@@ -229,7 +229,7 @@ func TestLauncherLockUpSocket(t *testing.T) {
 	}
 }
 
-// Commands that reach no console mount no socket, and need no lox up.
+// Commands that reach no console mount no socket, and need no lox run.
 func TestLauncherNoSocketWithoutAConsoleCommand(t *testing.T) {
 	f := newLauncherFixture(t)
 	if err := os.RemoveAll(filepath.Join(f.root, ".lockfamily")); err != nil {
@@ -250,8 +250,8 @@ func TestLauncherNoSocketWithoutAConsoleCommand(t *testing.T) {
 	}
 }
 
-// Without lox up's state, or with one the launcher cannot trust, an agent
-// command says why and what to do (run lox up), exits 2 as a client that
+// Without lox run's state, or with one the launcher cannot trust, an agent
+// command says why and what to do (run lox run), exits 2 as a client that
 // finds no console, and runs nothing: never the fixed volume instead.
 func TestLauncherLockUpRefusals(t *testing.T) {
 	upFile := func(f *launcherFixture) string { return filepath.Join(f.root, ".lockfamily", "up.json") }
@@ -260,7 +260,7 @@ func TestLauncherLockUpRefusals(t *testing.T) {
 		setup func(t *testing.T, f *launcherFixture)
 		want  string
 		args  []string
-		// docker's own failures: nothing for lox up to fix
+		// docker's own failures: nothing for lox run to fix
 		noHint bool
 	}{
 		{"no up.json", func(t *testing.T, f *launcherFixture) {
@@ -310,30 +310,30 @@ func TestLauncherLockUpRefusals(t *testing.T) {
 			s := f.loxUp(t, f.root, map[string]string{"files": "lockfile"})
 			s.Version = 2
 			f.writeUpState(t, f.root, s)
-		}, "is not lox up's state (version 1)", nil, false},
-		{"not lox up's layout", func(t *testing.T, f *launcherFixture) {
+		}, "is not lox run's state (version 1)", nil, false},
+		{"not lox run's layout", func(t *testing.T, f *launcherFixture) {
 			s := f.loxUp(t, f.root, map[string]string{"files": "lockfile"})
 			b, _ := json.Marshal(s)
 			f.writeUpFile(t, f.root, b)
-		}, "is not lox up's state (version 1)", nil, false},
+		}, "is not lox run's state (version 1)", nil, false},
 		{"an escaped value", func(t *testing.T, f *launcherFixture) {
 			b, _ := os.ReadFile(upFile(f))
 			b = bytes.Replace(b, []byte(`"type": "lockfile"`), []byte(`"type": "lock\u0073ql"`), 1)
 			f.writeUpFile(t, f.root, b)
-		}, "is not lox up's state (version 1)", nil, false},
+		}, "is not lox run's state (version 1)", nil, false},
 		{"no lockfile lock", func(t *testing.T, f *launcherFixture) {
 			os.RemoveAll(filepath.Join(f.root, ".lockfamily"))
 			f.loxUp(t, f.root, map[string]string{"web": "lockhttp"})
-		}, "lox up runs no lockfile lock in", nil, false},
+		}, "lox run starts no lockfile lock in", nil, false},
 		{"two lockfile locks", func(t *testing.T, f *launcherFixture) {
 			f.loxUp(t, f.root, map[string]string{"files": "lockfile", "crm-prod": "lockfile", "web": "lockhttp"})
-		}, "lox up runs several lockfile locks in ", nil, false},
+		}, "lox run starts several lockfile locks in ", nil, false},
 		{"an unknown instance", func(t *testing.T, f *launcherFixture) {
 			f.loxUp(t, f.root, map[string]string{"files": "lockfile", "crm-prod": "lockfile"})
-		}, "lox up runs no lockfile lock nope in", []string{"status", "--instance", "nope"}, false},
+		}, "lox run starts no lockfile lock nope in", []string{"status", "--instance", "nope"}, false},
 		{"an instance of another type", func(t *testing.T, f *launcherFixture) {
 			f.loxUp(t, f.root, map[string]string{"files": "lockfile", "web": "lockhttp"})
-		}, "lox up runs no lockfile lock web in", []string{"status", "--instance=web"}, false},
+		}, "lox run starts no lockfile lock web in", []string{"status", "--instance=web"}, false},
 		{"a bad instance name", func(t *testing.T, f *launcherFixture) {}, "--instance: not an instance name", []string{"status", "--instance", "../x"}, false},
 		{"another socket volume", func(t *testing.T, f *launcherFixture) {
 			s := f.loxUp(t, f.root, map[string]string{"files": "lockfile"})
@@ -341,7 +341,7 @@ func TestLauncherLockUpRefusals(t *testing.T) {
 			l.Socket = s.Project + "_files-home"
 			s.Locks["files"] = l
 			f.writeUpState(t, f.root, s)
-		}, "is not lox up's ", nil, false},
+		}, "is not lox run's ", nil, false},
 		{"another clients group", func(t *testing.T, f *launcherFixture) {
 			s := f.loxUp(t, f.root, map[string]string{"files": "lockfile"})
 			l := s.Locks["files"]
@@ -352,24 +352,24 @@ func TestLauncherLockUpRefusals(t *testing.T) {
 		{"no volume", func(t *testing.T, f *launcherFixture) {
 			os.Remove(filepath.Join(f.fake, "volume-"+loxProject(f.root)+"_files-run"))
 		}, "no volume ", nil, false},
-		{"a volume without lox up's labels", func(t *testing.T, f *launcherFixture) {
+		{"a volume without lox run's labels", func(t *testing.T, f *launcherFixture) {
 			f.dockerVolume(t, loxProject(f.root)+"_files-run", volumeLabels(loxProject(f.root), "files", "lockfile", f.project))
-		}, "is not lox up's socket volume of it (its labels)", nil, false},
+		}, "is not lox run's socket volume of it (its labels)", nil, false},
 		{"a home volume", func(t *testing.T, f *launcherFixture) {
 			l := strings.Replace(volumeLabels(loxProject(f.root), "files", "lockfile", f.root), `"socket"`, `"home"`, 1)
 			f.dockerVolume(t, loxProject(f.root)+"_files-run", l)
-		}, "is not lox up's socket volume of it (its labels)", nil, false},
+		}, "is not lox run's socket volume of it (its labels)", nil, false},
 		{"a compose container run from elsewhere", func(t *testing.T, f *launcherFixture) {
 			p := loxProject(f.root)
 			f.dockerContainers(t, p+"_files-run", map[string]string{
 				strings.Repeat("a", 64): containerLabels(p, f.stateDir(p), "-", "rw "),
 				strings.Repeat("b", 64): containerLabels(p, f.root, f.root+"/compose.yaml", "rw "),
 			})
-		}, "which lox up did not start", nil, false},
+		}, "which lox run did not start", nil, false},
 		{"a compose container of another file", func(t *testing.T, f *launcherFixture) {
 			p := loxProject(f.root)
 			f.dockerContainers(t, p+"_files-run", map[string]string{strings.Repeat("a", 64): containerLabels(p, f.stateDir(p), f.root+"/compose.yaml", "rw ")})
-		}, "which lox up did not start", nil, false},
+		}, "which lox run did not start", nil, false},
 		{"a container docker made, read-write", func(t *testing.T, f *launcherFixture) {
 			p := loxProject(f.root)
 			f.dockerContainers(t, p+"_files-run", map[string]string{
@@ -459,7 +459,7 @@ func TestLauncherLockUpInstance(t *testing.T) {
 	}
 }
 
-// lox up's own compose run, with the file on stdin or its state
+// lox run's own compose run, with the file on stdin or its state
 // directory's compose.yaml, is trusted (XDG_STATE_HOME's state directory
 // too); any other container only if it mounts the volume read-only.
 func TestLauncherLockUpContainers(t *testing.T) {
@@ -475,14 +475,14 @@ func TestLauncherLockUpContainers(t *testing.T) {
 		t.Errorf("%v\n%s", err, out)
 	}
 	state := filepath.Join(f.root, "xdg")
-	if out, _, err := f.run(t, f.project, []string{"XDG_STATE_HOME=" + state}, "mcp"); exitCode(err) != 2 || !strings.Contains(out, "which lox up did not start") {
+	if out, _, err := f.run(t, f.project, []string{"XDG_STATE_HOME=" + state}, "mcp"); exitCode(err) != 2 || !strings.Contains(out, "which lox run did not start") {
 		t.Errorf("XDG_STATE_HOME ignored: %v\n%s", err, out)
 	}
 	f.dockerContainers(t, p+"_files-run", map[string]string{strings.Repeat("a", 64): containerLabels(p, state+"/lockfamily/"+p, "-", "rw ")})
 	if out, calls, err := f.run(t, f.project, []string{"XDG_STATE_HOME=" + state + "/"}, "mcp"); err != nil || !hasSeq(lastRun(t, calls), mountOf(f.root, "files")...) {
 		t.Errorf("XDG_STATE_HOME: %v\n%s", err, out)
 	}
-	// No container at all (lox up down): the volume is still lox up's.
+	// No container at all (the locks stopped): the volume is still lox run's.
 	f.dockerContainers(t, p+"_files-run", nil)
 	if out, calls, err := f.run(t, f.project, nil, "mcp"); err != nil || !hasSeq(lastRun(t, calls), mountOf(f.root, "files")...) {
 		t.Errorf("%v\n%s", err, out)
@@ -505,7 +505,7 @@ func TestLauncherLockUpNearestWorkspace(t *testing.T) {
 	}
 }
 
-// doctor checks the setup without lox up too: with no socket, saying why.
+// doctor checks the setup without lox run too: with no socket, saying why.
 func TestLauncherDoctorWithoutLockUp(t *testing.T) {
 	f := newLauncherFixture(t)
 	if err := os.RemoveAll(filepath.Join(f.root, ".lockfamily")); err != nil {
@@ -518,13 +518,13 @@ func TestLauncherDoctorWithoutLockUp(t *testing.T) {
 	if run := strings.Join(lastRun(t, calls), " "); strings.Contains(run, "/run/lockfile") || strings.Contains(run, "/home/lockfile") {
 		t.Errorf("a socket or a home: %s", run)
 	}
-	if !strings.Contains(out, "no .lockfamily/up.json in "+f.project) || !strings.Contains(out, "lox up") {
+	if !strings.Contains(out, "no .lockfamily/up.json in "+f.project) || !strings.Contains(out, "lox run") {
 		t.Errorf("output:\n%s", out)
 	}
 }
 
 // The console account's commands (plugin, audit, forget) work on the
-// console lox up runs: its home and its profile copy, which lox up made
+// console lox run starts: its home and its profile copy, which lox run made
 // (compose's labels); without them, nothing runs (exit 2, saying why).
 func TestLauncherConsoleHome(t *testing.T) {
 	for _, tc := range []struct {
@@ -532,7 +532,7 @@ func TestLauncherConsoleHome(t *testing.T) {
 		setup func(t *testing.T, f *launcherFixture)
 		want  string
 	}{
-		{"no lox up", func(t *testing.T, f *launcherFixture) {
+		{"no lox run", func(t *testing.T, f *launcherFixture) {
 			if err := os.RemoveAll(filepath.Join(f.root, ".lockfamily")); err != nil {
 				t.Fatal(err)
 			}
@@ -541,28 +541,28 @@ func TestLauncherConsoleHome(t *testing.T) {
 			if err := os.Remove(filepath.Join(f.fake, "volume-"+loxProject(f.root)+"_files-home")); err != nil {
 				t.Fatal(err)
 			}
-		}, "_files-home: run `lox up`"},
+		}, "_files-home: run `lox run`"},
 		{"no profile copy", func(t *testing.T, f *launcherFixture) {
 			if err := os.Remove(filepath.Join(f.fake, "volume-"+loxProject(f.root)+"_profile-lockfile")); err != nil {
 				t.Fatal(err)
 			}
-		}, "_profile-lockfile: run `lox up`"},
+		}, "_profile-lockfile: run `lox run`"},
 		{"home of another project", func(t *testing.T, f *launcherFixture) {
 			f.dockerVolume(t, loxProject(f.root)+"_files-home", composeLabels("other", "files-home"))
-		}, "is not lox up's (its labels)"},
+		}, "is not lox run's (its labels)"},
 		{"home of another volume", func(t *testing.T, f *launcherFixture) {
 			f.dockerVolume(t, loxProject(f.root)+"_files-home", composeLabels(loxProject(f.root), "files-run"))
-		}, "is not lox up's (its labels)"},
+		}, "is not lox run's (its labels)"},
 		{"no labels", func(t *testing.T, f *launcherFixture) {
 			f.dockerVolume(t, loxProject(f.root)+"_profile-lockfile", "null\nnull\n")
-		}, "is not lox up's (its labels)"},
+		}, "is not lox run's (its labels)"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, args := range [][]string{{"plugin", "install", "file.non-empty@1.0.0"}, {"audit"}, {"forget", "--profile", "p"}} {
 				f := newLauncherFixture(t)
 				tc.setup(t, f)
 				out, calls, err := f.run(t, f.project, nil, args...)
-				if exitCode(err) != 2 || !strings.Contains(out, tc.want) || !strings.Contains(out, "works on the console that `lox up` runs") {
+				if exitCode(err) != 2 || !strings.Contains(out, tc.want) || !strings.Contains(out, "works on the console that `lox run` starts") {
 					t.Errorf("%v: %v\n%s", args, err, out)
 				}
 				if hasRun(calls) {
@@ -604,14 +604,14 @@ func TestLauncherProfileDirectory(t *testing.T) {
 		return []string{"--mount", "type=bind,src=" + filepath.Join(dir, ".lockfile") + ",dst=" + filepath.Join(dir, ".lockfile")}
 	}
 	f := newLauncherFixture(t)
-	// A sub-project's .lockfamily without up.json: the workspace lox up runs wins.
+	// A sub-project's .lockfamily without up.json: the workspace lox run starts wins.
 	if err := os.MkdirAll(filepath.Join(f.project, ".lockfamily"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if out, calls, err := f.run(t, filepath.Join(f.project, "sub"), nil, "profile", "add", "--profile", "p", "--source", "local", "--path", "/x"); err != nil || !hasSeq(lastRun(t, calls), bind(f.root)...) {
 		t.Errorf("%v\n%s\n%q", err, out, calls)
 	}
-	// No lox up yet: the nearest .lockfamily.
+	// No lox run yet: the nearest .lockfamily.
 	if err := os.Remove(filepath.Join(f.root, ".lockfamily", "up.json")); err != nil {
 		t.Fatal(err)
 	}

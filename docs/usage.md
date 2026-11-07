@@ -14,11 +14,11 @@ release image, with the account and the volumes it needs ([docker.md](docker.md#
 
 | Commands | Runs as |
 |---|---|
-| configuration: `profile`, `marketplace` | you, on the workspace's `.lockfile/` only, which `lox up` reviews and copies to the console ([docker.md](docker.md#the-console-of-lox-up)) |
-| console account: `plugin`, `audit`, `forget`, `doctor` | `lockfile`, on the home of the console `lox up` runs and its profile copy, read-only |
+| configuration: `profile`, `marketplace` | you, on the workspace's `.lockfile/` only, which `lox run` reviews and copies to the console ([docker.md](docker.md#the-console-of-lox-run)) |
+| console account: `plugin`, `audit`, `forget`, `doctor` | `lockfile`, on the home of the console `lox run` starts and its profile copy, read-only |
 | the console | `lockfile`, confined, under the shipped seccomp profile ([Run the console](docker.md#run-the-console)); `local` sources mounted with `LOCKFILE_DOCKER_ARGS` |
 | `init`, `doctor --fix` | you, with your home and the project |
-| agent side: `status`, `sources`, `plugins`, `plan`, `run`, `answers`, `release`, `mcp` | `agent`, with the socket volume of the workspace's lockfile lock that `lox up` runs, read-only, only ([docker.md](docker.md#the-socket-of-lox-ups-lock)) |
+| agent side: `status`, `sources`, `plugins`, `plan`, `run`, `answers`, `release`, `mcp` | `agent`, with the socket volume of the workspace's lockfile lock that `lox run` starts, read-only, only ([docker.md](docker.md#the-socket-of-lox-runs-lock)) |
 
 `lockfile version` prints the launcher's version and the image's; `lockfile update [vX.Y.Z]`
 replaces the launcher and the seccomp profile with a release's (cosign signatures and checksum
@@ -50,9 +50,9 @@ The exit status is 0 exactly when no check fails (a warning does not fail).
 
 ## Profiles (console account)
 
-The console reads its profiles from `~/.config/lockfile/config.toml`: under `lox up`, the read-only
-copy of the workspace's `.lockfile/config.toml` that `lox up` reviews and copies to it
-([docker.md](docker.md#the-console-of-lox-up)). `lockfile profile add`, run from the workspace, appends
+The console reads its profiles from `~/.config/lockfile/config.toml`: under `lox run`, the read-only
+copy of the workspace's `.lockfile/config.toml` that `lox run` reviews and copies to it
+([docker.md](docker.md#the-console-of-lox-run)). `lockfile profile add`, run from the workspace, appends
 one to `.lockfile/config.toml`, validated, without touching the rest of the file:
 
 ```sh
@@ -69,7 +69,7 @@ lockfile profile add [--non-interactive] [--json] [--project DIR] [--profile NAM
 ```
 
 The source flags are named after the config keys below (`--known-hosts` for `known_hosts`, ...).
-Without `--profile` the profile is `default`, the one `lox up` starts when `lockfamily.yaml`
+Without `--profile` the profile is `default`, the one `lox run` starts when `lockfamily.yaml`
 names none. `--project DIR` writes that workspace's `.lockfile/config.toml` instead of the one of
 the current directory. A profile already in the file is never rewritten: `profile add` fails
 and writes nothing (`exists`). On a terminal, `profile add` asks for what the flags did not give
@@ -151,8 +151,8 @@ it applies it only after `:review` in the console.
 lockfile console --profile docs --hub URL [--hub-plain-http] --hub-key-file FILE --instance NAME [--allowed-uids UID,...]
 ```
 
-The console is launched by `lox up` only (lockhub's CLI), which writes the hub flags: without
-`--hub`, `--hub-key-file` and `--instance` it refuses to start ("launched by `lox up` only").
+The console is launched by `lox run` only (lockhub's CLI), which writes the hub flags: without
+`--hub`, `--hub-key-file` and `--instance` it refuses to start ("launched by `lox run` only").
 There is no standalone console and no auto mode.
 
 `--allowed-uids UID,...` lets these uids connect besides the members of `lockfile-clients`, as
@@ -174,7 +174,7 @@ lockfile audit [--since 24h] [--json]           # console account only
 ```
 
 **Hub mode.** With `--hub URL --hub-key-file FILE --instance NAME` (the three are required;
-`lox up` writes them), plans are decided on lockhub, never on this terminal; the
+`lox run` writes them), plans are decided on lockhub, never on this terminal; the
 policy and `:review` stay here. `file.plan` fetches the object at once, hashes it, and asks
 the hub with a signed ticket (an object that cannot be fetched is not told to the agent then:
 the plan goes to the hub, the screen says so, and an approval answers `fetch_failed`; the plan
@@ -185,31 +185,32 @@ The agent hears `pending` with the ticket and runs it once decided (`lockfile ru
 usable, nonce once), the policy and the plugins, fetches again, and refuses other bytes
 `stale` before any plugin. A ticket runs once, for the agent that asked (its lea token). The
 decision is audited with the ticket, the approver, the facade and the hub's signature.
-`lockfile hub-key --instance NAME` prints the instance key for `lox up` to pin (made once in
+`lockfile hub-key --instance NAME` prints the instance key for `lox run` to pin (made once in
 the console account's home, `0600`).
-`lox up` also passes `--hub-plain-http` for its `http://lockhub:8443` on the hub's own network:
+`lox run` also passes `--hub-plain-http` for its `http://lockhub:8443` on the hub's own network:
 without it an `http://` hub URL other than loopback is refused, and with it the URL must still
 be a service name without a dot or a private address.
 The hub URL is `http(s)://host[:port]`: no path, query, fragment, user or password (lockhub
 serves its API at the root and authenticates the lock by signature).
 
 **Supported lockhub versions.** Which [lockhub](https://github.com/DavidGodefroid/lockhub) releases
-(its `lox` CLI, named `lock` before lockhub v0.3.0, and its hub image) each lockfile release works with under `lox up`:
+(its `lox` CLI, named `lock` before lockhub v0.3.0, and its hub image) each lockfile release works with under `lox run`:
 
 | lockfile | lockkit | lockhub |
 |---|---|---|
+| v0.8.1 | v0.14.1 | as v0.6.0; v0.10.0 or later for `lox run` (`lox up` is deprecated) |
 | v0.8.0 | v0.13.0 | as v0.6.0 |
 | v0.7.0 | v0.11.0 | as v0.6.0 |
-| v0.6.0 | v0.10.0 | v0.3.0 or later (`lox`): the console runs under `lox up` only, and the launcher's agent commands, `profile add` and plugin commands read its `.lockfamily/up.json` (version 1) |
-| v0.5.3 | v0.8.1 | as v0.5.2; the hub URL is `http(s)://host[:port]` only (`lox up`'s `http://lockhub:8443` is one) |
+| v0.6.0 | v0.10.0 | v0.3.0 or later (`lox`): the console runs under `lox run` only, and the launcher's agent commands, `profile add` and plugin commands read its `.lockfamily/up.json` (version 1) |
+| v0.5.3 | v0.8.1 | as v0.5.2; the hub URL is `http(s)://host[:port]` only (`lox run`'s `http://lockhub:8443` is one) |
 | v0.5.2 | v0.6.0 | as v0.5.1 |
 | v0.5.1 | v0.6.0 | as v0.5.0; `allowed_uids` (`--allowed-uids`, for lea's agents) from lockhub v0.2.4 |
 | v0.5.0 | v0.6.0 | v0.2.0 or later: hub mode, `devices: true` (paired phones), reveals (`reveal: true`, Ctrl-O) and renewals |
 | v0.4.0 | v0.3.1 | v0.2.0 or later: hub mode only; leave `devices` and `reveal` off |
 | v0.3.0 and older | older than v0.3.1, or none | none (no hub mode) |
 
-`lox up` runs these consoles from the `lox` CLI of lockhub v0.2.0 on (the console account, a
-terminal, the reviewed profile copy); the `lox up` of lockhub v0.1.x cannot run them. A console
+`lox run` starts these consoles from the `lox` CLI of lockhub v0.2.0 on (the console account, a
+terminal, the reviewed profile copy); the `lox run` of lockhub v0.1.x cannot run them. A console
 older than a feature `lockfamily.yaml` asks of it refuses the flag and does not start: leave
 `devices`/`reveal`/`allowed_uids` off for it. A lock on lockkit older than v0.5.0 ignores the hub's reveal and
 renewal requests, which then time out. lockhub's CI does not run a lockfile image: the table
@@ -224,7 +225,7 @@ reaches one lock among several of this type that lea mounts (a name is lowercase
 and `-`). Without it the client takes `$LOCKFILE_INSTANCE`, else the one lock in
 `$LEA_LOCKFILE_INSTANCES`. A name no lock mounted here has is refused with `no lock directory for
 the instance set by --instance or LOCKFILE_INSTANCE: no lock of that name is mounted here`.
-`lockfile console` and `lockfile hub-key` take a different `--instance`: the name `lox up` gives
+`lockfile console` and `lockfile hub-key` take a different `--instance`: the name `lox run` gives
 the lock (the hub instance). `lockfile doctor` takes none.
 
 | Command | MCP tool | What |
@@ -264,7 +265,7 @@ timeout ("ticket expired, and could not be asked again: plan the request again")
 (`hubclient.AnswerCode`: e.g. `policy_changed`, `recheck_failed` for a plugin that changed,
 `not_renewable`). The console
 never runs without its hub (`--hub` is required): there is no standalone mode, and no
-rollback to one. The other hub flags `lox up` writes (`--devices-file`, `--require-device`,
+rollback to one. The other hub flags `lox run` writes (`--devices-file`, `--require-device`,
 `--seal-clear`, `--facade-keys-file` for a reveal of the clear screen on a local facade,
 Ctrl-O) come with `--hub` from lockkit; the console audits reveals and renewals.
 

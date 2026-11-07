@@ -19,15 +19,15 @@ only the socket volume:
   `sudo` and the image starts no shell;
 - the socket directory `/run/lockfile` (mode 2750,
   `lockfile:lockfile-clients`) is a named volume, shared by the console
-  container and the agent's containers (read-only there): `lox up`'s socket
+  container and the agent's containers (read-only there): `lox run`'s socket
   volume of the lock (`lockfamily-<hash>_<instance>-run`, named in
   `.lockfamily/up.json`). The kernel checks every peer on the socket as on
   a host;
 - the console's configuration is the workspace's `.lockfile/` directory
   (`config.toml`: profiles and marketplaces; SFTP keys and `known_hosts`):
-  `lox up` reviews it and copies it, read-only, to the console's
+  `lox run` reviews it and copies it, read-only, to the console's
   `~/.config/lockfile` (the volume `lockfamily-<hash>_profile-lockfile`);
-- the console's home is `lox up`'s volume `lockfamily-<hash>_<instance>-home`:
+- the console's home is `lox run`'s volume `lockfamily-<hash>_<instance>-home`:
   the plugin store and `plugins.lock`, the approved policies, the audit log,
   the fetched files (`work_dir`), cosign's trust root cache.
 
@@ -86,11 +86,11 @@ does.
 | Command | Runs as | Volumes, mounts |
 |---|---|---|
 | `console` | `lockfile`, in a container of its own per profile (`lockfile-console-<n>`; `LOCKFILE_CONSOLE_NAME` names it), under the seccomp profile, with no capability, `no-new-privileges`, a read-only root with a 64 MB `/tmp`, at most 512 processes and 4 GB of memory, no log driver, `--add-host=host.docker.internal:host-gateway` | `lockfile-run`, `lockfile-home` |
-| `profile`, `marketplace` | you (your uid and gid): they write the workspace's configuration | the workspace's `.lockfile/` only, at its own path ([below](#the-console-of-lox-up)) |
-| `plugin`, `audit`, `forget` | `lockfile` | the home of the console `lox up` runs, and its profile copy, read-only (`--instance NAME` picks one of several); none without `lox up`: they exit 2 and say why |
-| `doctor` | `lockfile`, under the seccomp profile | lox up's socket volume of the lock, read-only, its home and its profile copy, read-only, when there is one; none otherwise |
+| `profile`, `marketplace` | you (your uid and gid): they write the workspace's configuration | the workspace's `.lockfile/` only, at its own path ([below](#the-console-of-lox-run)) |
+| `plugin`, `audit`, `forget` | `lockfile` | the home of the console `lox run` starts, and its profile copy, read-only (`--instance NAME` picks one of several); none without `lox run`: they exit 2 and say why |
+| `doctor` | `lockfile`, under the seccomp profile | lox run's socket volume of the lock, read-only, its home and its profile copy, read-only, when there is one; none otherwise |
 | `init`, `doctor --fix` | you (your uid and gid): they write your agents' files | your home, and the project (the nearest directory up holding `.lockfile/`, or else `.git`), each at its own path |
-| the agent commands: `mcp`, `status`, `sources`, `plugins`, `plan`, `run`, `answers`, `release` | `agent` | the socket volume of the workspace's lockfile lock that `lox up` runs, read-only, only ([below](#the-socket-of-lox-ups-lock)) |
+| the agent commands: `mcp`, `status`, `sources`, `plugins`, `plan`, `run`, `answers`, `release` | `agent` | the socket volume of the workspace's lockfile lock that `lox run` starts, read-only, only ([below](#the-socket-of-lox-runs-lock)) |
 | everything else: `help`... | `agent` | none |
 
 The launcher reads:
@@ -105,23 +105,23 @@ The launcher reads:
 - `VAULT_ADDR`, `VAULT_NAMESPACE`: passed to the console; `VAULT_CACERT`
   too, with its file mounted read-only at its own path.
 
-### The socket of lox up's lock
+### The socket of lox run's lock
 
-The consoles run hub-attached only, started by `lox up` (lockhub): each
+The consoles run hub-attached only, started by `lox run` (lockhub): each
 under compose, with its socket in the volume
-`lockfamily-<8 hex of sha256(workspace)>_<instance>-run`, which `lox up`
-names in `<workspace>/.lockfamily/up.json` (lockhub's `docs/lox-up.md`).
+`lockfamily-<8 hex of sha256(workspace)>_<instance>-run`, which `lox run`
+names in `<workspace>/.lockfamily/up.json` (lockhub's `docs/lox-run.md`).
 The agent commands mount that volume on `/run/lockfile`, read-only
 (connecting to a socket needs no write), and no other: without it they stop
-(exit 2) and say why, and what to do (`lox up`), never falling back to the
+(exit 2) and say why, and what to do (`lox run`), never falling back to the
 fixed `lockfile-run`. The launcher takes the volume only after the checks
 lea makes for its own agents:
 
 - `up.json` is found in the nearest directory up from here whose
   `.lockfamily` holds one (that directory is the workspace); the
   `.lockfamily` directory and `up.json` are no link, are yours, and
-  neither group nor others may write them; `up.json` is lox up's state
-  (version 1, as `lox up` writes it: two-space indented JSON, the values
+  neither group nor others may write them; `up.json` is lox run's state
+  (version 1, as `lox run` writes it: two-space indented JSON, the values
   the launcher reads unescaped) of this very workspace (its `workspace`,
   and its `project` `lockfamily-<8 hex of sha256(workspace)>`);
 - the lock is the workspace's only lockfile lock, or the one `--instance
@@ -129,16 +129,16 @@ lea makes for its own agents:
   with several and no `--instance`, the error names them). In
   `.mcp.json`, add it to the arguments: `"args": ["mcp", "--instance",
   "NAME"]`;
-- its socket volume is the one `lox up` names for it, its clients group
+- its socket volume is the one `lox run` names for it, its clients group
   the image's (10030);
-- Docker confirms the volume: lox up's labels (compose's project and
+- Docker confirms the volume: lox run's labels (compose's project and
   volume, `dev.lockfamily.role=socket`, its instance, type and workspace),
   read as JSON and compared whole; and every container that mounts it is
-  lox up's own (compose ran it from lox up's state directory: its
+  lox run's own (compose ran it from lox run's state directory: its
   `project.working_dir` is `$XDG_STATE_HOME/lockfamily/<project>` or
   `~/.local/state/lockfamily/<project>`, its `config_files` `-` or that
   directory's `compose.yaml`) or mounts it read-only (the agents', as the
-  launcher's own). A compose file written in the workspace, with lox up's
+  launcher's own). A compose file written in the workspace, with lox run's
   project name and volume, or any container mounting the volume
   read-write, could serve the socket from an image of its own: the
   launcher then trusts none of that socket.
@@ -151,13 +151,13 @@ workspace's lock, a volume or compose file of the same name) and files
 others than you can write. They are no boundary against an agent that
 runs as you on the host with Docker access (Claude Code started in a
 terminal usually does): it can write `up.json`, make volumes and
-containers with any labels, or `docker exec` into lox up's containers.
+containers with any labels, or `docker exec` into lox run's containers.
 Even then it holds none of the console's credentials and cannot sign a
 decision (the hub signs them, the console checks the hub's key), but it
 could serve an impostor socket to another agent. To contain the agent
 itself, run it in lea, whose containers have no Docker access.
 
-lox up runs the console of the `default` profile (`--profile default`) unless the lock names another; the agent commands find its socket in the volume.
+lox run starts the console of the `default` profile (`--profile default`) unless the lock names another; the agent commands find its socket in the volume.
 
 It never mounts the Docker socket, and refuses a path holding `:` (docker
 `-v` separates on it).
@@ -206,9 +206,9 @@ An agent in a container of its own that reached the console through the gid
 10000 now needs gid 10030; `ALLOWED_UIDS` is unchanged.
 
 From a release before 0.6: `profile`, `plugin` and `marketplace` worked in
-the `lockfile-home` volume, which the console `lox up` runs never reads. Add
+the `lockfile-home` volume, which the console `lox run` starts never reads. Add
 the profiles again from the workspace (`lockfile profile add`, or copy the
-`config.toml` into `.lockfile/`, yours, `0600`), run `lox up`, then install
+`config.toml` into `.lockfile/`, yours, `0600`), run `lox run`, then install
 the plugins again; `lockfile-home` can then go (`docker volume rm lockfile-home`).
 
 From a host install (a release binary, then `sudo lockfile install`):
@@ -222,26 +222,26 @@ plugins, approved policies, audit log): copy what you keep into the
 
 ## Set up the console
 
-### The console of lox up
+### The console of lox run
 
-`lox up` (lockhub) runs the console and never mounts your workspace in it.
-The launcher's setup commands write where `lox up` reads:
+`lox run` (lockhub) runs the console and never mounts your workspace in it.
+The launcher's setup commands write where `lox run` reads:
 
 - **`profile`, `marketplace`** edit the workspace's `.lockfile/config.toml`,
   as you, in a container that mounts only `.lockfile/` (made `0700` when
   missing; the file `0600`). The workspace is the one the agent commands
   reach: the nearest directory up from here whose `.lockfamily/` holds
-  `up.json`, else, before the first `lox up`, the nearest one with
+  `up.json`, else, before the first `lox run`, the nearest one with
   `.lockfamily/`, else this directory (where `lox add` makes it). They
   refuse a `.lockfile` or `config.toml` that is a link, is not yours, or
-  that others may write: `lox up` would copy none of it. `lox up` shows the
+  that others may write: `lox run` would copy none of it. `lox run` shows the
   directory's files and every line of `config.toml` in its review, and
   copies them to the console's `~/.config/lockfile`, read-only; a change
-  reaches the console at the next `lox up`.
+  reaches the console at the next `lox run`.
 - **`plugin`, `audit`, `forget`** run as the console account with the home
-  of the console `lox up` runs (`lockfamily-<hash>_<instance>-home`) and its
-  profile copy, read-only, once Docker shows both are `lox up`'s (compose's
-  labels). Run them after `lox up`; with several lockfile locks,
+  of the console `lox run` starts (`lockfamily-<hash>_<instance>-home`) and its
+  profile copy, read-only, once Docker shows both are `lox run`'s (compose's
+  labels). Run them after `lox run`; with several lockfile locks,
   `--instance NAME` picks one. A running console applies an installed
   plugin after `:review` (`lox attach INSTANCE`).
 
@@ -282,7 +282,7 @@ Inside a container, a few things differ from a host:
   container does not have: use `credentials = "ask"` (typed in the console at
   each start), or `"vault"` with the `vault` image below.
 - **SFTP keys** (`auth = "key"`) and `known_hosts` go in the workspace's
-  `.lockfile/`, yours, the key mode 0600 (`lox up` keeps it owner-only in
+  `.lockfile/`, yours, the key mode 0600 (`lox run` keeps it owner-only in
   the copy, owned by the console):
 
   ```sh
@@ -295,9 +295,9 @@ Inside a container, a few things differ from a host:
 ### Plugins and marketplaces
 
 They are installed as the console account, in the home of the console
-`lox up` runs; marketplaces are added to the workspace's `.lockfile/config.toml`
+`lox run` starts; marketplaces are added to the workspace's `.lockfile/config.toml`
 (a new one reaches the console, and `plugin install` from it, after the next
-`lox up`). cosign is in the image; signatures are checked as on a host:
+`lox run`). cosign is in the image; signatures are checked as on a host:
 
 ```sh
 lockfile plugin install file.non-empty@1.0.0
@@ -319,18 +319,18 @@ separate](#what-docker-does-and-does-not-separate).
 
 ## Run the console
 
-The console runs hub-attached only: lockhub's `lox up` starts it with its hub flags
-(`lockfile console` on its own refuses to start: "launched by `lox up` only"):
+The console runs hub-attached only: lockhub's `lox run` starts it with its hub flags
+(`lockfile console` on its own refuses to start: "launched by `lox run` only"):
 
 ```sh
 lox add lockfile samples --profile samples
-lox up
+lox run
 lox attach samples   # the console's policy review (detach: Ctrl-P Ctrl-Q)
 lox approve          # the agent's plans
 ```
 
 The rest of this page describes the launcher's own console container (`lockfile console` with
-the hub flags `lox up` writes, and for example
+the hub flags `lox run` writes, and for example
 `LOCKFILE_DOCKER_ARGS="-v /data/samples:/srv/lockfile/samples:ro"`). The launcher takes from the
 container what the console never needs: every capability, privilege gain
 (the plugin sandbox sets `no_new_privs` itself), a writable root; and bounds
@@ -436,8 +436,8 @@ the flag adds them to it for that console only (the console prints them at
 start). Both refuse root (0), the console's own uid (10031) and 65534
 (nobody, the kernel's overflow uid). Only whoever starts the console sets
 them: the human, through the launcher (which passes the flag on) or
-through `lox up` (lockhub v0.2.4 or later: a lock's `allowed_uids` in the
-lockfamily.yaml `lox up` reviews with you); no client can. `lockfile doctor`
+through `lox run` (lockhub v0.2.4 or later: a lock's `allowed_uids` in the
+lockfamily.yaml `lox run` reviews with you); no client can. `lockfile doctor`
 in the agent's container cannot see a running console's flags: for a uid
 with no account it warns instead of failing. It is the uid the kernel reports for
 the agent's process, as the console sees it (the agent container's uid when
