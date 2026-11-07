@@ -16,7 +16,7 @@ import (
 // "--". PATH holds only the tools the launcher needs.
 type launcherFixture struct {
 	root, bin, project, calls, script, seccomp string
-	// fake holds what the fake docker prints for lox up's volumes and
+	// fake holds what the fake docker prints for lox run's volumes and
 	// containers (launcher_lockup_test.go).
 	fake string
 	env  []string
@@ -72,7 +72,7 @@ exit 0
 	f.script = filepath.Join(root, "lockfile")
 	writeExec(t, f.script, strings.Replace(string(launcher), "\nseccomp_profile=\n", "\nseccomp_profile="+f.seccomp+"\n", 1))
 	f.env = []string{"PATH=" + f.bin, "HOME=" + filepath.Join(root, "home")}
-	// The workspace (root) runs a lockfile lock files under lox up.
+	// The workspace (root) runs a lockfile lock files under lox run.
 	f.loxUp(t, root, map[string]string{"files": "lockfile"})
 	return f
 }
@@ -254,11 +254,11 @@ func TestLauncherAccountsPerCommand(t *testing.T) {
 	f := newLauncherFixture(t)
 	me := strconv.Itoa(os.Getuid()) + ":" + strconv.Itoa(os.Getgid())
 	home := filepath.Join(f.root, "home")
-	// The agent commands: lox up's socket volume, read-only; never the
+	// The agent commands: lox run's socket volume, read-only; never the
 	// fixed one of a console the launcher started.
 	run, fixed, homeVol := mountOf(f.root, "files"), []string{"-v", "lockfile-run:/run/lockfile"}, []string{"-v", "lockfile-home:/home/lockfile"}
 	asYou := [][]string{{"--user", me}, {"-e", "HOME=" + home}, {"-v", home + ":" + home}, {"-v", f.project + ":" + f.project}, {"-w", filepath.Join(f.project, "sub")}}
-	// The console account's commands: lox up's home of the lock and its
+	// The console account's commands: lox run's home of the lock and its
 	// profile copy, never the fixed lockfile-home.
 	console := append([][]string{{"--user", "lockfile"}}, homeMounts(f.root, "files")...)
 	// The configuration's commands: as you, the workspace's .lockfile only.
@@ -305,7 +305,7 @@ func TestLauncherAccountsPerCommand(t *testing.T) {
 			t.Errorf("%v: command %q", tc.args, got)
 		}
 	}
-	// profile add made the profile directory lox up copies: yours, 0700.
+	// profile add made the profile directory lox run copies: yours, 0700.
 	if fi, err := os.Lstat(pd); err != nil || !fi.IsDir() || fi.Mode().Perm() != 0o700 {
 		t.Fatalf("%s: %v %v", pd, fi, err)
 	}

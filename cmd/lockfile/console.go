@@ -19,7 +19,7 @@ import (
 )
 
 func init() {
-	commands["console"] = command{human: true, help: "serve a profile to agents, attached to lockhub (launched by lox up) --hub URL [--hub-plain-http] --hub-key-file F --instance N [--allowed-uids UID,...]", run: runConsole}
+	commands["console"] = command{human: true, help: "serve a profile to agents, attached to lockhub (launched by lox run) --hub URL [--hub-plain-http] --hub-key-file F --instance N [--allowed-uids UID,...]", run: runConsole}
 	commands["hub-key"] = command{human: true, help: "hub-key --instance NAME: print the instance key for lockhub to pin (lockfile account)", run: runHubKey}
 }
 
@@ -46,7 +46,7 @@ func runConsole(e env, args []string) int {
 	fs.Var(&allowed, "allowed-uids", "uids that may connect besides lockfile-clients' members (an agent in a container of its own)")
 	var hub console.HubOptions
 	hub.Register(fs)
-	const usage = "usage: lockfile console --profile NAME --hub URL [--hub-plain-http] --hub-key-file FILE --instance NAME [--allowed-uids UID,...] (launched by lox up)"
+	const usage = "usage: lockfile console --profile NAME --hub URL [--hub-plain-http] --hub-key-file FILE --instance NAME [--allowed-uids UID,...] (launched by lox run)"
 	if err := fs.Parse(args); err != nil || *profile == "" || fs.NArg() != 0 {
 		fmt.Fprintln(e.stderr, usage)
 		return product.ExitUsage
@@ -139,7 +139,7 @@ func withHome(o console.HubOptions, home string) console.HubOptions {
 }
 
 // runHubKey is `lockfile hub-key --instance NAME`: the instance's public
-// key, made on the first call in the account's home, for `lox up`.
+// key, made on the first call in the account's home, for `lox run`.
 func runHubKey(e env, args []string) int {
 	home := ""
 	if testConsoleHooks != nil {

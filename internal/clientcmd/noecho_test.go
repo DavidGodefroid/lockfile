@@ -18,24 +18,24 @@ func TestUnknownProfileHintDoesNotEcho(t *testing.T) {
 	}
 }
 
-// The start hints follow lockkit v0.9.1: a console is started by `lox up`
+// The start hints follow lockkit v0.9.1: a console is started by `lox run`
 // only, never by `lockfile console`. An unknown profile is not fixed by
-// `lox up` alone: its hint also lists the profiles and how to add one.
+// `lox run` alone: its hint also lists the profiles and how to add one.
 func TestStartHints(t *testing.T) {
-	if StartCommand() != "lox up" {
+	if StartCommand() != "lox run" {
 		t.Errorf("start command %q", StartCommand())
 	}
-	if NoConsoleText != "no lockfile console is running: the console is started by `lox up` only: ask the user to run `lox up`" {
+	if NoConsoleText != "no lockfile console is running: the console is started by `lox run` only: ask the user to run `lox run`" {
 		t.Errorf("no console: %q", NoConsoleText)
 	}
 	if strings.Contains(NoConsoleText, "--profile") {
 		t.Errorf("no console names a profile: %q", NoConsoleText)
 	}
 	h := UnknownProfileHint("other")
-	if !strings.HasPrefix(h, "if profile other exists, its console is not running: ask the user to run `lox up`;") {
-		t.Errorf("unknown profile does not lead with lox up: %q", h)
+	if !strings.HasPrefix(h, "if profile other exists, its console is not running: ask the user to run `lox run`;") {
+		t.Errorf("unknown profile does not lead with lox run: %q", h)
 	}
-	if h != "if profile other exists, its console is not running: ask the user to run `lox up`; otherwise use a profile listed by lockfile sources, or ask the user to set up profile other and declare it (lox add lockfile INSTANCE --profile other), then to run `lox up`" {
+	if h != "if profile other exists, its console is not running: ask the user to run `lox run`; otherwise use a profile listed by lockfile sources, or ask the user to set up profile other and declare it (lox add lockfile INSTANCE --profile other), then to run `lox run`" {
 		t.Errorf("unknown profile: %q", h)
 	}
 	for _, s := range []string{NoConsoleText, h} {

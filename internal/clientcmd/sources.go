@@ -157,7 +157,7 @@ func yesNo(b bool) string {
 }
 
 // NoConsoleText says that no console runs and how one starts: lockkit's
-// hint, `lox up` only.
+// hint, `lox run` only.
 var NoConsoleText = "no lockfile console is running: " + client.StartHint
 
 // probeTimeout bounds the status call of each console in Sources and

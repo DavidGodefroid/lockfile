@@ -3,7 +3,7 @@
 // Package docker runs the image of the Dockerfile as docs/docker.md does:
 // the console in one container under the shipped seccomp profile, attached
 // to a fake lockhub in the test process (hubtest; the console container is
-// on the host's network to reach it, as lox up puts it on the hub's), the
+// on the host's network to reach it, as lox run puts it on the hub's), the
 // agent's commands in others, sharing only the socket volume. It needs a
 // Docker daemon and the image built beforehand:
 //
@@ -149,7 +149,7 @@ func newSetup(t *testing.T) *setup {
 		"profile", "add", "--profile", "samples", "--source", "local", "--path", "/srv/lockfile/samples")
 
 	// The hub pins the instance key the console account made (hub-key, as
-	// lox up runs it); the console pins the hub's key.
+	// lox run starts it); the console pins the hub's key.
 	pubText := mustDk(t, "run", "--rm", "--user", "lockfile", "-v", s.home+":/home/lockfile", image, "hub-key", "--instance", hubInstance)
 	pub, err := base64.StdEncoding.DecodeString(strings.TrimSpace(pubText))
 	if err != nil || len(pub) != ed25519.PublicKeySize {

@@ -323,10 +323,10 @@ func doctorConsoleSide(h doctorHooks, sys *sysconf.Config, add func(string, stri
 	f, err := profile.ReadFile(path)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
-		add("config", "warn", "no profile yet: lockfile profile add --profile NAME --source … from the workspace, then lox up")
+		add("config", "warn", "no profile yet: lockfile profile add --profile NAME --source … from the workspace, then lox run")
 		return
 	case err != nil:
-		add("config", "fail", "the config file does not load: the console names the error when `lox up` starts it")
+		add("config", "fail", "the config file does not load: the console names the error when `lox run` starts it")
 		return
 	}
 	add("config", "ok", fmt.Sprintf("%d profile(s)", len(f.Profiles)))

@@ -25,7 +25,7 @@ const profileUsage = "profile add [--non-interactive] [--json] [--project DIR] [
 	"--source local|s3|sftp [--path DIR] [--bucket B --region R --endpoint URL] [--host H --port N --user U --auth key|password --key FILE --known-hosts FILE --base-dir D] [--prefix P]"
 
 // defaultProfile is the profile profile add writes without --profile, the
-// one lox up starts a lockfile lock with when lockfamily.yaml names none.
+// one lox run starts a lockfile lock with when lockfamily.yaml names none.
 const defaultProfile = "default"
 
 // profileFlags are the string target options of profile add, by TOML key:
@@ -322,9 +322,9 @@ func runProfile(e env, args []string) int {
 		fmt.Fprintf(hint, "added profile %s to %s\n", pname, path)
 	}
 	if os.Getenv(workspaceEnv) != "" || set[verbs.FlagProject] {
-		fmt.Fprintf(hint, "lox up reviews it and copies it to the console: lox add lockfile INSTANCE --profile %s, then lox up\n", pname)
+		fmt.Fprintf(hint, "lox run reviews it and copies it to the console: lox add lockfile INSTANCE --profile %s, then lox run\n", pname)
 	} else {
-		fmt.Fprintf(hint, "start it with its hub: lox add lockfile INSTANCE --profile %s, then lox up\n", pname)
+		fmt.Fprintf(hint, "start it with its hub: lox add lockfile INSTANCE --profile %s, then lox run\n", pname)
 	}
 	return product.ExitOK
 }

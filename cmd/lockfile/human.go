@@ -62,15 +62,15 @@ func configPath() (string, error) {
 
 // workspaceEnv names the workspace whose profile the commands that write
 // the configuration (profile add, marketplace add|remove|list) edit:
-// <workspace>/.lockfile/config.toml. lox up never mounts that directory:
+// <workspace>/.lockfile/config.toml. lox run never mounts that directory:
 // it reviews it and copies it, read-only, to the console's
 // ~/.config/lockfile (lockhub's internal/family/profile.go). The launcher
 // sets it and runs these commands as you, from the workspace.
 const workspaceEnv = "LOCKFILE_WORKSPACE"
 
 // workspaceConfig is the config file of the workspace ws, once its
-// profile directory is one lox up copies: no link, yours, that neither
-// your group nor others may write (lox up refuses any other).
+// profile directory is one lox run copies: no link, yours, that neither
+// your group nor others may write (lox run refuses any other).
 func workspaceConfig(ws string) (string, error) {
 	if !filepath.IsAbs(ws) {
 		return "", fmt.Errorf("%s: the workspace must be an absolute path", workspaceEnv)
@@ -91,15 +91,15 @@ func workspaceConfig(ws string) (string, error) {
 		}
 		switch {
 		case p == dir && !fi.IsDir():
-			return "", fmt.Errorf("%s: not a directory (a link?): lox up copies none", p)
+			return "", fmt.Errorf("%s: not a directory (a link?): lox run copies none", p)
 		case p == file && !fi.Mode().IsRegular():
-			return "", fmt.Errorf("%s: not a regular file (a link?): lox up copies none", p)
+			return "", fmt.Errorf("%s: not a regular file (a link?): lox run copies none", p)
 		}
 		if uid, _, ok := fileOwner(fi); ok && uid != euid() {
-			return "", fmt.Errorf("%s: owned by uid %d, not by you: lox up copies none", p, uid)
+			return "", fmt.Errorf("%s: owned by uid %d, not by you: lox run copies none", p, uid)
 		}
 		if fi.Mode().Perm()&0o022 != 0 {
-			return "", fmt.Errorf("%s: mode %04o: writable by others than you, lox up copies none (chmod go-w %s)", p, fi.Mode().Perm(), p)
+			return "", fmt.Errorf("%s: mode %04o: writable by others than you, lox run copies none (chmod go-w %s)", p, fi.Mode().Perm(), p)
 		}
 	}
 	return file, nil
