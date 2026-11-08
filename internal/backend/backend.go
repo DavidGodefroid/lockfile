@@ -13,6 +13,7 @@ import (
 
 	"github.com/DavidGodefroid/lockkit/config"
 	"github.com/DavidGodefroid/lockkit/console"
+	"github.com/DavidGodefroid/lockkit/hubclient"
 	"github.com/DavidGodefroid/lockkit/kit"
 
 	"github.com/DavidGodefroid/lockfile/internal/answers"
@@ -70,6 +71,12 @@ type Backend struct {
 
 	sanOnce sync.Once
 	san     *profileSanitizer
+
+	// hubClient is the console's hub client (OnHub), limits the ticket
+	// limits of the policy in force (ApplyPolicy; nil before the first).
+	limMu     sync.Mutex
+	hubClient *hubclient.Client
+	limits    *hubclient.Limits
 }
 
 var _ console.Backend = (*Backend)(nil)

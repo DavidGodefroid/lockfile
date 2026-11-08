@@ -91,6 +91,10 @@ type RawProfile struct {
 	MaxPluginsPerHandle int    `toml:"max_plugins_per_handle"`
 	HandleTTL           string `toml:"handle_ttl"`
 	AnswerQuantum       string `toml:"answer_quantum"`
+	// hub ticket limits (lockkit's config.Base; 0 = hubclient's default)
+	TicketsPerWindow int    `toml:"tickets_per_window"`
+	TicketWindow     string `toml:"ticket_window"`
+	MaxPending       int    `toml:"max_pending"`
 }
 
 // Profile is a validated profile with its defaults applied.
@@ -233,6 +237,13 @@ func parseProfile(name string, r RawProfile) (Profile, error) {
 		return Profile{}, err
 	}
 	p.Base = withTimerDefaults(p.Base)
+	if r.TicketsPerWindow < 0 || r.MaxPending < 0 {
+		return Profile{}, errors.New("tickets_per_window and max_pending must not be negative")
+	}
+	p.TicketsPerWindow, p.MaxPending = r.TicketsPerWindow, r.MaxPending
+	if p.TicketWindow, err = duration("ticket_window", r.TicketWindow, 0); err != nil {
+		return Profile{}, err
+	}
 	if p.HandleTTL, err = duration("handle_ttl", r.HandleTTL, DefaultHandleTTL); err != nil {
 		return Profile{}, err
 	}
