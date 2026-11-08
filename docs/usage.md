@@ -99,7 +99,14 @@ max_object_bytes = "50MiB"    # larger objects are not fetched
 max_plugins_per_handle = 16   # answers revealed about one fetched file, at most
 handle_ttl = "30m"            # a fetched file is deleted after this
 answer_quantum = "5s"         # results leave the console only on multiples of this
+tickets_per_window = 30       # hub tickets a human decides, per ticket_window at most
+ticket_window = "5m"
+max_pending = 30              # hub tickets pending a decision at once, at most
 ```
+
+The ticket limits bound the questions an agent can put to you on lockhub
+([configuration.md](configuration.md)); more tickets, a shorter `ticket_window` or a higher
+`max_pending` is a loosening, a lowering applies at once.
 
 Top-level `work_dir` (absolute, default under the state directory) and `max_workspace_bytes`
 (default `1GiB`, all fetched files together) are part of the approved policy: the console

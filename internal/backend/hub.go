@@ -284,8 +284,12 @@ func (b *Backend) recompute(sp *plans.Plan) (string, string, map[string]string, 
 
 // OnHub is console.Options.OnHub: the console's hub, before any request,
 // gets the recompute, so a renewal asked from the hub right after a start
-// is checked too.
-func (b *Backend) OnHub(h *console.Hub) { h.Client.SetRecompute(b.recompute) }
+// is checked too; its client is kept for the ticket limits of the policy
+// in force (ApplyPolicy).
+func (b *Backend) OnHub(h *console.Hub) {
+	h.Client.SetRecompute(b.recompute)
+	b.setHubClient(h.Client)
+}
 
 // auditRenewal records the renewal of expired ticket old by the agent's
 // run: the new ticket n, or why it could not be asked again (err: the

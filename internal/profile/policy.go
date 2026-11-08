@@ -218,6 +218,8 @@ func (p *Policy) Describe() []string {
 		fmt.Sprintf("limits: max_object_bytes %d · max_plugins_per_handle %d · handle_ttl %s · answer_quantum %s",
 			pr.MaxObjectBytes, pr.MaxPluginsPerHandle, pr.HandleTTL, pr.AnswerQuantum),
 	}
+	l := pr.TicketLimits()
+	lines = append(lines, fmt.Sprintf("tickets: %d per %s · %d pending (at most %d per window, auto-decided included)", l.RateN, l.RateWindow, l.MaxPending, l.RateTotal))
 	ws := p.Workspace.withDefaults()
 	dir := ws.Dir
 	if dir == "" {
