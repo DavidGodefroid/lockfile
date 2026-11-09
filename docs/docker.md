@@ -277,7 +277,14 @@ Inside a container, a few things differ from a host:
 - **`localhost` is the container itself.** A server on your machine is
   `host.docker.internal`, which the launcher maps to your machine; a server
   in another container is reached by its name on a shared network
-  (`LOCKFILE_DOCKER_ARGS="--network NAME" lockfile console ...`).
+  (`LOCKFILE_DOCKER_ARGS="--network NAME" lockfile console ...`). A local
+  S3-compatible store without TLS (MinIO, LocalStack) is
+  `endpoint = "http://host.docker.internal:9000"`: plain `http://` is
+  accepted to `host.docker.internal` and `localhost` only, never on a
+  production profile, and the policy review, the status screen, `lockfile
+  doctor` and `profile add` warn that the connection is NOT encrypted. An
+  endpoint on `localhost` is flagged there too: under `lox run` it is the
+  lock's own container.
 - **No keychain.** `credentials = "keychain"` needs an OS keychain, which the
   container does not have: use `credentials = "ask"` (typed in the console at
   each start), or `"vault"` with the `vault` image below.

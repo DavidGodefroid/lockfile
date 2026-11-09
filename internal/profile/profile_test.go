@@ -146,3 +146,50 @@ func TestWhereHasNoSecret(t *testing.T) {
 		t.Errorf("console profile = %+v", got)
 	}
 }
+
+func TestS3Endpoint(t *testing.T) {
+	s3 := "[profiles.dev]\nsource = \"s3\"\nbucket = \"documents\"\n"
+	for _, tc := range []struct {
+		endpoint   string
+		production bool
+		ok         bool
+		warnings   []string
+	}{
+		{"https://minio.example.org", false, true, nil},
+		{"https://minio.example.org", true, true, nil},
+		{"http://host.docker.internal:9010", false, true, []string{"NOT encrypted"}},
+		{"http://HOST.DOCKER.INTERNAL:9010", false, true, []string{"NOT encrypted"}},
+		{"http://localhost:9010", false, true, []string{"NOT encrypted", "localhost is the lock's own container; use host.docker.internal"}},
+		{"http://127.0.0.1:9010", false, true, []string{"NOT encrypted", "localhost is the lock's own container"}},
+		{"http://[::1]:9010", false, true, []string{"NOT encrypted", "localhost is the lock's own container"}},
+		{"https://localhost:9010", false, true, []string{"localhost is the lock's own container"}},
+		{"http://host.docker.internal:9010", true, false, nil},
+		{"http://localhost:9010", true, false, nil},
+		{"http://minio.example.org", false, false, nil},
+		{"http://host.docker.internal.example.org", false, false, nil},
+		{"http://192.168.1.10:9000", false, false, nil},
+	} {
+		cfg := s3 + "endpoint = \"" + tc.endpoint + "\"\n"
+		if tc.production {
+			cfg += "production = true\n"
+		}
+		f, err := Parse([]byte(cfg), "c")
+		if (err == nil) != tc.ok {
+			t.Errorf("%s (production %v): err = %v, want ok %v", tc.endpoint, tc.production, err, tc.ok)
+			continue
+		}
+		if err != nil {
+			continue
+		}
+		w := f.Profiles["dev"].EndpointWarnings()
+		if len(w) != len(tc.warnings) {
+			t.Errorf("%s: warnings %q, want %d", tc.endpoint, w, len(tc.warnings))
+			continue
+		}
+		for i, want := range tc.warnings {
+			if !strings.Contains(w[i], want) {
+				t.Errorf("%s: warning %q, want %q", tc.endpoint, w[i], want)
+			}
+		}
+	}
+}

@@ -13,7 +13,7 @@ holds a secret, and `profile add` never takes one.
 source = "s3"                 # s3 | sftp | local
 bucket = "documents"
 region = "eu-west-1"
-endpoint = ""                 # S3-compatible server; https:// (http:// only for localhost)
+endpoint = ""                 # S3-compatible server; https:// (http:// only to host.docker.internal or localhost, never production)
 prefix = "invoices/"          # keys outside the prefix are refused
 credentials = "vault"         # ask | vault (none: local, or an unencrypted sftp key); no keychain in Docker
 vault_path = "secret/data/lockfile/docs"   # username = access key id, password = secret key

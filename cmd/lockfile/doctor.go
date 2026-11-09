@@ -353,6 +353,9 @@ func doctorConsoleSide(h doctorHooks, sys *sysconf.Config, add func(string, stri
 	sort.Strings(names)
 	for _, name := range names {
 		p := f.Profiles[name]
+		for _, w := range p.EndpointWarnings() {
+			add("s3 endpoint", "warn", "profile "+name+": "+w)
+		}
 		if p.Source != "local" {
 			continue
 		}

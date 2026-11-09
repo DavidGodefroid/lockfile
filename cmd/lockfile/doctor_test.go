@@ -394,3 +394,30 @@ func TestDoctorClientsGroupAgentWithoutAccount(t *testing.T) {
 		t.Fatalf("an account outside the group:\n%s", out)
 	}
 }
+
+// lox add runs the doctor: an S3 endpoint in plain http, or on localhost
+// (the lock's own container under lox run), is a warning there.
+func TestDoctorS3EndpointWarnings(t *testing.T) {
+	h := doctorEnv(t, "/nonexistent")
+	h.sys = func() (*sysconf.Config, error) { return nil, nil }
+	hh, _ := humanEnv(t, "official")
+	cfg := "[profiles.loop]\nsource = \"s3\"\nbucket = \"documents\"\nendpoint = \"http://localhost:9010\"\n" +
+		"[profiles.minio]\nsource = \"s3\"\nbucket = \"documents\"\nendpoint = \"http://host.docker.internal:9010\"\n" +
+		"[profiles.aws]\nsource = \"s3\"\nbucket = \"documents\"\nregion = \"eu-west-1\"\n"
+	if err := os.WriteFile(hh.configPath, []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, out, _ := runArgs(t, "", "doctor")
+	for _, want := range []string{
+		"profile loop: endpoint localhost:9010: under lox run, localhost is the lock's own container; use host.docker.internal",
+		"profile loop: the connection to the S3 endpoint localhost:9010 is NOT encrypted",
+		"profile minio: the connection to the S3 endpoint host.docker.internal:9010 is NOT encrypted",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("doctor lacks %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "profile aws:") || strings.Contains(out, "profile minio: endpoint") {
+		t.Errorf("unexpected endpoint warning:\n%s", out)
+	}
+}
