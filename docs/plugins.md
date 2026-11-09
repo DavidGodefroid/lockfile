@@ -37,4 +37,9 @@ A running console applies a newly installed plugin after `:review`
 added, is flagged on every approval screen and in every agent result, and is
 never auto-approved.
 
+If the official index cannot be downloaded, the `plugin` commands say that the official marketplace is unreachable or not published
+and give its URL (`https://davidgodefroid.github.io/lockfile-marketplace/index.json`);
+a scheduled workflow (`official-index`) checks every day that this index
+answers and that its signature verifies.
+
 **Writing a plugin**: see [plugin-contract.md](plugin-contract.md).

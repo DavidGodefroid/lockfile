@@ -11,6 +11,11 @@ Builds on lockkit v0.15.0 (from v0.14.1).
   shorter window or more pending tickets is a loosening, reviewed like the others (the typed
   profile name on production), a lowering applies at once. The status screen shows the limits
   in force (DavidGodefroid/lockkit#150).
+- **Official marketplace unreachable**: a failed download of the official index or of its
+  signature (an HTTP error such as 404, a host that does not answer) now says that the
+  official marketplace is unreachable or not published and gives its URL, instead of a bare
+  `HTTP 404`. A daily `official-index` workflow checks that the index answers and verifies
+  against the pinned identity (lockfile#61).
 
 ## v0.8.1 (2026-11-07)
 

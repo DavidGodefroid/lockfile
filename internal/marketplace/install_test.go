@@ -315,3 +315,53 @@ func TestDiffManifestsQuestionChanged(t *testing.T) {
 		t.Fatalf("limits/accepts: %v %v", changed, lines)
 	}
 }
+
+// An official index that cannot be downloaded (not published: 404 on the
+// index or on its signature; or the host unreachable) says so and gives
+// OfficialIndexURL, never the URL it fetched; another marketplace's error
+// stays bare.
+func TestOfficialIndexUnreachable(t *testing.T) {
+	const hint = "the official marketplace is unreachable or not published (" + OfficialIndexURL + ")"
+	missing := newMarket(t, "official")
+	missing.srv.Config.Handler = http.NotFoundHandler()
+	unsigned := newMarket(t, "official")
+	delete(unsigned.files, "/index.json.sigstore.json")
+	refused := newMarket(t, "official")
+	for _, tc := range []struct {
+		name string
+		m    *market
+		url  string
+		want string
+	}{
+		{"index 404", missing, "", "marketplace official: index: download: HTTP 404: " + hint},
+		{"signature 404", unsigned, "", "marketplace official: index signature: download: HTTP 404: " + hint},
+		{"connection refused", refused, "https://127.0.0.1:1/index.json", "marketplace official: index: download: "},
+	} {
+		inst, _ := tc.m.installer(t)
+		mp := tc.m.marketplace("official", true)
+		if tc.url != "" {
+			mp.IndexURL = tc.url
+		}
+		_, err := inst.Install(context.Background(), mp, "pdf.parses", "1.0.0")
+		if err == nil || !strings.HasPrefix(err.Error(), tc.want) || !strings.HasSuffix(err.Error(), hint) {
+			t.Errorf("%s: %v, want %q ... %q", tc.name, err, tc.want, hint)
+			continue
+		}
+		if strings.Contains(err.Error(), tc.m.srv.URL) || strings.Contains(err.Error(), "127.0.0.1") {
+			t.Errorf("%s: the error quotes the fetched URL: %v", tc.name, err)
+		}
+	}
+
+	inst, _ := missing.installer(t)
+	_, err := inst.Install(context.Background(), missing.marketplace("acme", false), "pdf.parses", "1.0.0")
+	if err == nil || err.Error() != "marketplace acme: index: download: HTTP 404" {
+		t.Errorf("unofficial: %v", err)
+	}
+
+	// A refused or oversized download is not an unreachable marketplace.
+	mp := missing.marketplace("official", true)
+	mp.IndexURL = "http://example.org/index.json"
+	if _, err := inst.Install(context.Background(), mp, "pdf.parses", "1.0.0"); err == nil || strings.Contains(err.Error(), "not published") {
+		t.Errorf("non-https: %v", err)
+	}
+}
