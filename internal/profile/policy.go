@@ -229,6 +229,9 @@ func (p *Policy) Describe() []string {
 	if pr.Production {
 		lines = append(lines, "PRODUCTION")
 	}
+	for _, w := range pr.EndpointWarnings() {
+		lines = append(lines, "WARNING "+w)
+	}
 	if len(p.Plugins) == 0 {
 		lines = append(lines, "plugins: none installed")
 	}

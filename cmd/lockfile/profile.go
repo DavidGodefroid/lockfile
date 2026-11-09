@@ -321,6 +321,11 @@ func runProfile(e env, args []string) int {
 	} else {
 		fmt.Fprintf(hint, "added profile %s to %s\n", pname, path)
 	}
+	added := profile.Profile{Source: source}
+	added.S3.Endpoint = p.str("endpoint")
+	for _, w := range added.EndpointWarnings() {
+		fmt.Fprintln(hint, "WARNING "+w)
+	}
 	if os.Getenv(workspaceEnv) != "" || set[verbs.FlagProject] {
 		fmt.Fprintf(hint, "lox run reviews it and copies it to the console: lox add lockfile INSTANCE --profile %s, then lox run\n", pname)
 	} else {

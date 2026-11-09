@@ -346,7 +346,7 @@ func (p *Profile) s3(r RawProfile) error {
 		return errors.New("region or endpoint is required")
 	}
 	if r.Endpoint != "" {
-		if err := checkEndpoint(r.Endpoint); err != nil {
+		if err := checkEndpoint(r.Endpoint, r.Production); err != nil {
 			return err
 		}
 	}
@@ -354,9 +354,15 @@ func (p *Profile) s3(r RawProfile) error {
 	return p.credentials(r.Credentials, false)
 }
 
-// checkEndpoint accepts https, and plain http to the local machine only
-// (a local S3-compatible store for tests).
-func checkEndpoint(e string) error {
+// HostGateway is the name lox run and the console's container give this
+// machine.
+const HostGateway = "host.docker.internal"
+
+// checkEndpoint accepts https, and plain http to a local S3-compatible
+// store (tests, MinIO, LocalStack) on this machine: host.docker.internal
+// from the console's container, localhost outside one. Never plain http
+// for a production profile.
+func checkEndpoint(e string, production bool) error {
 	u, err := url.Parse(e)
 	if err != nil || u.Host == "" || u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" {
 		return errors.New("endpoint must be a bare https:// URL")
@@ -365,11 +371,36 @@ func checkEndpoint(e string) error {
 	case "https":
 		return nil
 	case "http":
-		if h := u.Hostname(); h == "localhost" || h == "127.0.0.1" || h == "::1" {
-			return nil
+		if h := u.Hostname(); !config.IsLoopback(h) && !strings.EqualFold(h, HostGateway) {
+			break
 		}
+		if production {
+			return errors.New("endpoint must be https:// for a production profile")
+		}
+		return nil
 	}
-	return errors.New("endpoint must be https:// (http:// only to localhost)")
+	return errors.New("endpoint must be https:// (http:// only to " + HostGateway + " or localhost)")
+}
+
+// EndpointWarnings are the weaknesses of an accepted S3 endpoint, for the
+// policy review, the doctor and profile add: plain http, and localhost,
+// which under lox run is the lock's own container.
+func (p Profile) EndpointWarnings() []string {
+	if p.Source != SourceS3 || p.S3.Endpoint == "" {
+		return nil
+	}
+	u, err := url.Parse(p.S3.Endpoint)
+	if err != nil {
+		return nil
+	}
+	var w []string
+	if strings.EqualFold(u.Scheme, "http") {
+		w = append(w, "the connection to the S3 endpoint "+u.Host+" is NOT encrypted (http://)")
+	}
+	if config.IsLoopback(u.Hostname()) {
+		w = append(w, "endpoint "+u.Host+": under lox run, localhost is the lock's own container; use "+HostGateway)
+	}
+	return w
 }
 
 func (p *Profile) sftp(r RawProfile) error {

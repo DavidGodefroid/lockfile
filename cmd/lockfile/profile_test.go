@@ -289,3 +289,40 @@ func TestProfileAddOldFormsRefused(t *testing.T) {
 		t.Fatalf("written: %v", err)
 	}
 }
+
+// lox add's S3 endpoint on this machine: http://host.docker.internal is
+// accepted with the NOT encrypted warning, localhost is flagged as the
+// lock's own container, and a production profile keeps https only.
+func TestProfileAddLocalS3Endpoint(t *testing.T) {
+	h, _ := humanEnv(t, "official")
+	noTerminal(h)
+	for _, tc := range []struct {
+		profile, endpoint string
+		warnings          []string
+	}{
+		{"minio", "http://host.docker.internal:9010", []string{"WARNING the connection to the S3 endpoint host.docker.internal:9010 is NOT encrypted"}},
+		{"loop", "http://localhost:9010", []string{"NOT encrypted", "WARNING endpoint localhost:9010: under lox run, localhost is the lock's own container; use host.docker.internal"}},
+	} {
+		code, out, errText := runArgs(t, "", "profile", "add", "--non-interactive", "--json", "--profile", tc.profile, "--source", "s3",
+			"--bucket", "documents", "--endpoint", tc.endpoint)
+		if code != product.ExitOK {
+			t.Fatalf("%s: exit %d: %s %s", tc.endpoint, code, out, errText)
+		}
+		var p verbs.Profile
+		jsonLine(t, out, &p)
+		for _, w := range tc.warnings {
+			if !strings.Contains(errText, w) {
+				t.Errorf("%s: stderr lacks %q: %s", tc.endpoint, w, errText)
+			}
+		}
+	}
+	f, err := profile.ReadFile(h.configPath)
+	if err != nil || f.Profiles["minio"].S3.Endpoint != "http://host.docker.internal:9010" {
+		t.Fatalf("%+v %v", f, err)
+	}
+	code, _, errText := runArgs(t, "", "profile", "add", "--non-interactive", "--profile", "prod", "--production", "--source", "s3",
+		"--bucket", "documents", "--endpoint", "http://host.docker.internal:9010")
+	if code != product.ExitUsage || !strings.Contains(errText, "https:// for a production profile") {
+		t.Fatalf("production http: exit %d: %s", code, errText)
+	}
+}

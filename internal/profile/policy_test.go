@@ -3,6 +3,7 @@ package profile
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -166,5 +167,17 @@ func TestDescribeWarnsUnofficial(t *testing.T) {
 	lines := p.Describe()
 	if lines[len(lines)-1][:7] != "WARNING" {
 		t.Fatalf("describe = %q", lines)
+	}
+}
+
+func TestDescribeWarnsPlainEndpoint(t *testing.T) {
+	p := basePolicy(t)
+	p.P.Source, p.P.S3.Endpoint = SourceS3, "http://localhost:9010"
+	got := strings.Join(p.Describe(), "\n")
+	for _, want := range []string{"WARNING the connection to the S3 endpoint localhost:9010 is NOT encrypted",
+		"WARNING endpoint localhost:9010: under lox run, localhost is the lock's own container; use host.docker.internal"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("describe lacks %q:\n%s", want, got)
+		}
 	}
 }

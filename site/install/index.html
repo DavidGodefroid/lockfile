@@ -120,7 +120,7 @@ lockfile profile add --profile samples --source local --path /srv/lockfile/sampl
 source = "s3"                 <span class="cmt"># s3 | sftp | local</span>
 bucket = "documents"
 region = "eu-west-1"
-endpoint = ""                 <span class="cmt"># S3-compatible server; https:// (http:// only for localhost)</span>
+endpoint = ""                 <span class="cmt"># S3-compatible server; https:// (http:// only to host.docker.internal or localhost, never production)</span>
 prefix = "invoices/"          <span class="cmt"># keys outside the prefix are refused</span>
 credentials = "vault"         <span class="cmt"># ask | vault</span>
 vault_path = "secret/data/lockfile/docs"

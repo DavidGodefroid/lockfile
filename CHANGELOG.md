@@ -25,6 +25,16 @@ Builds on lockkit v0.15.0 (from v0.14.1).
   `lockfile_status` first, says why, instead of a closed connection
   (DavidGodefroid/lockfile#60).
 
+- **Local S3 store under `lox run`**: an S3 `endpoint` may be plain `http://` to
+  `host.docker.internal` (the host, as `lox run` maps it), as it was to `localhost`, so a MinIO
+  or LocalStack without TLS on your machine works from the console's container; `lox run`'s
+  allowlist reaches it. Plain `http://` is refused on a production profile (to `localhost` as
+  well, which it accepted before). The policy review and the status screen show `WARNING the
+  connection to the S3 endpoint HOST:PORT is NOT encrypted`, and `lockfile doctor` and `profile
+  add` (both run by `lox add`) warn too. An endpoint on `localhost` or a loopback address is
+  flagged the same way: under `lox run` it is the lock's own container, use
+  `host.docker.internal` (DavidGodefroid/lockfile#62).
+
 ## v0.8.1 (2026-11-07)
 
 Builds on lockkit v0.14.1 (from v0.13.0). No behavior change: container labels, files
