@@ -26,6 +26,10 @@ import (
 // agent code.
 var ErrYanked = errors.New("plugin_yanked")
 
+// errDownload marks a download that failed (status, transport): not a
+// refused URL or a file too large.
+var errDownload = errors.New("download")
+
 // Download caps.
 const (
 	maxIndex    = 4 << 20
@@ -160,10 +164,10 @@ func (i Installer) index(ctx context.Context, m Marketplace, tmp string) (index.
 	idxPath := filepath.Join(tmp, "index.json")
 	idxBytes, err := i.fetch(ctx, m.what("", "", "index"), m.IndexURL, idxPath, maxIndex)
 	if err != nil {
-		return index.Index{}, err
+		return index.Index{}, m.unreachable(err)
 	}
 	if _, err := i.fetch(ctx, m.what("", "", "index signature"), m.IndexURL+".sigstore.json", idxPath+".sigstore.json", maxBundle); err != nil {
-		return index.Index{}, err
+		return index.Index{}, m.unreachable(err)
 	}
 	if err := i.Verifier.VerifyBlob(ctx, idxPath, idxPath+".sigstore.json", m.Root); err != nil {
 		return index.Index{}, fmt.Errorf("marketplace %s: index signature: %w", m.Name, err)
@@ -211,6 +215,17 @@ func (m Marketplace) what(name, version, file string) string {
 	return fmt.Sprintf("marketplace %s: %s@%s %s", m.Name, name, version, file)
 }
 
+// unreachable explains a failed download of the official index: the
+// marketplace is unreachable or not published, at OfficialIndexURL. It
+// quotes that constant, never m.IndexURL; other marketplaces' errors are
+// kept as they are.
+func (m Marketplace) unreachable(err error) error {
+	if !m.Official || !errors.Is(err, errDownload) || errors.Is(err, context.Canceled) {
+		return err
+	}
+	return fmt.Errorf("%w: the official marketplace is unreachable or not published (%s)", err, OfficialIndexURL)
+}
+
 // fetch downloads an https URL, at most max bytes, into path; what labels
 // its errors, which never quote the URL.
 func (i Installer) fetch(ctx context.Context, what, rawURL, path string, max int64) ([]byte, error) {
@@ -224,15 +239,15 @@ func (i Installer) fetch(ctx context.Context, what, rawURL, path string, max int
 	}
 	resp, err := SafeClient(i.HTTP).Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("%s: download: %w", what, transportError(err))
+		return nil, fmt.Errorf("%s: %w: %w", what, errDownload, transportError(err))
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%s: download: HTTP %d", what, resp.StatusCode)
+		return nil, fmt.Errorf("%s: %w: HTTP %d", what, errDownload, resp.StatusCode)
 	}
 	b, err := io.ReadAll(io.LimitReader(resp.Body, max+1))
 	if err != nil {
-		return nil, fmt.Errorf("%s: download: %w", what, transportError(err))
+		return nil, fmt.Errorf("%s: %w: %w", what, errDownload, transportError(err))
 	}
 	if int64(len(b)) > max {
 		return nil, fmt.Errorf("%s is larger than %d bytes", what, max)
