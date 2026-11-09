@@ -51,26 +51,30 @@ type caller interface {
 	Close() error
 }
 
-// instance is the lock instance every call reaches (SetInstance): ""
-// is the socket directory itself, as before instances.
-var instance string
-
-// SetInstance sets the lock instance every call reaches, the one
-// client.ResolveInstance resolved once per process (the CLI after its
-// flags, mcp before it serves).
-func SetInstance(name string) { instance = name }
-
 // dial connects to profile's console. Profiles live in the lockfile
 // account, never in a project: the client dials from "/" so that no
 // project directory changes the socket it looks for. The socket is the
-// lock instance's (SetInstance); a leftover --instance or
+// lock instance's (SetInstance), or with several locks (SetInstances) the
+// one of the lock that serves profile; a leftover --instance or
 // <PREFIX>INSTANCE whose lock is not mounted here fails before the dial
 // with errInstanceNotMounted, which closed names.
 var dial = func(profile string) (caller, error) {
-	if err := instanceNotMountedErr(); err != nil {
+	if instanceErr != nil {
+		return nil, instanceErr
+	}
+	inst, err := instanceOf(profile)
+	if err != nil {
 		return nil, err
 	}
-	return client.DialInstance(product.P, "/", profile, instance)
+	return dialIn(inst, profile)
+}
+
+// dialIn connects to profile's console of the lock instance inst.
+func dialIn(inst, profile string) (caller, error) {
+	if err := instanceNotMountedErr(inst); err != nil {
+		return nil, err
+	}
+	return client.DialInstance(product.P, "/", profile, inst)
 }
 
 // StartCommand is the command that starts the consoles: lockkit's, `lox
@@ -113,6 +117,10 @@ func closed(profile string, err error) error {
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return err
+	}
+	var ce *Error
+	if errors.As(err, &ce) {
+		return ce
 	}
 	if errors.Is(err, client.ErrNoConsole) {
 		return unknownProfile(profile)

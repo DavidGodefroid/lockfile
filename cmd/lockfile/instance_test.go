@@ -153,16 +153,15 @@ var agentCommands = [][]string{
 	{"mcp"},
 }
 
-// Several locks listed by lea and none chosen: lockkit's error, a usage
-// error.
+// Several locks listed by lea and none chosen: no usage error, every
+// command reaches the listed locks (none runs here), and nothing is
+// created in the socket directory.
 func TestInstanceSeveralNoneChosen(t *testing.T) {
 	dir := instanceSetup(t)
 	t.Setenv("LEA_LOCKFILE_INSTANCES", "inventory orders")
 	for _, args := range agentCommands {
 		code, out, errText := runArgs(t, "", args...)
-		if code != product.ExitUsage || out != "" ||
-			!strings.Contains(errText, "several lockfile locks: inventory orders; pass --instance NAME (or set LOCKFILE_INSTANCE)") ||
-			!strings.Contains(errText, "[--instance NAME]") {
+		if code == product.ExitUsage || strings.Contains(out+errText, "several lockfile locks") {
 			t.Errorf("%v: exit %d, stdout %q stderr %q", args, code, out, errText)
 		}
 	}
@@ -176,6 +175,10 @@ func TestInstanceSeveralNoneChosen(t *testing.T) {
 func TestInstanceBadNameRefused(t *testing.T) {
 	dir := instanceSetup(t)
 	for _, args := range agentCommands {
+		if args[0] == "mcp" {
+			// The server starts and its tools report it (TestMCPInstanceErrorStarts).
+			continue
+		}
 		args = append(append([]string{}, args...), "--instance", "../x")
 		code, out, errText := runArgs(t, "", args...)
 		if code != product.ExitUsage || out != "" || !strings.Contains(errText, "--instance: not a lock instance name") ||

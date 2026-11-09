@@ -10,7 +10,9 @@ import (
 
 	"github.com/DavidGodefroid/lockkit/agentwire"
 	"github.com/DavidGodefroid/lockkit/client"
+	"github.com/DavidGodefroid/lockkit/sanitize"
 
+	"github.com/DavidGodefroid/lockfile/internal/clientcmd"
 	"github.com/DavidGodefroid/lockfile/internal/mcpserver"
 	"github.com/DavidGodefroid/lockfile/internal/product"
 	"github.com/DavidGodefroid/lockfile/internal/wiring"
@@ -30,8 +32,11 @@ func runMCP(e env, args []string) int {
 	if err := fs.Parse(args); err != nil || fs.NArg() != 0 {
 		return usageErr(e, use)
 	}
-	if !setInstance(e, *instance, use) {
-		return product.ExitUsage
+	// The server starts whatever the instance: an agent would get no tool
+	// at all from a server that exits, so a resolution error goes to every
+	// tool's answer, status first (DavidGodefroid/lockfile#60).
+	if err := clientcmd.ApplyInstances(*instance); err != nil {
+		fmt.Fprintln(e.stderr, "lockfile mcp: "+sanitize.Terminal(err.Error(), false)+"; serving, every tool reports it")
 	}
 	ctx, stop := agentContext()
 	defer stop()

@@ -12,6 +12,14 @@ Builds on lockkit v0.15.0 (from v0.14.1).
   profile name on production), a lowering applies at once. The status screen shows the limits
   in force (DavidGodefroid/lockkit#150).
 
+- **Several lockfile locks, one MCP server**: when lea mounts several lockfile locks and neither
+  `--instance` nor `LOCKFILE_INSTANCE` chooses one, `lockfile mcp` (the one server `lockfile
+  init` writes) and the agent commands no longer exit with `several lockfile locks`: they reach
+  every lock, list the profiles of all of them, and route each call to the lock that serves its
+  profile. `lockfile mcp` also starts when the instance cannot be resolved, and every tool,
+  `lockfile_status` first, says why, instead of a closed connection
+  (DavidGodefroid/lockfile#60).
+
 ## v0.8.1 (2026-11-07)
 
 Builds on lockkit v0.14.1 (from v0.13.0). No behavior change: container labels, files

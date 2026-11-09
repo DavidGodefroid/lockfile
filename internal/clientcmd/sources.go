@@ -170,8 +170,8 @@ var probeTimeout = 2 * time.Second
 // separated setup (mode 2750: the clients group may list it), or its
 // subdirectory of the lock instance (SetInstance), else the user's private
 // runtime directory.
-func socketDir() (string, error) {
-	return client.SocketDirInstance(product.P, instance)
+func socketDir(inst string) (string, error) {
+	return client.SocketDirInstance(product.P, inst)
 }
 
 // errInstanceNotMounted is what dial returns when the lock instance's
@@ -181,14 +181,14 @@ func socketDir() (string, error) {
 var errInstanceNotMounted = errors.New("instance socket directory not mounted")
 
 // instanceNotMountedErr is errInstanceNotMounted when the lock instance
-// (SetInstance) has no socket directory here, nil otherwise: with instance
-// "" there is no instance directory to miss, and a socketDir error is a
-// setup problem, not a stale instance.
-func instanceNotMountedErr() error {
-	if instance == "" {
+// inst has no socket directory here, nil otherwise: with instance "" there
+// is no instance directory to miss, and a socketDir error is a setup
+// problem, not a stale instance.
+func instanceNotMountedErr(inst string) error {
+	if inst == "" {
 		return nil
 	}
-	dir, err := socketDir()
+	dir, err := socketDir(inst)
 	if err != nil {
 		return nil
 	}
@@ -198,19 +198,48 @@ func instanceNotMountedErr() error {
 	return nil
 }
 
-// Sources lists the profiles of the running consoles, sorted. A socket
-// nobody answers on is left out. A lock instance (SetInstance) whose
-// directory is not mounted here is an error naming --instance, not an
-// empty list.
+// Sources lists the profiles of the running consoles, sorted: those of
+// the lock instance (SetInstance), or of every listed lock
+// (SetInstances), a profile once, from the lock calls reach. A socket
+// nobody answers on is left out. A lock instance chosen by --instance or
+// <PREFIX>INSTANCE whose directory is not mounted here is an error naming
+// --instance, not an empty list; a listed lock that is not is left out.
 func Sources(ctx context.Context) ([]rpc.Source, error) {
-	dir, err := socketDir()
+	if instanceErr != nil {
+		return nil, instanceErr
+	}
+	out := []rpc.Source{}
+	for _, inst := range reached() {
+		src, err := sourcesIn(ctx, inst)
+		if err != nil {
+			var ce *Error
+			if len(instances) > 0 && errors.As(err, &ce) && ce.Msg == rpc.MsgNoInstanceDir {
+				continue
+			}
+			return nil, err
+		}
+		for _, s := range src {
+			if !slices.ContainsFunc(out, func(o rpc.Source) bool { return o.Profile == s.Profile }) {
+				out = append(out, s)
+			}
+		}
+	}
+	slices.SortFunc(out, func(a, b rpc.Source) int { return strings.Compare(a.Profile, b.Profile) })
+	return out, nil
+}
+
+// sourcesIn lists the profiles of the running consoles of the lock
+// instance inst. A profile served by an earlier listed lock is the
+// earlier one's: instanceOf picks the first.
+func sourcesIn(ctx context.Context, inst string) ([]rpc.Source, error) {
+	dir, err := socketDir(inst)
 	if err != nil {
 		return nil, &Error{Kind: KindOther, Msg: "cannot read the lockfile setup; ask the user to run lockfile doctor"}
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			if instance != "" {
+			if inst != "" {
 				return nil, &Error{Kind: KindOther, Msg: rpc.MsgNoInstanceDir}
 			}
 			return []rpc.Source{}, nil
@@ -232,7 +261,7 @@ func Sources(ctx context.Context) ([]rpc.Source, error) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if s, ok := probe(ctx, filepath.Join(dir, name), strings.TrimSuffix(strings.TrimPrefix(name, prefix), ".sock")); ok {
+			if s, ok := probe(ctx, inst, filepath.Join(dir, name), strings.TrimSuffix(strings.TrimPrefix(name, prefix), ".sock")); ok {
 				mu.Lock()
 				out = append(out, s)
 				mu.Unlock()
@@ -240,13 +269,13 @@ func Sources(ctx context.Context) ([]rpc.Source, error) {
 		}()
 	}
 	wg.Wait()
-	slices.SortFunc(out, func(a, b rpc.Source) int { return strings.Compare(a.Profile, b.Profile) })
 	return out, nil
 }
 
-// probe asks the console on path for its status. profile is the socket's
-// name part; a hashed one ("~…") is read from the console's hello.
-func probe(ctx context.Context, path, profile string) (rpc.Source, bool) {
+// probe asks the console on path, of the lock instance inst, for its
+// status. profile is the socket's name part; a hashed one ("~…") is read
+// from the console's hello.
+func probe(ctx context.Context, inst, path, profile string) (rpc.Source, bool) {
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
 	if strings.HasPrefix(profile, "~") {
@@ -255,12 +284,12 @@ func probe(ctx context.Context, path, profile string) (rpc.Source, bool) {
 			return rpc.Source{}, false
 		}
 		// The name must lead back to this very socket.
-		if want, err := client.SocketPathInstance(product.P, "/", p, instance); err != nil || want != path {
+		if want, err := client.SocketPathInstance(product.P, "/", p, inst); err != nil || want != path {
 			return rpc.Source{}, false
 		}
 		profile = p
 	}
-	c, err := dial(profile)
+	c, err := dialIn(inst, profile)
 	if err != nil {
 		return rpc.Source{}, false
 	}
@@ -341,12 +370,19 @@ func StatusProfile(pinned, arg string) (string, error) {
 	return pinnedProfile(pinned, arg)
 }
 
-// socketExists reports whether profile's console socket is there. A
-// console serving another request does not answer the probe, and one whose
-// socket name is hashed cannot be named without that answer, so Sources
-// may leave out a console that runs.
+// socketExists reports whether profile's console socket is there, on the
+// lock calls reach (instanceOf). A console serving another request does
+// not answer the probe, and one whose socket name is hashed cannot be
+// named without that answer, so Sources may leave out a console that runs.
 func socketExists(profile string) bool {
-	p, err := client.SocketPathInstance(product.P, "/", profile, instance)
+	inst, err := instanceOf(profile)
+	return err == nil && socketExistsIn(inst, profile)
+}
+
+// socketExistsIn reports whether profile's console socket of the lock
+// instance inst is there.
+func socketExistsIn(inst, profile string) bool {
+	p, err := client.SocketPathInstance(product.P, "/", profile, inst)
 	if err != nil {
 		return false
 	}

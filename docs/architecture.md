@@ -56,7 +56,8 @@ agent account (CLI / MCP)            lockfile account (console)
 
 Every agent command and `lockfile mcp` also take `--instance NAME`, to reach
 one lock among several of this type that lea mounts (without it:
-`$LOCKFILE_INSTANCE`, else the one lock in `$LEA_LOCKFILE_INSTANCES`).
+`$LOCKFILE_INSTANCE`, else the one lock in `$LEA_LOCKFILE_INSTANCES`, else
+every lock it lists, each call reaching the lock that serves its profile).
 `lockfile console` and `lockfile hub-key` take an `--instance` too, but that
 one is the name lockhub gives the lock.
 

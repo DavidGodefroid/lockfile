@@ -55,16 +55,16 @@ func newAgentFlags(name string) agentFlags {
 
 // setInstance resolves the lock instance once per process, right after
 // the flags (--instance, else LOCKFILE_INSTANCE, else the one lock lea
-// lists), and hands it to clientcmd. Its error, which names the flag or
-// variable and never the value, is a usage error.
+// lists, else every lock lea lists, each call reaching the one that serves
+// its profile), and hands it to clientcmd. Its error, which names the flag
+// or variable and never a value that is not an instance name, is a usage
+// error.
 func setInstance(e env, flagValue, use string) bool {
-	inst, err := client.ResolveInstance(product.P, flagValue)
-	if err != nil {
+	if err := clientcmd.ApplyInstances(flagValue); err != nil {
 		fmt.Fprintln(e.stderr, "lockfile: "+sanitize.Terminal(err.Error(), false))
 		usageErr(e, use)
 		return false
 	}
-	clientcmd.SetInstance(inst)
 	return true
 }
 
