@@ -230,8 +230,14 @@ v0.2.0).
 `--instance NAME` (on every command below and on `lockfile mcp [--profile P] [--instance NAME]`)
 reaches one lock among several of this type that lea mounts (a name is lowercase letters, digits
 and `-`). Without it the client takes `$LOCKFILE_INSTANCE`, else the one lock in
-`$LEA_LOCKFILE_INSTANCES`. A name no lock mounted here has is refused with `no lock directory for
-the instance set by --instance or LOCKFILE_INSTANCE: no lock of that name is mounted here`.
+`$LEA_LOCKFILE_INSTANCES`. When lea mounts several and neither chooses one, the client reaches
+them all: `sources` and `status` list the profiles of every lock, and a command with a profile
+reaches the lock that serves it (profile names are unique in a workspace), so the one
+`lockfile mcp` server `lockfile init` writes serves every lockfile lock. A name no lock mounted
+here has is refused with `no lock directory for the instance set by --instance or
+LOCKFILE_INSTANCE: no lock of that name is mounted here`. `lockfile mcp` starts whatever the
+instance: when it cannot be resolved (a bad name, a `LOCKFILE_INSTANCE` lea does not list), every
+tool, `lockfile_status` first, answers with the reason.
 `lockfile console` and `lockfile hub-key` take a different `--instance`: the name `lox run` gives
 the lock (the hub instance). `lockfile doctor` takes none.
 

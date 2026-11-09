@@ -154,7 +154,7 @@ lockfile release f_8Kq2xR</code></pre>
   </table>
   </div>
   <div class="prose">
-    <p>Every agent command and <code>lockfile mcp</code> take <code>--instance NAME</code>, to reach one lock among several of this type.</p>
+    <p>Every agent command and <code>lockfile mcp</code> take <code>--instance NAME</code>, to reach one lock among several of this type. Without it, the one <code>lockfile mcp</code> server reaches them all and routes each call to the lock that serves its profile.</p>
     <p>Exit codes depend on the outcome only, never on an answer: <code>0</code> answered, <code>1</code> no console or error, <code>2</code> refused, <code>3</code> denied or no answer in time, <code>64</code> usage.</p>
   </div>
 </section>

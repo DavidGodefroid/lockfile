@@ -96,7 +96,8 @@ func usage() string {
 	if len(agent) > 0 {
 		b.WriteString("\nAgent commands (--json for JSON output):\n" + strings.Join(agent, "\n") + "\n")
 		b.WriteString("  Every agent command and mcp take --instance NAME: the lock to reach when lea mounts several\n" +
-			"  (default: LOCKFILE_INSTANCE, else the one in LEA_LOCKFILE_INSTANCES); not the hub instance name of console/hub-key\n")
+			"  (default: LOCKFILE_INSTANCE, else the one in LEA_LOCKFILE_INSTANCES, else each listed one, by profile);\n" +
+			"  not the hub instance name of console/hub-key\n")
 	}
 	if len(human) > 0 {
 		b.WriteString("\nHuman commands:\n" + strings.Join(human, "\n") + "\n")
