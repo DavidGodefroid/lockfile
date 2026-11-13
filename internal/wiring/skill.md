@@ -33,6 +33,12 @@ Use the MCP tools (`lockfile_*`) when they are available, otherwise the `lockfil
    turn until it is decided. With the CLI, use the Bash tool with **`timeout: 600000`**.
 5. **Run.** `lockfile_run` with the ticket as `plan_id` (CLI `lockfile run TICKET`). The answer
    comes at the next multiple of a few seconds, whatever the plugins did. A plan runs once.
+   **A plugin with `inputs`** (a value to search, such as an e-mail address): bind each input to
+   a placeholder, `"inputs": {"pdf.contains.needle": "${email}"}` (CLI
+   `--input 'pdf.contains.needle=${email}'`). The user types the value when approving; you never
+   see it. Never put a value there yourself (refused `E_LITERAL_INPUT`), and never suggest one
+   to the user. To check the same value on other files, reuse the same placeholder: the plan
+   answer lists the placeholders already held (`held_inputs`), asked no more.
 6. **Follow-ups** on the same file: `lockfile_plan` with the result's `handle` instead of the key
    (no new fetch, a lighter approval), then `lockfile_run`. `lockfile_release` when you are done.
 
@@ -55,7 +61,9 @@ A refusal carries `refusal.code`, `refusal.retry` and `refusal.hint`:
 - `retry: rewrite`: `E_KEY_OUTSIDE_PREFIX` (the key is not under the profile's prefix),
   `E_TOO_MANY_PLUGINS` (ask fewer questions), `E_HANDLE_EXPIRED` (plan again with the key),
   `E_STALE` (the file changed since the plan was approved: plan again with the key),
-  `E_UNKNOWN_PROFILE` (no console serves it: the hint names the command the user runs).
+  `E_UNKNOWN_PROFILE` (no console serves it: the hint names the command the user runs),
+  `E_LITERAL_INPUT` (you bound an input to a value: bind it to a placeholder like `${email}`),
+  `E_INPUT_INVALID` (the typed value did not fit, or is no longer held: plan again).
 - `retry: ask_user`: `E_PLUGIN_NOT_INSTALLED`, `E_PLUGIN_YANKED`. Tell the user.
 - `retry: stop`: `E_FETCH_FAILED` (the file could not be fetched; the cause is in the human's
   audit), `E_PLUGIN_TAMPERED`, `E_SANDBOX_UNAVAILABLE`, `E_PROC_NOT_HIDDEN`. Report and stop.

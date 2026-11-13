@@ -63,6 +63,9 @@ whitelist (`internal/testenv`): any key, value or word outside it fails.
 | hub mode | a plan's ticket carries a masked screen and a plan hash over the content's sha256, key or handle, plugins and pins; a decision runs only verified under the pinned hub key, for this instance, matching the ticket, the policy unchanged, once (nonce), for the requesting agent's token; a fetch failure at plan time is told only after an approval and the plan answer is quantized, so planning is no existence or size oracle; the instance key lives in the console account's home; **residual**: the content is fetched twice (plan, run): a change in between is refused `stale`, which tells that the file changed; an expired ticket is asked again as a new ticket for the same plan (re-checked: policy fingerprint, which must be unchanged, and the installed plugins; the content's sha256 is not checked then: the renewal names it `unchecked`, never presented as unchanged, and the run checks it when it fetches again), whose changes name the plan inputs that moved, never their values; a console never runs without its hub (`--hub` is required) |
 | pending answer (`status: pending`, `ticket`, `lock: lockfile`, `instance`), its fixed text, and `in hub mode, run the ticket file.plan answered` for a run by plan id | the plan waits for a decision on lockhub: a random ticket id, the lock type and the instance name `lox run` gave it (configuration) |
 | `stale` (`E_STALE`) | the plan was approved on a content hash (hub mode) and the fetched bytes differ; **residual**: says "this file changed since the approval", never how; no plugin ran on the new bytes, and the spool is released |
+| plugin `inputs` (name, `kind`, `max_bytes`) in `file.plugins`, and a plan's `held_inputs` (names of the placeholders this console holds a value for) | signed manifest metadata, and names the agent wrote itself: never a value. The values the human types travel only from `lox run` to the lock, sealed in the decision to the ticket's one-use key (the hub relays a box it cannot open), are held in the console's memory for its session (wiped at its end), and reach only the plugin's fd 6: never the agent, a plan answer, a client error, the audit (which names the placeholders), the hub's screen, the console window or the disk |
+| `literal_input` (`E_LITERAL_INPUT`) | a plugin input bound to anything but a placeholder: refused before any other check, the literal never echoed, nothing pushed to the hub |
+| `input_invalid` (`E_INPUT_INVALID`) | the typed value does not fit its input's `kind` or `max_bytes`, or a reused value is no longer held (the console restarted): refused before the fetch, the value never echoed; the human is told the placeholder's name on the console |
 | approval outcome (`approval_denied`, `approval_timeout`) | a human decision; the reason the human types is never forwarded |
 | refusals `key_outside_prefix`, `too_many_plugins`, `unknown_profile`, `plugin_not_installed`, `plugin_tampered`, `plugin_yanked`, `sandbox_unavailable`, `proc_not_hidden`, `handle_expired` (as `E_*` codes with a static hint) | computed from the request and the local install, before or without reading the file |
 | `status` (console up, production, security level, idle/session timers, plugin protocol, sandbox ok, approved `answer_quantum`) | console state and configuration |
@@ -144,6 +147,16 @@ the tag ruleset and does not replace it.
 - A question can itself be about content ("is the amount above 10 000?"): the marketplace's
   review rule refuses such questions; an unofficial marketplace may not.
 - `fetch_failed` and `plugin_error` each carry one symbol that depends on the file.
+- **Typed values** (protocol-2 inputs). The agent never chooses a searched value, but:
+  - the human may type what the agent suggests ("type alice@example.org for `${email}`"): the
+    console cannot stop it; `lox run`'s card says the value must come from the human's own need;
+  - `plugin_error` on a value is one more file-dependent symbol per answer, already counted in
+    `max_plugins_per_handle` (each plugin and distinct placeholder is one answer);
+  - replaying one value over many files tells the agent which files hold it: that is the
+    intended use, and the approval screen shows on how many files this console already replayed
+    the placeholder;
+  - a plugin's detail (fd 7), printed only with clear results on (level 0), stays in the console
+    terminal's scrollback (screen sharing, recording, a logging terminal).
 - Plugin resource caps are availability limits, not isolation: the task cap is `RLIMIT_NPROC`
   set to the account's current task count (measured from the kernel) plus 512, so it is shared
   with whatever else the account starts meanwhile, and root ignores it (the console never runs

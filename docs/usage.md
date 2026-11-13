@@ -246,7 +246,7 @@ the lock (the hub instance). `lockfile doctor` takes none.
 | `lockfile status [--profile P] [--instance NAME]` | `lockfile_status` | the running consoles' state (`busy`: see below) |
 | `lockfile sources [--instance NAME]` | `lockfile_sources` | profiles of the running consoles (`busy`: see below) |
 | `lockfile plugins [--profile P] [--instance NAME]` | `lockfile_plugins` | questions, meaning of 1 and 0 |
-| `lockfile plan --key K --plugin X… [--intent T] [--run] [--profile P] [--instance NAME]` | `lockfile_plan` | ask the human to approve |
+| `lockfile plan --key K --plugin X… [--input PLUGIN.INPUT='${NAME}'…] [--intent T] [--run] [--profile P] [--instance NAME]` | `lockfile_plan` | ask the human to approve (inputs: see placeholders below) |
 | `lockfile run PLAN_ID [--profile P] [--instance NAME]` (hub mode: `TICKET`) | `lockfile_run` | run an approved plan once (hub mode: the ticket of a pending plan, once decided) |
 | `lockfile plan --handle H --plugin X… --run` | `lockfile_plan` + `lockfile_run` | follow-up on the same file |
 | `lockfile answers HANDLE [--profile P] [--instance NAME]` | `lockfile_answers` | answers already given |
@@ -286,6 +286,39 @@ Output is capped in text and in JSON alike: a value (a text line) is cut at 512 
 output above 64 KiB is not printed (`output too large`, exit 1).
 
 There is no listing or stat: the agent asks the user for the exact key.
+
+### Placeholders: values the human types
+
+A protocol-2 plugin may take inputs ("does the extracted text contain `${needle}`?";
+`lockfile plugins` lists them). The agent never gives their values: it binds each input to a
+placeholder, and the human types the value.
+
+```sh
+lockfile plan --key invoices/2026/10/abc123.pdf --plugin pdf.contains \
+  --input 'pdf.contains.needle=${email}' --intent "is the customer's address in it?"
+```
+
+(MCP: `"inputs": {"pdf.contains.needle": "${email}"}`.) A literal value is refused
+`E_LITERAL_INPUT`, before anything is shown or pushed. The approval screen shows the question
+with its placeholder and `values to type: ${email}`; `lox run` asks the value on the ticket card,
+without echo, and seals it in the decision to the ticket's one-use key, so neither the hub nor
+the agent sees it. Such a ticket is never decided by an auto rule.
+
+The console then holds the value in memory for the rest of its session (wiped when it ends): a
+plan on another file with the same `${email}` asks nothing new, and its screen says
+`${email}: typed at 14:02, reused · replayed on 3 files this session`; the plan answer lists
+the placeholders held (`held_inputs`). To search another value, use another placeholder name.
+A value that does not fit its input's `kind` (`text`, `email`, `digits`) or `max_bytes` refuses
+the run `E_INPUT_INVALID`; the console prints `${email}: not a valid email; plan again`, never the
+value. Each (plugin, distinct placeholder) pair counts as one answer in `max_plugins_per_handle`.
+
+**Where the value is (the human only).** A plugin with `detail` may also say where it found the
+value (`found on pages 4512, 12307`). The console prints it, escaped, under `shown here only; the
+agent got 1/0`, only while clear results are on: Ctrl-O or `:results` in the console window,
+which you reach with `lox attach`, and which lockkit refuses at desktop security levels 1 and 2
+(the agent's account can read that window). `lockfile console` has no `--show-results` flag.
+The detail never goes to the agent, the audit or the hub, but it stays in the terminal's
+scrollback.
 
 ## Wiring an agent
 

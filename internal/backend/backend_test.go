@@ -49,6 +49,8 @@ type fakeEnv struct {
 	// onSession runs inside Session, after run's pin check and before the
 	// plugins are opened.
 	onSession func()
+	// showResults is the clear results switch (Ctrl-O).
+	showResults bool
 }
 
 func (e *fakeEnv) Approve(ctx context.Context, id int64, s console.Screen) console.Approval {
@@ -61,7 +63,7 @@ func (e *fakeEnv) Approve(ctx context.Context, id int64, s console.Screen) conso
 	return e.approve(s)
 }
 func (e *fakeEnv) Auto() bool          { return false }
-func (e *fakeEnv) ShowResults() bool   { return false }
+func (e *fakeEnv) ShowResults() bool   { return e.showResults }
 func (e *fakeEnv) UnmaskAllowed() bool { return false }
 func (e *fakeEnv) Session(ctx context.Context) (console.Session, error) {
 	e.sessions++
@@ -130,6 +132,13 @@ max_plugins_per_handle = 4
 
 func newHarness(t *testing.T, plugins ...string) *harness {
 	t.Helper()
+	return newHarnessWith(t, nil, plugins...)
+}
+
+// newHarnessWith is newHarness with more plugins installed by install
+// before the policy is approved.
+func newHarnessWith(t *testing.T, install func(plugin.Store), plugins ...string) *harness {
+	t.Helper()
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, "invoices"), 0o700); err != nil {
 		t.Fatal(err)
@@ -146,6 +155,9 @@ func newHarness(t *testing.T, plugins ...string) *harness {
 	for _, p := range plugins {
 		bin := testenv.BuildPlugin(t, p[strings.LastIndex(p, ".")+1:])
 		testenv.Install(t, store, p, bin, "Is it "+p+"?", 2)
+	}
+	if install != nil {
+		install(store)
 	}
 	b, err := New(Options{ConfigPath: cfg, Profile: "samples", StateDir: state, PluginDir: store.Dir,
 		WorkDir: filepath.Join(t.TempDir(), "work"), Probe: func() (int, bool, error) { return 4, true, nil },

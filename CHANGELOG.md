@@ -4,6 +4,23 @@
 
 Builds on lockkit v0.18.0 (from v0.14.1).
 
+- **Placeholders typed by the human** (plugin protocol 2): a plugin may declare up to 4 `inputs`
+  (`text`, `email` or `digits`, at most 1024 bytes) named in its question as `${name}`. The
+  agent binds them to placeholders (`--input 'pdf.contains.needle=${email}'`, MCP `inputs`); a
+  literal is refused `E_LITERAL_INPUT`. The human types the value in `lox run` at approval (no
+  echo, sealed in the decision to a one-use key of the ticket, never auto-approved); the
+  console holds it in memory for its session and replays it on other files without a new
+  prompt (`held_inputs` in the plan answer, `reused` and the replay count on the screen). A
+  value that does not fit is refused `E_INPUT_INVALID`, never echoed. The plugin reads its
+  values on a sealed read-only memfd, fd 6; each (plugin, placeholder) pair counts as one
+  answer. The value never reaches the agent, the audit (which names the placeholders), the hub
+  or the disk (DavidGodefroid/lockfile#9).
+- **Human-only detail**: a protocol-2 plugin with `detail = true` may write up to 4 KiB on fd 7
+  (`found on pages 4512, 12307`), printed escaped on the console window only while clear
+  results are on (Ctrl-O, level 0); never to the agent, the audit or the hub.
+- Plugins get `LOCKFILE_PLUGIN_PROTOCOL` set to their manifest's protocol; `status` reports
+  plugin protocol 2.
+
 - **Managed configuration**: lockfile enforces the `[lockfile]` section of the company's
   `managed.toml` (lockfamily#31): `[lockfile.profiles.<name>]` served as written (a profile of
   yours with that name is refused), `[lockfile.defaults]` for what your config leaves unset, and
