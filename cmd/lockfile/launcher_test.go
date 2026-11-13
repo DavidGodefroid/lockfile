@@ -19,7 +19,29 @@ type launcherFixture struct {
 	// fake holds what the fake docker prints for lox run's volumes and
 	// containers (launcher_lockup_test.go).
 	fake string
-	env  []string
+	// managed is the launcher's managed directory (the host's
+	// /etc/lockfamily).
+	managed string
+	env     []string
+}
+
+// managedLines are the launcher's managed directories, Linux's and macOS'.
+var managedLines = []string{
+	`*) managed_dir=/etc/lockfamily ;;`,
+	`Darwin) managed_dir="/Library/Application Support/lockfamily" ;;`,
+}
+
+// withManagedDir is launcher with the managed directory of each of lines
+// replaced by dir.
+func withManagedDir(t *testing.T, launcher, dir string, lines ...string) string {
+	t.Helper()
+	for _, line := range lines {
+		if !strings.Contains(launcher, line) {
+			t.Fatalf("launcher lacks %q", line)
+		}
+		launcher = strings.Replace(launcher, line, line[:strings.Index(line, "managed_dir=")]+`managed_dir="`+dir+`" ;;`, 1)
+	}
+	return launcher
 }
 
 func newLauncherFixture(t *testing.T) *launcherFixture {
@@ -70,7 +92,11 @@ exit 0
 		t.Fatal(err)
 	}
 	f.script = filepath.Join(root, "lockfile")
-	writeExec(t, f.script, strings.Replace(string(launcher), "\nseccomp_profile=\n", "\nseccomp_profile="+f.seccomp+"\n", 1))
+	// The machine's managed directory: one of the fixture's, absent until
+	// a test makes it, never the host's own.
+	f.managed = filepath.Join(root, "managed dir", "lockfamily")
+	s := strings.Replace(string(launcher), "\nseccomp_profile=\n", "\nseccomp_profile="+f.seccomp+"\n", 1)
+	writeExec(t, f.script, withManagedDir(t, s, f.managed, managedLines...))
 	f.env = []string{"PATH=" + f.bin, "HOME=" + filepath.Join(root, "home")}
 	// The workspace (root) runs a lockfile lock files under lox run.
 	f.loxUp(t, root, map[string]string{"files": "lockfile"})
@@ -571,5 +597,149 @@ func TestLauncherUpdateRefusesABadTag(t *testing.T) {
 		if err == nil || !strings.Contains(out, "invalid release tag") || len(calls) != 0 {
 			t.Errorf("%q: %v, calls %q\n%s", tag, err, calls, out)
 		}
+	}
+}
+
+// mountsManaged reports whether run mounts a managed directory at all.
+func mountsManaged(run []string, dir string) bool {
+	for _, a := range run {
+		if strings.Contains(a, "/etc/lockfamily") || strings.Contains(a, dir) {
+			return true
+		}
+	}
+	return false
+}
+
+// The machine's managed directory, when there is one, is mounted read-only
+// on /etc/lockfamily in every container (as lox run mounts it in its
+// locks), before the image; without one, nothing is.
+func TestLauncherManagedMount(t *testing.T) {
+	f := newLauncherFixture(t)
+	commands := [][]string{
+		{"managed", "show"}, {"managed", "check", "--profile", "prod"}, {"doctor"}, {"doctor", "--fix", "--yes"},
+		{"profile", "add", "p"}, {"init", "claude"}, {"mcp"}, {"status"}, {"run", "x"}, {"console"}, {"version"}, {"help"},
+	}
+	for _, args := range commands {
+		out, calls, err := f.run(t, f.project, nil, args...)
+		if err != nil {
+			t.Fatalf("%v: %v\n%s", args, err, out)
+		}
+		for _, c := range calls {
+			if len(c) > 0 && c[0] == "run" && mountsManaged(c, f.managed) {
+				t.Errorf("%v: no managed directory, but mounted: %q", args, c)
+			}
+		}
+	}
+	if err := os.MkdirAll(f.managed, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range commands {
+		out, calls, err := f.run(t, f.project, nil, args...)
+		if err != nil {
+			t.Fatalf("%v: %v\n%s", args, err, out)
+		}
+		run := lastRun(t, calls)
+		if !hasSeq(run, "-v", f.managed+":/etc/lockfamily:ro") {
+			t.Errorf("%v: managed directory not mounted read-only on /etc/lockfamily: %q", args, run)
+		}
+		if img := imageArgs(run, "lockfile"); img == nil || mountsManaged(img, f.managed) {
+			t.Errorf("%v: mount after the image: %q", args, run)
+		}
+	}
+	// The account-id migration before the console reads no policy.
+	_, calls, err := f.run(t, f.project, nil, "console")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range calls {
+		if len(c) > 0 && c[0] == "run" && hasSeq(c, "--user", "0:0") && mountsManaged(c, f.managed) {
+			t.Errorf("migrate-ids mounts the managed directory: %q", c)
+		}
+	}
+}
+
+// The managed directory is the one of the host's OS: macOS' on Darwin,
+// /etc/lockfamily elsewhere.
+func TestLauncherManagedDirPerOS(t *testing.T) {
+	for _, tc := range []struct {
+		uname string
+		line  int
+	}{{"Linux", 0}, {"Darwin", 1}} {
+		f := newLauncherFixture(t)
+		launcher, err := os.ReadFile(filepath.Join("..", "..", "scripts", "lockfile"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Only this OS's directory is the fixture's: the other one, if the
+		// launcher picked it, is not there (or the host's, never this one).
+		s := strings.Replace(string(launcher), "\nseccomp_profile=\n", "\nseccomp_profile="+f.seccomp+"\n", 1)
+		writeExec(t, f.script, withManagedDir(t, s, f.managed, managedLines[tc.line]))
+		if err := os.Remove(filepath.Join(f.bin, "uname")); err != nil && !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+		writeExec(t, filepath.Join(f.bin, "uname"), "#!/bin/sh\necho "+tc.uname+"\n")
+		if err := os.MkdirAll(f.managed, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		out, calls, err := f.run(t, f.project, nil, "managed", "show")
+		if err != nil {
+			t.Fatalf("%s: %v\n%s", tc.uname, err, out)
+		}
+		if run := lastRun(t, calls); !hasSeq(run, "-v", f.managed+":/etc/lockfamily:ro") {
+			t.Errorf("%s: %q", tc.uname, run)
+		}
+	}
+}
+
+// A managed path that is not a directory, or that docker -v cannot mount,
+// stops the launcher before docker runs; a link to a directory is mounted.
+func TestLauncherManagedRefused(t *testing.T) {
+	f := newLauncherFixture(t)
+	if err := os.MkdirAll(filepath.Dir(f.managed), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(f.managed, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, calls, err := f.run(t, f.project, nil, "managed", "show")
+	if err == nil || !strings.Contains(out, f.managed+" is not a directory") || len(calls) != 0 {
+		t.Errorf("a file: %v, calls %q\n%s", err, calls, out)
+	}
+	// A link to a directory: what the image checks (root owns it) is the
+	// directory it leads to.
+	if err := os.Remove(f.managed); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(t.TempDir(), f.managed); err != nil {
+		t.Fatal(err)
+	}
+	out, calls, err = f.run(t, f.project, nil, "managed", "show")
+	if err != nil || !hasSeq(lastRun(t, calls), "-v", f.managed+":/etc/lockfamily:ro") {
+		t.Errorf("a link to a directory: %v, %q\n%s", err, calls, out)
+	}
+	// A dangling link: refused, not skipped.
+	if err := os.Remove(f.managed); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(f.root, "nowhere"), f.managed); err != nil {
+		t.Fatal(err)
+	}
+	out, calls, err = f.run(t, f.project, nil, "managed", "show")
+	if err == nil || !strings.Contains(out, "is not a directory") || len(calls) != 0 {
+		t.Errorf("a dangling link: %v, calls %q\n%s", err, calls, out)
+	}
+	// A ":" in the path.
+	b, err := os.ReadFile(f.script)
+	if err != nil {
+		t.Fatal(err)
+	}
+	colon := filepath.Join(f.root, "a:b")
+	if err := os.MkdirAll(colon, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeExec(t, f.script, strings.ReplaceAll(string(b), `managed_dir="`+f.managed+`"`, `managed_dir="`+colon+`"`))
+	out, calls, err = f.run(t, f.project, nil, "managed", "show")
+	if err == nil || !strings.Contains(out, "which docker -v cannot mount") || len(calls) != 0 {
+		t.Errorf("a \":\": %v, calls %q\n%s", err, calls, out)
 	}
 }

@@ -34,6 +34,12 @@
 #                    without one and says why)
 #   anything else    as the agent account, with no volume: help...
 #
+# Every container but migrate_ids' also mounts the company's managed
+# directory, when this machine has one (/etc/lockfamily on Linux,
+# /Library/Application Support/lockfamily on macOS), read-only on
+# /etc/lockfamily, where lockkit reads managed.toml in the image, as lox run
+# mounts it in its locks.
+#
 # `lockfile update` updates this launcher, its seccomp profile and its
 # image; `lockfile version` prints the launcher's and the image's versions.
 #
@@ -94,20 +100,43 @@ fi
 tty=-i
 if [ -t 0 ] && [ -t 1 ]; then tty=-it; fi
 
-# docker_run ARGS...: docker run, then LOCKFILE_DOCKER_ARGS, then ARGS (the
-# account, the volumes, the image and its command).
+# The company-managed directory of this machine (lockkit's
+# managed.DefaultPath): managed.toml, its signature bundle, signer.toml and
+# lox's managed.toml.verified stamp. Every container of docker_run mounts it
+# read-only on /etc/lockfamily, the path lockkit reads in the (Linux)
+# image, as lox run mounts it in its locks (lockhub#179): the commands see
+# the bounds the console enforces. lockkit's ownership checks still apply
+# in the container: a bind mount keeps the files' owner and mode.
+case "$(uname -s)" in
+Darwin) managed_dir="/Library/Application Support/lockfamily" ;;
+*) managed_dir=/etc/lockfamily ;;
+esac
+
+# docker_run ARGS...: docker run, then the managed directory, then
+# LOCKFILE_DOCKER_ARGS, then ARGS (the account, the volumes, the image and
+# its command).
 docker_run() {
 	command -v docker >/dev/null 2>&1 || die "docker is required: lockfile runs in Docker (docs/docker.md)"
+	# No managed directory: no mount, no managed policy. One that is not a
+	# directory (a file, a dangling link) is refused, as lockkit refuses it
+	# on the host.
+	managed_mount=
+	if [ -e "$managed_dir" ] || [ -L "$managed_dir" ]; then
+		[ -d "$managed_dir" ] || die "$managed_dir is not a directory: lockfile cannot mount the company-managed configuration"
+		mountable "$managed_dir"
+		managed_mount="$managed_dir:/etc/lockfamily:ro"
+	fi
 	# LOCKFILE_DOCKER_ARGS is split on spaces, never globbed.
 	set -f
 	# shellcheck disable=SC2086 # LOCKFILE_DOCKER_ARGS is split on purpose
-	exec docker run --rm ${LOCKFILE_DOCKER_ARGS:-} "$@"
+	exec docker run --rm ${managed_mount:+-v} ${managed_mount:+"$managed_mount"} ${LOCKFILE_DOCKER_ARGS:-} "$@"
 }
 
 # migrate_ids VOLUME...: give the files of the volumes, made by a release
 # before 0.3 with locksql's account ids (10000-10002), lockfile's own
 # (10030-10032). Idempotent; root in the container with CAP_CHOWN and
-# CAP_DAC_READ_SEARCH only, no network. Stays for one release.
+# CAP_DAC_READ_SEARCH only, no network. Stays for one release. It reads no
+# policy: docker_run's managed directory is not mounted.
 migrate_ids() {
 	command -v docker >/dev/null 2>&1 || die "docker is required: lockfile runs in Docker (docs/docker.md)"
 	seccomp

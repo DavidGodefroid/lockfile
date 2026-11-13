@@ -14,6 +14,12 @@ Builds on lockkit v0.18.0 (from v0.14.1).
   New `lockfile managed show` and `lockfile managed check [--profile NAME]` (the check `lox run`
   runs before it starts the lock), and a `managed` line in `lockfile doctor`. See
   docs/configuration.md#managed-configuration (DavidGodefroid/lockfile#63).
+- **Launcher**: it mounts the machine's managed directory (`/etc/lockfamily`,
+  `/Library/Application Support/lockfamily` on macOS) read-only on `/etc/lockfamily` in its
+  containers, as `lox run` does in its locks: `lockfile managed show`, `managed check`, `doctor`,
+  `profile`, `init` and the other commands run from the host see the company's managed
+  configuration. No directory: no mount; a file, a dangling link or a `:` in the path stops the
+  launcher (DavidGodefroid/lockfile#69).
 - The status no longer reports an auto mode (`auto_approve`, gone from lockkit's status answer in
   v0.18.0): lockhub decides.
 
