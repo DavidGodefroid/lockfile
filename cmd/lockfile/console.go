@@ -82,7 +82,7 @@ func runConsole(e env, args []string) int {
 	b, err := backend.New(opts)
 	if err != nil {
 		fmt.Fprintln(e.stderr, "lockfile console:", err)
-		return product.ExitError
+		return consoleExit(err)
 	}
 	// Every exit path removes the fetched files.
 	defer b.Close()
@@ -126,9 +126,19 @@ func runConsole(e env, args []string) int {
 		// URL is named by scheme and host only, once it is one; the
 		// instance name only once it is valid; never a risk class.
 		fmt.Fprintln(e.stderr, "lockfile console:", err)
-		return product.ExitError
+		return consoleExit(err)
 	}
 	return product.ExitOK
+}
+
+// consoleExit is the exit code of a console that failed with err: a
+// refusal by the company's managed configuration is ExitManaged, the line
+// above citing its key.
+func consoleExit(err error) int {
+	if errors.Is(err, console.ErrManaged) {
+		return product.ExitManaged
+	}
+	return product.ExitError
 }
 
 func withHome(o console.HubOptions, home string) console.HubOptions {

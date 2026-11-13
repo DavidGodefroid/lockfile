@@ -1,0 +1,12 @@
+Managed by Acme (sha256:{{SHA12}})
+path: {{PATH}}
+organisation: Acme
+fingerprint: sha256:{{SHA}}
+signed: no
+bounds:
+  marketplaces = ["official"]
+  max_object_bytes = "10MiB"
+  source = ["s3", "sftp"]
+defaults:
+  handle_ttl = "10m"
+profiles: erp

@@ -334,6 +334,9 @@ func readManaged(m *managed.File) (managedConfig, error) {
 			pol.Workspace.MaxBytes = b.maxWorkspaceBytes
 		}
 		if lines := Violations(pol, m); len(lines) > 0 {
+			for i, l := range lines {
+				lines[i] = strings.TrimPrefix(l, blocked)
+			}
 			return fail(fmt.Errorf("managed: [%s.%s.%s] is beyond the bounds: %s", ManagedTool, managed.KindProfiles, name, strings.Join(lines, "; ")))
 		}
 		if mc.profiles == nil {
@@ -344,12 +347,15 @@ func readManaged(m *managed.File) (managedConfig, error) {
 	return mc, nil
 }
 
+// blocked starts every line of a refusal by the managed file.
+const blocked = "blocked by company policy: "
+
 // Violations are the lines that refuse pol under m, as the console prints
 // them: "blocked by company policy: …", one per violation.
 func Violations(pol *Policy, m *managed.File) []string {
 	bs, err := ManagedBounds(pol, m)
 	if err != nil {
-		return []string{"blocked by company policy: " + err.Error()}
+		return []string{blocked + err.Error()}
 	}
 	var out []string
 	for _, v := range managed.Check(pol, bs) {

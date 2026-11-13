@@ -27,4 +27,8 @@ const (
 	ExitRefused = 2  // a refusal (E_* code, unknown_profile included)
 	ExitDenied  = 3  // denied by the human, or no answer in time
 	ExitUsage   = 64 // bad command line
+	// ExitManaged is a refusal by the company's managed configuration (a
+	// denial no human can lift): the console's start, `managed show` and
+	// `managed check`.
+	ExitManaged = ExitDenied
 )

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -18,6 +19,8 @@ import (
 	"syscall"
 
 	"github.com/DavidGodefroid/lockkit/agentwire"
+	"github.com/DavidGodefroid/lockkit/console"
+	"github.com/DavidGodefroid/lockkit/managed"
 	"github.com/DavidGodefroid/lockkit/sysconf"
 	"github.com/DavidGodefroid/lockkit/verbs"
 
@@ -316,12 +319,16 @@ func setgidBits(fi fs.FileInfo) fs.FileMode {
 // the unofficial marketplaces. Paths are not printed: they may sit in the
 // console's home or name the data.
 func doctorConsoleSide(h doctorHooks, sys *sysconf.Config, add func(string, string, string)) {
+	add(doctorManaged())
 	path, err := configPath()
 	if err != nil {
 		return
 	}
 	f, err := profile.ReadFile(path)
 	switch {
+	case errors.Is(err, console.ErrManaged):
+		add("config", "fail", "the config file is refused by the company's managed configuration: lockfile managed check names why")
+		return
 	case errors.Is(err, fs.ErrNotExist):
 		add("config", "warn", "no profile yet: lockfile profile add --profile NAME --source … from the workspace, then lox run")
 		return
@@ -372,6 +379,19 @@ func doctorConsoleSide(h doctorHooks, sys *sysconf.Config, add func(string, stri
 		add("marketplace", "warn", "UNOFFICIAL "+m.Name+" ("+m.IndexURL+")")
 	}
 	doctorYanked(add)
+}
+
+// doctorManaged is the managed line: the company's managed file in force,
+// none, or the error that refuses it (every console refuses to start then).
+func doctorManaged() (name, status, detail string) {
+	m, err := managed.Load(context.Background())
+	switch {
+	case err != nil:
+		return "managed", "fail", err.Error()
+	case m == nil:
+		return "managed", "ok", noManaged
+	}
+	return "managed", "ok", m.Describe()
 }
 
 // doctorYanked reports the installed versions plugins.lock records as
