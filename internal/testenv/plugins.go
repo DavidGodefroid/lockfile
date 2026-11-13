@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/DavidGodefroid/lockfile/internal/plugin"
+	"github.com/DavidGodefroid/lockfile/internal/testenv/uidtasks"
 )
 
 // RepoRoot is the lockfile repository root.
@@ -28,8 +29,11 @@ var (
 )
 
 // BuildPlugin builds sandbox/testdata/plugins/<name> once per test binary.
+// The test runs it: it shares the account's task budget until it ends
+// (uidtasks).
 func BuildPlugin(t testing.TB, name string) []byte {
 	t.Helper()
+	uidtasks.Share(t)
 	buildMu.Lock()
 	defer buildMu.Unlock()
 	if b, ok := buildCache[name]; ok {

@@ -16,6 +16,7 @@ import (
 
 	"github.com/elastic/go-seccomp-bpf/arch"
 
+	"github.com/DavidGodefroid/lockfile/internal/testenv/uidtasks"
 	"github.com/DavidGodefroid/lockfile/pluginspec"
 )
 
@@ -31,8 +32,11 @@ var (
 )
 
 // plugin builds sandbox/testdata/plugins/<name> once and returns its path.
+// The test runs it: it shares the account's task budget until it ends
+// (uidtasks).
 func plugin(t *testing.T, name string, ldflags ...string) string {
 	t.Helper()
+	uidtasks.Share(t)
 	buildMu.Lock()
 	defer buildMu.Unlock()
 	key := name + strings.Join(ldflags, " ")
@@ -175,8 +179,11 @@ func TestMemoryLimitBypass(t *testing.T) {
 }
 
 // A plugin cannot exhaust the tasks of the console's account: thread
-// creation stops at the cap and the runtime dies.
+// creation stops at the cap and the runtime dies. It takes the account's
+// whole allowance: no other plugin of the account runs meanwhile, in any
+// test binary (lockfile#72).
 func TestThreadCap(t *testing.T) {
+	uidtasks.Exclusive(t)
 	o, r := run(t, plugin(t, "threads"), defaultLimits)
 	wantFailure(t, o, r, pluginspec.CauseExitCode, pluginspec.CauseSignal)
 }

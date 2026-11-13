@@ -86,7 +86,7 @@ func scenarios(t *testing.T) (*consoletest.Console, *wire, []string) {
 	}
 	if want := []string{"1", "0", "plugin_error", "plugin_error", "plugin_error", "1"}; !slices.Equal(got, want) ||
 		res.Answers[5].Warning != answers.WarningUnofficial {
-		t.Fatalf("answers %v, want %v", got, want)
+		t.Fatalf("answers %v, want %v%s", got, want, pluginCauses(t, c, "test.answer1", "test.answer0", "acme/test.answer1"))
 	}
 	agent = append(agent, res.Handle)
 	var first rpc.PlanResult
@@ -142,6 +142,31 @@ func scenarios(t *testing.T) (*consoletest.Console, *wire, []string) {
 		t.Fatalf("undecided run: %+v %s", r.Error, r.Result)
 	}
 	return c, w, agent
+}
+
+// pluginCauses is, for a failure message, why each of the plugins named
+// gave no answer, from c's audit log: its cause, exit code, signal and
+// duration.
+func pluginCauses(t *testing.T, c *consoletest.Console, names ...string) string {
+	t.Helper()
+	var b strings.Builder
+	for _, line := range strings.Split(c.AuditLog(t), "\n") {
+		var r struct {
+			Decision     string `json:"decision"`
+			Plugin       string `json:"plugin"`
+			Result       *int   `json:"result"`
+			Cause        string `json:"cause"`
+			ConsoleError string `json:"console_error"`
+			ExitCode     int    `json:"exit_code"`
+			Signal       string `json:"signal"`
+			DurationMS   int64  `json:"duration_ms"`
+		}
+		if json.Unmarshal([]byte(line), &r) != nil || r.Decision != "plugin" || r.Result != nil || !slices.Contains(names, r.Plugin) {
+			continue
+		}
+		fmt.Fprintf(&b, "\n%s: cause %q, console error %q, exit %d, signal %q, %d ms", r.Plugin, r.Cause, r.ConsoleError, r.ExitCode, r.Signal, r.DurationMS)
+	}
+	return b.String()
 }
 
 // TestWireIsClosed: every response of every method, over the real socket
