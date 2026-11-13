@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.9.1 (2026-11-13)
+
 ### Fixed
 
 - A Go plugin whose manifest memory was between about 80 and 176 MiB (128 MiB, say) died at
