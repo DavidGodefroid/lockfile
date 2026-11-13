@@ -5,8 +5,11 @@
 package profile
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io/fs"
+	"maps"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -16,6 +19,7 @@ import (
 
 	"github.com/DavidGodefroid/lockkit/config"
 	"github.com/DavidGodefroid/lockkit/console"
+	"github.com/DavidGodefroid/lockkit/managed"
 	"github.com/DavidGodefroid/lockkit/secrets"
 
 	"github.com/DavidGodefroid/lockfile/internal/product"
@@ -142,40 +146,62 @@ func (w Workspace) withDefaults() Workspace {
 	return w
 }
 
-// File is a decoded, validated config file.
+// File is a decoded, validated config file, merged with the company's
+// managed configuration.
 type File struct {
 	Workspace    Workspace
 	Profiles     map[string]Profile
 	Marketplaces []Trust
+	// Managed is the managed file merged in (nil: none), ManagedProfiles
+	// the names of the profiles it provides, sorted.
+	Managed         *managed.File
+	ManagedProfiles []string
 }
 
-// ReadFile reads and validates the config file at path.
+// ReadFile reads and validates the config file at path, merged with the
+// machine's managed file: the one helper every reader of the config goes
+// through. A missing config file is no profile of its own when the
+// managed file provides some.
 func ReadFile(path string) (*File, error) {
+	m, err := managed.Load(context.Background())
+	if err != nil {
+		return nil, &ManagedError{Err: err}
+	}
 	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) && len(m.Profiles(ManagedTool)) > 0 {
+		data, err = nil, nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("config: %w", err)
 	}
-	return Parse(data, path)
+	return ParseManaged(data, path, m)
 }
 
-// Parse decodes and validates config data; name labels errors.
-func Parse(data []byte, name string) (*File, error) {
+// Parse decodes and validates config data; name labels errors. It merges
+// no managed file.
+func Parse(data []byte, name string) (*File, error) { return ParseManaged(data, name, nil) }
+
+// ParseManaged decodes and validates config data merged with the managed
+// file m (nil: none): its [lockfile.defaults] fill what the file leaves
+// unset, its [lockfile.profiles] win and cannot be redefined. A managed
+// default or profile beyond [lockfile.bounds] is an error.
+func ParseManaged(data []byte, name string, m *managed.File) (*File, error) {
 	var raw Raw
 	if _, err := config.Decode(product.P, data, name, &raw); err != nil {
 		return nil, err
 	}
-	f := &File{Profiles: map[string]Profile{}}
+	mc, err := readManaged(m)
+	if err != nil {
+		return nil, err
+	}
+	mc.fill(&raw)
+	f := &File{Profiles: map[string]Profile{}, Managed: m}
 	f.Workspace.Dir = raw.WorkDir
 	if raw.WorkDir != "" && !filepath.IsAbs(raw.WorkDir) {
 		return nil, fmt.Errorf("config: %s: work_dir must be absolute", name)
 	}
-	f.Workspace.MaxBytes = DefaultMaxWorkspaceBytes
-	if raw.MaxWorkspaceBytes != "" {
-		n, err := pluginspec.ParseBytes(raw.MaxWorkspaceBytes)
-		if err != nil || n <= 0 {
-			return nil, fmt.Errorf("config: %s: max_workspace_bytes: invalid size", name)
-		}
-		f.Workspace.MaxBytes = n
+	if f.Workspace.MaxBytes, err = workspaceBytes(raw.MaxWorkspaceBytes); err != nil {
+		return nil, fmt.Errorf("config: %s: %w", name, err)
 	}
 	for pname, rp := range raw.Profiles {
 		p, err := parseProfile(pname, rp)
@@ -195,7 +221,23 @@ func Parse(data []byte, name string) (*File, error) {
 		f.Marketplaces = append(f.Marketplaces, t)
 	}
 	slices.SortFunc(f.Marketplaces, func(a, b Trust) int { return strings.Compare(a.Name, b.Name) })
+	if f.Profiles, err = managed.MergeProfiles(mc.profiles, nil, f.Profiles); err != nil {
+		return nil, &ManagedError{Err: err}
+	}
+	f.ManagedProfiles = slices.Sorted(maps.Keys(mc.profiles))
 	return f, nil
+}
+
+// workspaceBytes parses max_workspace_bytes ("" is the default).
+func workspaceBytes(s string) (int64, error) {
+	if s == "" {
+		return DefaultMaxWorkspaceBytes, nil
+	}
+	n, err := pluginspec.ParseBytes(s)
+	if err != nil || n <= 0 {
+		return 0, errors.New("max_workspace_bytes: invalid size")
+	}
+	return n, nil
 }
 
 func duration(key, s string, def time.Duration) (time.Duration, error) {
@@ -224,47 +266,10 @@ func parseProfile(name string, r RawProfile) (Profile, error) {
 	}
 	p := Profile{Name: name, Source: r.Source, Prefix: r.Prefix}
 	p.Production, p.User, p.VaultPath = r.Production, r.User, r.VaultPath
+	if err := p.limits(r); err != nil {
+		return Profile{}, err
+	}
 	var err error
-	if p.CredentialsTTL, err = duration("credentials_ttl", r.CredentialsTTL, 0); err != nil {
-		return Profile{}, err
-	}
-	// lockkit reads 0 as its default; state the default so that removing a
-	// value diffs as the longer timer it really is.
-	if p.IdleTimeout, err = duration("idle_timeout", r.IdleTimeout, DefaultIdleTimeout); err != nil {
-		return Profile{}, err
-	}
-	if p.MaxSession, err = duration("max_session", r.MaxSession, DefaultMaxSession); err != nil {
-		return Profile{}, err
-	}
-	p.Base = withTimerDefaults(p.Base)
-	if r.TicketsPerWindow < 0 || r.MaxPending < 0 {
-		return Profile{}, errors.New("tickets_per_window and max_pending must not be negative")
-	}
-	p.TicketsPerWindow, p.MaxPending = r.TicketsPerWindow, r.MaxPending
-	if p.TicketWindow, err = duration("ticket_window", r.TicketWindow, 0); err != nil {
-		return Profile{}, err
-	}
-	if p.HandleTTL, err = duration("handle_ttl", r.HandleTTL, DefaultHandleTTL); err != nil {
-		return Profile{}, err
-	}
-	if p.AnswerQuantum, err = duration("answer_quantum", r.AnswerQuantum, DefaultAnswerQuantum); err != nil {
-		return Profile{}, err
-	}
-	if p.AnswerQuantum < time.Second {
-		return Profile{}, errors.New("answer_quantum must be 1s or more")
-	}
-	p.MaxObjectBytes = DefaultMaxObjectBytes
-	if r.MaxObjectBytes != "" {
-		if p.MaxObjectBytes, err = pluginspec.ParseBytes(r.MaxObjectBytes); err != nil || p.MaxObjectBytes <= 0 {
-			return Profile{}, errors.New("max_object_bytes: invalid size")
-		}
-	}
-	p.MaxObjectsPerPlan = orDefault(r.MaxObjectsPerPlan, DefaultMaxObjectsPerPlan)
-	p.MaxPluginsPerHandle = orDefault(r.MaxPluginsPerHandle, DefaultMaxPluginsPerHandle)
-	if r.MaxObjectsPerPlan < 0 || r.MaxPluginsPerHandle < 0 || p.MaxPluginsPerHandle > MaxPluginsPerHandleCap {
-		return Profile{}, fmt.Errorf("max_objects_per_plan and max_plugins_per_handle must be positive, max_plugins_per_handle at most %d", MaxPluginsPerHandleCap)
-	}
-
 	switch r.Source {
 	case SourceS3:
 		err = p.s3(r)
@@ -286,6 +291,52 @@ func parseProfile(name string, r RawProfile) (Profile, error) {
 		return Profile{}, errors.New(`vault_path is set but credentials is not "vault"`)
 	}
 	return p, nil
+}
+
+// limits parses the timers and limits of r into p, the built-in defaults
+// for what r leaves unset.
+func (p *Profile) limits(r RawProfile) error {
+	var err error
+	if p.CredentialsTTL, err = duration("credentials_ttl", r.CredentialsTTL, 0); err != nil {
+		return err
+	}
+	// lockkit reads 0 as its default; state the default so that removing a
+	// value diffs as the longer timer it really is.
+	if p.IdleTimeout, err = duration("idle_timeout", r.IdleTimeout, DefaultIdleTimeout); err != nil {
+		return err
+	}
+	if p.MaxSession, err = duration("max_session", r.MaxSession, DefaultMaxSession); err != nil {
+		return err
+	}
+	p.Base = withTimerDefaults(p.Base)
+	if r.TicketsPerWindow < 0 || r.MaxPending < 0 {
+		return errors.New("tickets_per_window and max_pending must not be negative")
+	}
+	p.TicketsPerWindow, p.MaxPending = r.TicketsPerWindow, r.MaxPending
+	if p.TicketWindow, err = duration("ticket_window", r.TicketWindow, 0); err != nil {
+		return err
+	}
+	if p.HandleTTL, err = duration("handle_ttl", r.HandleTTL, DefaultHandleTTL); err != nil {
+		return err
+	}
+	if p.AnswerQuantum, err = duration("answer_quantum", r.AnswerQuantum, DefaultAnswerQuantum); err != nil {
+		return err
+	}
+	if p.AnswerQuantum < time.Second {
+		return errors.New("answer_quantum must be 1s or more")
+	}
+	p.MaxObjectBytes = DefaultMaxObjectBytes
+	if r.MaxObjectBytes != "" {
+		if p.MaxObjectBytes, err = pluginspec.ParseBytes(r.MaxObjectBytes); err != nil || p.MaxObjectBytes <= 0 {
+			return errors.New("max_object_bytes: invalid size")
+		}
+	}
+	p.MaxObjectsPerPlan = orDefault(r.MaxObjectsPerPlan, DefaultMaxObjectsPerPlan)
+	p.MaxPluginsPerHandle = orDefault(r.MaxPluginsPerHandle, DefaultMaxPluginsPerHandle)
+	if r.MaxObjectsPerPlan < 0 || r.MaxPluginsPerHandle < 0 || p.MaxPluginsPerHandle > MaxPluginsPerHandleCap {
+		return fmt.Errorf("max_objects_per_plan and max_plugins_per_handle must be positive, max_plugins_per_handle at most %d", MaxPluginsPerHandleCap)
+	}
+	return nil
 }
 
 // withTimerDefaults replaces a zero idle_timeout or max_session (lockkit's
