@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/DavidGodefroid/lockfile/internal/profile"
+	"github.com/DavidGodefroid/lockfile/internal/rpc"
 	"github.com/DavidGodefroid/lockfile/internal/workspace"
 )
 
@@ -14,14 +15,31 @@ const planTTL = 10 * time.Minute
 
 // plan is an approved plan, run at most once, by the client that asked.
 type plan struct {
-	id       string
-	peerUID  int
-	key      string
-	handle   workspace.Handle
-	plugins  []string
-	pins     []profile.PluginPin
+	id      string
+	peerUID int
+	key     string
+	handle  workspace.Handle
+	plugins []string
+	pins    []profile.PluginPin
+	// bindings maps each plugin input ("<plugin>.<input>") to the
+	// placeholder name whose value it gets (nil: no input).
+	bindings map[string]string
 	policyFP string // fingerprint of the approved policy at approval
 	expires  time.Time
+}
+
+// names is the plan's distinct placeholder names, sorted.
+func (p *plan) names() []string { return rpc.InputNames(p.bindings) }
+
+// cost is how many answers the plan reveals at most (rpc.PlanCost).
+func (p *plan) cost() int { return rpc.PlanCost(p.plugins, p.bindings) }
+
+// file names the file a plan runs on, for the replay count of a value.
+func (p *plan) file() string {
+	if p.handle != "" {
+		return "handle " + string(p.handle)
+	}
+	return "key " + p.key
 }
 
 type planTable struct {

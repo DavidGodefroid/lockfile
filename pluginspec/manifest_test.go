@@ -36,7 +36,8 @@ func TestParseManifestValid(t *testing.T) {
 func TestParseManifestRejects(t *testing.T) {
 	cases := map[string][2]string{
 		"unknown key params": {`limits = {`, "params = [\"x\"]\nlimits = {"},
-		"protocol 2":         {`protocol = 1`, `protocol = 2`},
+		"protocol 3":         {`protocol = 1`, `protocol = 3`},
+		"protocol 0":         {`protocol = 1`, `protocol = 0`},
 		"empty question":     {`question = "Does the PDF have at least one page that paints nothing visible?"`, `question = ""`},
 		"empty one":          {`one  = "at least one page has no painting operator, or only full-page white fills"`, `one = ""`},
 		"empty zero":         {`zero = "every page paints something"`, `zero = ""`},

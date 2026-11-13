@@ -9,6 +9,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/DavidGodefroid/lockkit/client"
 	"github.com/DavidGodefroid/lockkit/config"
@@ -20,6 +22,7 @@ import (
 	"github.com/DavidGodefroid/lockfile/internal/answers"
 	"github.com/DavidGodefroid/lockfile/internal/product"
 	"github.com/DavidGodefroid/lockfile/internal/rpc"
+	"github.com/DavidGodefroid/lockfile/pluginspec"
 )
 
 // Kind classifies an error for the CLI's exit code.
@@ -194,12 +197,50 @@ func Plugins(ctx context.Context, profile string) ([]rpc.PluginInfo, error) {
 
 // planOK checks a plan result against the request it answers.
 func planOK(p rpc.PlanParams, out rpc.PlanResult) bool {
-	return validPlanID(out.PlanID) && out.Answers == len(p.Plugins)
+	bindings, _ := rpc.Bindings(p.Inputs)
+	return validPlanID(out.PlanID) && out.Answers == rpc.PlanCost(p.Plugins, bindings) && validHeld(out.HeldInputs)
+}
+
+// InputLines are a plugin's inputs as text, for the plugin lists: what to
+// bind, never a value.
+func InputLines(p rpc.PluginInfo) []string {
+	var out []string
+	for _, in := range p.Inputs {
+		out = append(out, fmt.Sprintf("  input %s.%s (%s, at most %d bytes): bind it to a placeholder like ${%s}; the human types the value", p.Plugin, in.Name, in.Kind, in.MaxBytes, in.Name))
+	}
+	return out
+}
+
+// HeldText says which placeholders the console holds a value for, "" for
+// none.
+func HeldText(names []string) string {
+	if len(names) == 0 {
+		return ""
+	}
+	s := make([]string, len(names))
+	for i, n := range names {
+		s[i] = "${" + n + "}"
+	}
+	return "values held by the console (reuse them without a new prompt): " + strings.Join(s, ", ")
+}
+
+// validHeld checks held placeholder names.
+func validHeld(names []string) bool {
+	for _, n := range names {
+		if !pluginspec.ValidInputName(n) {
+			return false
+		}
+	}
+	return len(names) <= rpc.MaxPlanInputs
 }
 
 // PendingError is a plan or run waiting for a decision on the approval
-// hub: run Ticket once it is decided.
-type PendingError struct{ Ticket, Lock, Instance string }
+// hub: run Ticket once it is decided. HeldInputs names the placeholders
+// whose values the console holds already (a plan's answer).
+type PendingError struct {
+	Ticket, Lock, Instance string
+	HeldInputs             []string
+}
 
 func (e *PendingError) Error() string {
 	return "pending human approval: ticket " + e.Ticket + " on " + e.Lock
@@ -207,11 +248,18 @@ func (e *PendingError) Error() string {
 
 // pendingOf reads a pending answer (console.PendingResp), nil for another.
 func pendingOf(raw json.RawMessage) *PendingError {
-	var p struct{ Status, Ticket, Lock, Instance string }
+	var p struct {
+		Status, Ticket, Lock, Instance string
+		HeldInputs                     []string `json:"held_inputs"`
+	}
 	if json.Unmarshal(raw, &p) != nil || p.Status != "pending" || !ticket.ValidID(p.Ticket) || p.Lock != product.P.Name {
 		return nil
 	}
-	return &PendingError{Ticket: p.Ticket, Lock: p.Lock, Instance: p.Instance}
+	pe := &PendingError{Ticket: p.Ticket, Lock: p.Lock, Instance: p.Instance}
+	if validHeld(p.HeldInputs) {
+		pe.HeldInputs = p.HeldInputs
+	}
+	return pe
 }
 
 // Plan asks the human to approve a plan. In hub mode it answers a
@@ -254,6 +302,7 @@ func PlanAndRun(ctx context.Context, profile string, p rpc.PlanParams) (answers.
 		return answers.Result{}, closed(profile, err)
 	}
 	if !validResult(out) || len(out.Answers) != len(p.Plugins) {
+		// One answer per plugin, whatever the plan's cost.
 		return answers.Result{}, errBadResult()
 	}
 	return result(out), nil

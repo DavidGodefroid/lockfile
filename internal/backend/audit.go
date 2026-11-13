@@ -50,6 +50,10 @@ func (b *Backend) auditRun(ctx context.Context, env console.Env, p *plan, entrie
 	}
 	head := Record{Base: stamp(ctx, b.o.Profile, audit.EventRun, decision), PlanID: p.id, Handle: string(p.handle), Key: p.key, Plugins: p.plugins}
 	head.Code = refusal
+	// The placeholders by name: never a value.
+	if names := p.names(); len(names) > 0 {
+		head.Inputs = names
+	}
 	for _, e := range entries {
 		if e.Fetch != nil {
 			head.Size, head.SHA256 = e.Fetch.Size, e.Fetch.SHA256
