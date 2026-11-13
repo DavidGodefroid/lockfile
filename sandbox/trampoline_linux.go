@@ -39,9 +39,21 @@ func Main() {
 
 const (
 	// asHeadroom is the address space a plugin gets above its memory
-	// limit. A Go program reserves about 600 MiB at start (page allocator
-	// summaries, arena hints) and fails below 768 MiB in total.
-	asHeadroom = 1 << 30
+	// limit. A Go program reserves (PROT_NONE) far more address space than
+	// it uses, and how much it needs is not monotonic in the limit: a Go
+	// 1.26 plugin on amd64 fails at start under 688 MiB in total and again
+	// from 1104 to 1192 MiB, and starts from 1200 MiB up (measured, up to
+	// 20 GiB; lockfile#76). 1 GiB put manifests from about 80 to 176 MiB in
+	// that window. 4 GiB clears every reservation with room for future
+	// runtimes; what it lets a plugin reach without RLIMIT_DATA is
+	// read-only private memory only (the zero page: page tables at most,
+	// about 8 MiB for 4 GiB touched).
+	asHeadroom = 4 << 30
+	// stackLimit is the plugin's main-thread stack limit, soft and hard.
+	// The stack is not data (RLIMIT_DATA ignores it), so a plugin that
+	// could raise an inherited unlimited hard limit could grow it up to
+	// RLIMIT_AS. Go uses it for g0 only.
+	stackLimit = 8 << 20
 	// threadAllowance is how many tasks a plugin may add to its uid. A Go
 	// plugin needs GOMAXPROCS threads plus a few; the margin absorbs other
 	// tasks of the uid (the console, other consoles) starting while it runs.
@@ -118,6 +130,10 @@ func trampoline(args []string) error {
 	if err != nil {
 		return fmt.Errorf("%s: seccomp: %v", ErrUnsupported, err)
 	}
+	stack, err := stackLimitFor()
+	if err != nil {
+		return fmt.Errorf("rlimit stack: %w", err)
+	}
 	for _, rl := range []struct {
 		res      int
 		cur, max uint64
@@ -125,14 +141,16 @@ func trampoline(args []string) error {
 		{unix.RLIMIT_CORE, 0, 0},
 		{unix.RLIMIT_FSIZE, 0, 0},
 		{unix.RLIMIT_CPU, cpu, cpu + 1},
-		// Memory is RLIMIT_DATA: the private writable memory actually
-		// mapped. RLIMIT_DATA does not count shared, grows-down or
-		// read-only mappings (seccomp refuses the first two), so RLIMIT_AS
-		// bounds everything at the limit plus asHeadroom: the Go runtime
-		// reserves (PROT_NONE) more address space than it uses and cannot
-		// start under an RLIMIT_AS near the memory limit.
+		// Memory is RLIMIT_DATA: the private writable memory mapped (and
+		// made writable with mprotect). RLIMIT_DATA does not count shared,
+		// grows-down, stack or read-only mappings: seccomp refuses the
+		// first two, RLIMIT_STACK fixes the third, and RLIMIT_AS bounds
+		// everything at the limit plus asHeadroom: the Go runtime reserves
+		// (PROT_NONE) more address space than it uses and cannot start
+		// under an RLIMIT_AS near the memory limit.
 		{unix.RLIMIT_DATA, mem, mem},
 		{unix.RLIMIT_AS, mem + asHeadroom, mem + asHeadroom},
+		{unix.RLIMIT_STACK, stack, stack},
 		// RLIMIT_NPROC counts every task (thread) of the real uid, the
 		// console's and other plugins' included, so it is set relative to
 		// what the uid runs now (measured, see uidTasks): the plugin may
@@ -148,6 +166,16 @@ func trampoline(args []string) error {
 	}
 	err = syscall.Exec(pluginPath, []string{"plugin"}, []string{protocolEnv(protocol)})
 	return fmt.Errorf("exec plugin: %w", err)
+}
+
+// stackLimitFor returns stackLimit, or the inherited hard limit when it
+// is lower: an unprivileged process cannot raise it.
+func stackLimitFor() (uint64, error) {
+	var rl unix.Rlimit
+	if err := unix.Getrlimit(unix.RLIMIT_STACK, &rl); err != nil {
+		return 0, err
+	}
+	return min(rl.Max, stackLimit), nil
 }
 
 // uidTasks measures how many tasks the kernel counts against RLIMIT_NPROC

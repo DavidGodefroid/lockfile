@@ -169,6 +169,39 @@ func TestMemoryLimit(t *testing.T) {
 	wantFailure(t, o, r, pluginspec.CauseExitCode, pluginspec.CauseSignal)
 }
 
+// A Go plugin starts at every reasonable manifest memory: the Go runtime's
+// address-space reservations fit in RLIMIT_AS whatever the limit
+// (lockfile#76: 1 GiB of headroom failed from about 80 to 176 MiB).
+func TestGoPluginStartsAtEveryMemory(t *testing.T) {
+	bin := plugin(t, "answer1")
+	for mib := int64(64); mib <= 512; mib += 16 {
+		l := defaultLimits
+		l.Memory = mib << 20
+		o, r := run(t, bin, l)
+		if o.Answer == nil || !*o.Answer {
+			t.Errorf("memory %d MiB: want answer true, got %+v (report %+v)", mib, o, r)
+		}
+	}
+}
+
+// At a small manifest memory the limit still holds: the plugin works
+// within it and is killed past it.
+func TestMemoryLimitSmall(t *testing.T) {
+	l := defaultLimits
+	l.Memory = 128 << 20
+	o, r := run(t, plugin(t, "allocmib", "-X main.mib=16"), l)
+	wantAnswer(t, o, r, true)
+	o, r = run(t, plugin(t, "allocmib", "-X main.mib=256"), l)
+	wantFailure(t, o, r, pluginspec.CauseExitCode, pluginspec.CauseSignal)
+}
+
+// The main-thread stack is not data: its limit is fixed, the plugin cannot
+// raise it.
+func TestStackLimitFixed(t *testing.T) {
+	o, r := run(t, plugin(t, "stackraise"), defaultLimits)
+	wantAnswer(t, o, r, false)
+}
+
 // RLIMIT_DATA counts private writable memory only: shared anonymous,
 // grows-down and read-only mappings must be refused or bounded too.
 func TestMemoryLimitBypass(t *testing.T) {

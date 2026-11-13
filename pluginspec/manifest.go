@@ -61,7 +61,7 @@ var (
 // Limits are the resources a plugin run may use.
 type Limits struct {
 	CPUSeconds int
-	Memory     int64 // address space, bytes
+	Memory     int64 // private writable memory (RLIMIT_DATA), bytes
 	Timeout    time.Duration
 }
 
