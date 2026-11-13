@@ -50,3 +50,94 @@ container. See [usage.md](usage.md#profiles-console-account).
 `production = true` (v0.8.0): the console's own widenings, the policy review
 at start and a loosening at `:review`, take the profile name typed instead of
 `y`; its tickets are flagged production on every lockhub facade.
+
+## Managed configuration
+
+A company can bound lockfile on a machine with the Lock Family's
+`managed.toml` (schema and deployment:
+[lockfamily docs/managed.md](https://github.com/DavidGodefroid/lockfamily/blob/main/docs/managed.md)):
+`/etc/lockfamily/managed.toml` on Linux, `/Library/Application
+Support/lockfamily/managed.toml` on macOS, owned by root and writable by root
+only (`lox run` mounts it into the console's container). lockfile reads its
+`[lockfile]` section; a user may tighten what it allows, never loosen it, and
+no human can approve beyond it.
+
+```toml
+version = 1
+organisation = "Acme"
+
+[lockfile.bounds]
+source = ["s3", "sftp"]
+hosts = ["*.s3.corp.example", "files.corp.example"]
+max_object_bytes = "10MiB"
+marketplaces = ["official"]
+
+[lockfile.defaults]
+handle_ttl = "10m"
+
+[lockfile.profiles.erp]
+source = "sftp"
+host = "files.corp.example"
+user = "files"
+auth = "key"
+key = "/home/lockfile/.ssh/erp"
+known_hosts = "/home/lockfile/.ssh/known_hosts"
+```
+
+Precedence: hard-coded floor > managed bounds and profiles > your config >
+managed defaults > built-in defaults. The merged result is checked against
+the bounds at the console's start and at every policy poll (2 s): beyond
+them, a profile is refused with no prompt (`blocked by company policy:
+lockfile.bounds.max_object_bytes = 10485760 (profile dev:
+limits.max_object_bytes = 52428800)`, audited `refused-managed`), and a
+change made while the console runs is refused, never pending. The console
+prints `Managed by <organisation> (sha256:…)` at start; the approved policy
+and every audit record carry the file's fingerprint (`managed_sha256`).
+
+**`[lockfile.bounds]`**, every key optional:
+
+| Key | Type | Looser is |
+|---|---|---|
+| `production` | `true` | a profile without `production = true` |
+| `source` | allowed list (`["s3", "sftp", "local"]`) | another source kind |
+| `hosts` | allowed host patterns (`*` matches any part, case-insensitive) | an s3 `endpoint` host, the AWS host of a `region` (`s3.<region>.amazonaws.com`) or an sftp `host` matching none |
+| `buckets` | allowed list of s3 bucket names | another bucket |
+| `credentials` | allowed list (`ask`, `keychain`, `vault`, `none`) | another credentials mode (a local source's is `none`) |
+| `credentials_ttl` | duration ceiling | longer, or unset (the whole session) |
+| `idle_timeout`, `max_session`, `handle_ttl` | duration ceiling | longer |
+| `max_object_bytes` | size ceiling | larger |
+| `max_objects_per_plan`, `max_plugins_per_handle` | ceiling | larger |
+| `max_workspace_bytes` | size ceiling (the file-level key) | larger |
+| `answer_quantum` | duration floor | shorter |
+| `marketplaces` | allowed list of marketplace names (`official` is lockfile's own) | a `[[marketplaces]]` entry not in the list |
+
+`[family] vault = { required = true }` acts as `credentials = ["vault"]`,
+cited as `family.vault.required`. A refusal names the managed key; a bound
+on a list (`source`, `hosts`, `buckets`, `credentials`) reads `blocked by
+company policy: lockfile.bounds.source does not allow local (profile disk:
+source = local)`. There is no plugin allow list: plugins come only from the
+marketplaces, which `marketplaces` bounds.
+
+**`[lockfile.defaults]`** takes the profile keys plus `max_workspace_bytes`:
+each fills a key your config leaves unset, before the built-in defaults. A
+default beyond the bounds is a load error.
+
+**`[lockfile.profiles.<name>]`** takes exactly the profile keys and is served
+as written, with no config of your own. A profile of yours with a managed
+name is refused, naming it (rename yours). A managed profile beyond the
+bounds is a load error.
+
+Commands:
+
+- `lockfile managed show` prints the file's path, organisation, fingerprint
+  and signature, lockfile's bounds and defaults and the managed profile
+  names; `no managed configuration` without one (exit 0); a refused file
+  (not root's, invalid, bad signature) prints lockkit's error, exit 3.
+- `lockfile managed check [--profile NAME]` loads your config and the
+  managed file as the console does and prints one `blocked by company
+  policy: …` line per violation (exit 3), else `N profile(s) within the
+  company policy (Managed by …)` (exit 0). It opens no connection and reads
+  no credential; `lox run` runs it before it starts the lock.
+- `lockfile doctor` has a `managed` line: the file in force, `no managed
+  configuration`, or why it is refused.
+- A console refused by the managed file exits 3.

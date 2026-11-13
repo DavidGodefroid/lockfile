@@ -210,7 +210,7 @@ Every rule and limit: [docs/safety.md](docs/safety.md). Threat model:
 | [docs/install.md](docs/install.md) | Homebrew, the install script, the first plan by hand, upgrade, build, status |
 | [docs/docker.md](docs/docker.md) | the setup: image, volumes, seccomp profile, console, agent wiring, what Docker separates |
 | [docs/usage.md](docs/usage.md) | every command, profiles, the agent flow, MCP |
-| [docs/configuration.md](docs/configuration.md) | profile keys: S3, SFTP, local, credentials, limits |
+| [docs/configuration.md](docs/configuration.md) | profile keys: S3, SFTP, local, credentials, limits; the company's managed configuration ([lockfamily docs/managed.md](https://github.com/DavidGodefroid/lockfamily/blob/main/docs/managed.md)) |
 | [docs/architecture.md](docs/architecture.md) | the life of a plan, the approval screen, commands and MCP tools, exit codes |
 | [docs/plugins.md](docs/plugins.md) | the official plugins, installing, unofficial marketplaces |
 | [docs/plugin-contract.md](docs/plugin-contract.md) | for plugin authors: manifest, runtime, answer, publishing |
