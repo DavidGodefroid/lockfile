@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Fixed
+
+- A Go plugin whose manifest memory was between about 80 and 176 MiB (128 MiB, say) died at
+  start (exit 2): the sandbox's address-space limit (`RLIMIT_AS` = memory + 1 GiB, since v0.3.0)
+  fell in a range where the Go runtime cannot reserve its heap. The address-space headroom is
+  now 4 GiB; the memory a plugin can use is still bounded by `RLIMIT_DATA` = `memory`, and the
+  main-thread stack, which `RLIMIT_DATA` does not count, is now fixed at 8 MiB
+  (DavidGodefroid/lockfile#76).
+
 ## v0.9.0 (2026-11-13)
 
 Builds on lockkit v0.19.0 (from v0.14.1).

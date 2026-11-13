@@ -160,4 +160,7 @@ the tag ruleset and does not replace it.
 - Plugin resource caps are availability limits, not isolation: the task cap is `RLIMIT_NPROC`
   set to the account's current task count (measured from the kernel) plus 512, so it is shared
   with whatever else the account starts meanwhile, and root ignores it (the console never runs
-  as root). Memory is bounded by `RLIMIT_DATA` and `RLIMIT_AS` (limit + 1 GiB).
+  as root). Memory is bounded by `RLIMIT_DATA` (the limit: private writable memory), `RLIMIT_STACK`
+  (8 MiB, fixed) and `RLIMIT_AS` (limit + 4 GiB, so the Go runtime's address-space reservations
+  fit at any limit). Past the limit a plugin can map only read-only private memory, which costs
+  page tables at most (about 8 MiB for 4 GiB touched).
