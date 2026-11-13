@@ -36,8 +36,10 @@ jobs:
             grep -E -- '--- FAIL|_test\.go:[0-9]+:|^FAIL|panic:' test.log | head -40 | sed 's/^/::error::/'
             exit 1
           }
+      - name: go test (managed configuration)
+        run: go test -count=1 -tags lockfamily_managed_test ./...
       - name: go test (integration)
-        run: go test -count=1 -tags integration ./test/integration/...
+        run: go test -count=1 -tags 'integration lockfamily_managed_test' ./test/integration/...
 
   docker:
     name: docker (image, sandbox under the shipped seccomp profile, end to end)
@@ -137,7 +139,7 @@ jobs:
           go-version: "1.26.x"
           check-latest: true
       - name: staticcheck
-        run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 -tags integration ./...
+        run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 -tags 'integration lockfamily_managed_test' ./...
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 -tags integration ./...
       - name: actionlint

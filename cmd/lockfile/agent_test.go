@@ -120,7 +120,7 @@ func cliVocab(inputs ...string) testenv.Vocab {
 		clientcmd.UnknownProfileHint("other"),
 		"handle", "no answer", "(unofficial marketplace)", "released", "UNOFFICIAL MARKETPLACE",
 		"plan approved: it reveals at most answers", "run it once: lockfile run --profile",
-		"console up, production no, auto no, security level, plugin protocol, sandbox ok",
+		"console up, production no, security level, plugin protocol, sandbox ok",
 	}, inputs...)
 	return testenv.ClosedVocab(extra...).WithKeys(testenv.ClientKeys...)
 }

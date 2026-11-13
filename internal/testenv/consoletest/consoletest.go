@@ -171,6 +171,9 @@ type Options struct {
 	// Now is the console's clock (hub mode: tickets, decisions, plans);
 	// nil is time.Now.
 	Now func() time.Time
+	// MayRefuse lets the console end before it listens (a start refused):
+	// Start returns it with Err set instead of failing the test.
+	MayRefuse bool
 }
 
 // Console is a running test console.
@@ -191,7 +194,9 @@ type Console struct {
 	// test gave its own (Options.Hub); HubOptions attach a console to it.
 	Hub        *hubtest.Hub
 	HubOptions console.HubOptions
-	done       chan error
+	// Err is why a console started with MayRefuse ended before listening.
+	Err  error
+	done chan error
 
 	// What Restart starts again on.
 	iso   *console.IsolationEnv
@@ -342,6 +347,10 @@ func (c *Console) launch(t testing.TB, o Options) {
 	}
 	b, err := backend.New(bo)
 	if err != nil {
+		if o.MayRefuse {
+			c.Err = err
+			return
+		}
 		t.Fatal(err)
 	}
 	ready := make(chan string, 1)
@@ -365,11 +374,19 @@ func (c *Console) launch(t testing.TB, o Options) {
 	case c.Socket = <-ready:
 		c.StartLines = c.IO.Lines()
 	case err := <-c.done:
+		if o.MayRefuse {
+			c.Err = err
+			c.done <- err
+			return
+		}
 		t.Fatalf("console exited before listening: %v\n%s", err, c.IO.Output())
 	case <-time.After(30 * time.Second):
 		t.Fatalf("no socket:\n%s", c.IO.Output())
 	}
 }
+
+// StateDir is the console's state base (approved policies, audit log).
+func (c *Console) StateDir() string { return c.state }
 
 // ConfigPath is the console's config file (a test changes the policy on
 // disk, then restarts).

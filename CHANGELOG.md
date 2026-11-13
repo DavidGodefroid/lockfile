@@ -2,7 +2,20 @@
 
 ## Unreleased
 
-Builds on lockkit v0.15.0 (from v0.14.1).
+Builds on lockkit v0.18.0 (from v0.14.1).
+
+- **Managed configuration**: lockfile enforces the `[lockfile]` section of the company's
+  `managed.toml` (lockfamily#31): `[lockfile.profiles.<name>]` served as written (a profile of
+  yours with that name is refused), `[lockfile.defaults]` for what your config leaves unset, and
+  `[lockfile.bounds]` you may tighten, never loosen: production, source, hosts, buckets,
+  credentials, timers, limits, `max_workspace_bytes` and marketplaces; `[family] vault.required`
+  allows only Vault credentials. The console refuses a policy beyond them at start and at every
+  poll, with no prompt, citing the managed key (`blocked by company policy: …`), and exits 3.
+  New `lockfile managed show` and `lockfile managed check [--profile NAME]` (the check `lox run`
+  runs before it starts the lock), and a `managed` line in `lockfile doctor`. See
+  docs/configuration.md#managed-configuration (DavidGodefroid/lockfile#63).
+- The status no longer reports an auto mode (`auto_approve`, gone from lockkit's status answer in
+  v0.18.0): lockhub decides.
 
 - **Hub ticket limits**: the console opens at most 30 tickets a human decides per 5 minutes
   (was 10) and 30 pending ones (was 20); a ticket `lox run`'s auto mode decides leaves that

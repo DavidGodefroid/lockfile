@@ -1,0 +1,2 @@
+blocked by company policy: lockfile.bounds.max_object_bytes = 10485760 (profile big: limits.max_object_bytes = 52428800)
+blocked by company policy: lockfile.bounds.source does not allow local (profile disk: source = local)
