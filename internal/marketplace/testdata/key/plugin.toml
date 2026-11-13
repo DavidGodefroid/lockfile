@@ -1,0 +1,8 @@
+name = "pdf.parses"
+version = "1.0.0"
+protocol = 1
+question = "Does the file parse as a PDF without errors?"
+one = "it parses"
+zero = "it does not"
+accepts = ["application/pdf"]
+limits = { cpu_s = 5, memory = "64MiB", timeout_s = 5 }

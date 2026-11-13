@@ -2,7 +2,18 @@
 
 ## Unreleased
 
-Builds on lockkit v0.18.0 (from v0.14.1).
+Builds on lockkit v0.19.0 (from v0.14.1).
+
+- **Public-key trust roots** for unofficial marketplaces (DavidGodefroid/lockfile#68, lockkit
+  v0.18.0's key mode): `marketplace add NAME --index URL --public-key cosign.pub` trusts a
+  cosign public key (ECDSA P-256/P-384, Ed25519, RSA >= 2048) instead of a keyless identity,
+  never both. The index, manifests and binaries are checked with `cosign verify-blob --key`, a
+  Rekor entry required. `public_key` in the config holds the key inline (the base64 body of the
+  PEM, on one line), so the config's approval covers it; it is checked at load, never quoted in
+  an error, and shown as its SHA-256 fingerprint (`public_key_sha256` in JSON). A changed key
+  is a loosening on `:review`.
+- lockkit v0.19.0: the hub screen's masking of object keys catches more phone formats and
+  e-mail addresses with an apostrophe.
 
 - **Placeholders typed by the human** (plugin protocol 2): a plugin may declare up to 4 `inputs`
   (`text`, `email` or `digits`, at most 1024 bytes) named in its question as `${name}`. The

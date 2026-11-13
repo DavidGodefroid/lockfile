@@ -1,7 +1,14 @@
 package main
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/pem"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -60,11 +67,67 @@ func TestMarketplaceAddWarnsWeakSigner(t *testing.T) {
 	}
 }
 
-func TestMarketplaceKeyRootRefused(t *testing.T) {
+func writeTestKey(t *testing.T) (path, value string) {
+	t.Helper()
+	k, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	der, _ := x509.MarshalPKIXPublicKey(&k.PublicKey)
+	path = filepath.Join(t.TempDir(), "cosign.pub")
+	if err := os.WriteFile(path, pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: der}), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path, base64.StdEncoding.EncodeToString(der)
+}
+
+func TestMarketplaceAddPublicKey(t *testing.T) {
+	h, _ := humanEnv(t, "official")
+	key, value := writeTestKey(t)
+	args := []string{"marketplace", "add", "acme", "--index", "https://example.org/index.json", "--public-key", key}
+	code, out, errText := runArgs(t, "acme\n", args...)
+	if code != 0 {
+		t.Fatalf("exit %d: %s %s", code, out, errText)
+	}
+	f, err := profile.ReadFile(h.configPath)
+	if err != nil || len(f.Marketplaces) != 1 {
+		t.Fatalf("config %+v %v", f, err)
+	}
+	tr := f.Marketplaces[0]
+	if tr.PublicKey != value || tr.IdentityRegexp != "" || tr.OIDCIssuer != "" || tr.Marketplace().Root.Validate() != nil {
+		t.Fatalf("trust %+v", tr)
+	}
+	if !strings.Contains(out, "key      sha256:"+tr.KeySHA256) || strings.Contains(out, "signer") || strings.Contains(out, value[20:40]) {
+		t.Fatalf("banner: %s", out)
+	}
+	code, out, _ = runArgs(t, "", "marketplace", "list")
+	if code != 0 || !strings.Contains(out, "acme (https://example.org/index.json, public key sha256:"+tr.KeySHA256+")") || strings.Contains(out, value[20:40]) {
+		t.Fatalf("list %d: %s", code, out)
+	}
+}
+
+func TestMarketplaceAddPublicKeyRefused(t *testing.T) {
 	humanEnv(t, "official")
-	code, _, errText := runArgs(t, "acme\n", "marketplace", "add", "acme", "--index", "https://example.org/index.json", "--public-key", "/k.pub")
-	if code != product.ExitError || !strings.Contains(errText, "public-key trust roots need lockkit support") {
-		t.Fatalf("exit %d: %s", code, errText)
+	key, value := writeTestKey(t)
+	notKey := filepath.Join(t.TempDir(), "notkey.pub")
+	if err := os.WriteFile(notKey, []byte("glsa_CanarySecretToken123\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	idx := []string{"marketplace", "add", "acme", "--index", "https://example.org/index.json"}
+	for name, extra := range map[string][]string{
+		"missing file":  {"--public-key", filepath.Join(t.TempDir(), "none.pub")},
+		"not a key":     {"--public-key", notKey},
+		"with identity": {"--public-key", key, "--identity-regexp", `^https://github\.com/acme/p/`},
+		"with issuer":   {"--public-key", key, "--issuer", "https://token.actions.githubusercontent.com"},
+		"neither":       {},
+	} {
+		code, out, errText := runArgs(t, "acme\n", append(append([]string{}, idx...), extra...)...)
+		if code == 0 || code == product.ExitDenied {
+			t.Errorf("%s: exit %d: %s", name, code, out)
+		}
+		if strings.Contains(errText+out, "glsa_Canary") || strings.Contains(errText+out, value[20:40]) {
+			t.Errorf("%s: the output quotes the file: %s %s", name, out, errText)
+		}
 	}
 }
 

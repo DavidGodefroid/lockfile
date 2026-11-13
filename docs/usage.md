@@ -131,6 +131,7 @@ lockfile plugin update pdf.parses@1.1.0         # shows the manifest diff; a cha
 lockfile plugin list | verify [NAME] | remove NAME
 lockfile marketplace add acme --index https://plugins.acme.example/index.json \
   --identity-regexp '^https://github\.com/acme/lockfile-plugins/\.github/workflows/release\.yml@refs/tags/'
+lockfile marketplace add beta --index https://plugins.beta.example/index.json --public-key cosign.pub
 lockfile marketplace list | remove NAME
 ```
 
@@ -147,7 +148,27 @@ The official marketplace's signer is pinned in the binary. An unofficial marketp
 unescaped `.` or does not pin `HOST/OWNER/REPO/` (other signers would match). It needs
 its name typed when added (in a terminal: a typed name is never read from a pipe, nor the
 plugin name `plugin update` asks for), is flagged on every approval screen and in every agent result,
-and is never auto-approved. Keyless signers only (`--public-key` is refused).
+and is never auto-approved.
+
+An unofficial marketplace trusts one signer: a keyless identity (`--identity-regexp`, and
+`--issuer`, by default GitHub Actions), or a cosign public key (`--public-key FILE`, the PEM
+`cosign.pub`; ECDSA P-256 or P-384, Ed25519, or RSA of 2048 bits or more), never both. Its
+index, manifests and binaries are checked with `cosign verify-blob --key` and must have a
+Rekor entry (a bundle signed with `--tlog-upload=false` is refused); sign them with
+`cosign sign-blob --new-bundle-format --key cosign.key --bundle FILE.sigstore.json FILE`.
+In the config the key is held inline, not as a path: `public_key` is the base64 body of the
+PEM on one line (`marketplace add` writes it), so it travels with the config and the approval
+of the config covers it; a key file swapped on disk cannot change the signer. A key that does
+not parse is refused at load, without quoting it. Screens, `marketplace list` and JSON outputs
+show the key's SHA-256 fingerprint (of its DER encoding), never the key; check it with the
+marketplace. Anyone holding the private key can publish plugins there.
+
+```toml
+[[marketplaces]]
+name = "beta"
+index_url = "https://plugins.beta.example/index.json"
+public_key = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE..."
+```
 
 A running console sees an installed plugin or an added marketplace as a policy loosening:
 it applies it only after `:review` in the console.

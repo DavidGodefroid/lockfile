@@ -1,7 +1,6 @@
 package profile
 
 import (
-	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -24,29 +23,36 @@ type RawMarketplace struct {
 	PublicKey      string `toml:"public_key"`
 }
 
-// Trust is an unofficial marketplace and its keyless trust root.
+// Trust is an unofficial marketplace and its trust root: a keyless
+// identity (IdentityRegexp and OIDCIssuer) or a public key, exactly one.
 type Trust struct {
 	Name           string `json:"name"`
 	IndexURL       string `json:"index_url"`
-	IdentityRegexp string `json:"identity_regexp"`
-	OIDCIssuer     string `json:"oidc_issuer"`
+	IdentityRegexp string `json:"identity_regexp,omitempty"`
+	OIDCIssuer     string `json:"oidc_issuer,omitempty"`
+	// PublicKey is the public_key value as configured (the base64 body of a
+	// PEM public key). Outputs show KeySHA256 instead.
+	PublicKey string `json:"-"`
+	KeySHA256 string `json:"public_key_sha256,omitempty"`
 }
 
 func (t Trust) String() string {
+	if t.PublicKey != "" {
+		return fmt.Sprintf("%s (%s, public key sha256:%s)", t.Name, t.IndexURL, t.KeySHA256)
+	}
 	return fmt.Sprintf("%s (%s, identity %s, issuer %s)", t.Name, t.IndexURL, t.IdentityRegexp, t.OIDCIssuer)
 }
 
 // Marketplace is t for the installer: never official.
 func (t Trust) Marketplace() marketplace.Marketplace {
-	return marketplace.Marketplace{Name: t.Name, IndexURL: t.IndexURL,
-		Root: verify.TrustRoot{IdentityRegexp: t.IdentityRegexp, OIDCIssuer: t.OIDCIssuer}}
+	root := verify.TrustRoot{IdentityRegexp: t.IdentityRegexp, OIDCIssuer: t.OIDCIssuer}
+	if t.PublicKey != "" {
+		root = verify.TrustRoot{PublicKey: publicKeyPEM(t.PublicKey)}
+	}
+	return marketplace.Marketplace{Name: t.Name, IndexURL: t.IndexURL, Root: root}
 }
 
 var marketplaceName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,39}$`)
-
-// ErrPublicKeyRoot refuses a public-key trust root: lockkit's signature
-// check is keyless only.
-var ErrPublicKeyRoot = errors.New("public-key trust roots need lockkit support (not in lockkit yet): use a keyless identity_regexp and oidc_issuer")
 
 // ValidMarketplaceName reports whether s is a valid unofficial marketplace
 // name (safe to quote in an error).
@@ -67,14 +73,21 @@ func parseMarketplace(r RawMarketplace) (Trust, error) {
 	if !ValidMarketplaceName(r.Name) {
 		return Trust{}, fmt.Errorf("marketplace: invalid name (lower-case letters, digits and '-', at most 40; not %q)", plugin.OfficialMarketplace)
 	}
-	if r.PublicKey != "" {
-		return Trust{}, fmt.Errorf("marketplace %s: %w", r.Name, ErrPublicKeyRoot)
-	}
 	u, err := url.Parse(r.IndexURL)
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
 		// No query or userinfo: a token there would be shown and quoted
 		// (and the signature is fetched at index_url + ".sigstore.json").
 		return Trust{}, fmt.Errorf("marketplace %s: index_url must be an https:// URL without userinfo, query or fragment", r.Name)
+	}
+	if r.PublicKey != "" {
+		if r.IdentityRegexp != "" || r.OIDCIssuer != "" {
+			return Trust{}, fmt.Errorf("marketplace %s: public_key excludes identity_regexp and oidc_issuer (one trust root)", r.Name)
+		}
+		sum, err := checkPublicKey(r.PublicKey)
+		if err != nil {
+			return Trust{}, fmt.Errorf("marketplace %s: public_key: %w", r.Name, err)
+		}
+		return Trust{Name: r.Name, IndexURL: r.IndexURL, PublicKey: r.PublicKey, KeySHA256: sum}, nil
 	}
 	if !strings.HasPrefix(r.IdentityRegexp, "^https://") {
 		return Trust{}, fmt.Errorf("marketplace %s: identity_regexp must start with ^https://", r.Name)

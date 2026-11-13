@@ -108,7 +108,7 @@ func (m *market) marketplace(name string, official bool) Marketplace {
 		mp.IndexURL = m.srv.URL + "/index.json"
 		return mp
 	}
-	return Marketplace{Name: name, IndexURL: m.srv.URL + "/index.json", Root: verify.TrustRoot{PublicKeyPath: "/keys/" + name + ".pub"}}
+	return Marketplace{Name: name, IndexURL: m.srv.URL + "/index.json", Root: verify.TrustRoot{PublicKey: "key of " + name}}
 }
 
 func (m *market) installer(t *testing.T) (Installer, plugin.Store) {
@@ -264,7 +264,7 @@ func TestUnofficialEntryFlagged(t *testing.T) {
 	if e.Official || e.Name != "acme/pdf.parses" || e.Marketplace != "acme" {
 		t.Fatalf("entry %+v", e)
 	}
-	if m.verifier.roots[0].PublicKeyPath != "/keys/acme.pub" {
+	if m.verifier.roots[0].PublicKey != "key of acme" {
 		t.Fatalf("verified with %+v", m.verifier.roots[0])
 	}
 	if _, _, err := s.Open("pdf.parses"); !errors.Is(err, plugin.ErrNotInstalled) {

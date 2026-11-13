@@ -51,7 +51,7 @@ func TestErrorsDoNotEchoValues(t *testing.T) {
 		{"identity_regexp", mk("acme", okIndex, canary, okIssuer)},
 		{"identity_regexp", mk("acme", okIndex, "^https://("+canary, okIssuer)},
 		{"oidc_issuer", mk("acme", okIndex, okIdentity, canary)},
-		{"public-key", s3 + "[[marketplaces]]\nname = \"acme\"\nindex_url = \"" + okIndex + "\"\npublic_key = \"" + canary + "\"\n"},
+		{"public_key", s3 + "[[marketplaces]]\nname = \"acme\"\nindex_url = \"" + okIndex + "\"\npublic_key = \"" + canary + "\"\n"},
 	} {
 		_, err := Parse([]byte(tc.cfg), "c")
 		if err == nil {

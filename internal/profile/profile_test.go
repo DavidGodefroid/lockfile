@@ -103,7 +103,7 @@ func TestRejects(t *testing.T) {
 		"local with credentials":   "[profiles.dev]\nsource = \"local\"\npath = \"/srv\"\ncredentials = \"ask\"\n",
 		"too many plugins":         s3 + "max_plugins_per_handle = 65\n",
 		"quantum too short":        s3 + "answer_quantum = \"100ms\"\n",
-		"public key marketplace":   s3 + "[[marketplaces]]\nname = \"acme\"\nindex_url = \"https://plugins.example.org/index.json\"\npublic_key = \"/k.pub\"\n",
+		"public key path":          s3 + "[[marketplaces]]\nname = \"acme\"\nindex_url = \"https://plugins.example.org/index.json\"\npublic_key = \"/k.pub\"\n",
 		"http marketplace":         s3 + "[[marketplaces]]\nname = \"acme\"\nindex_url = \"http://plugins.example.org/index.json\"\nidentity_regexp = \"^https://x/\"\noidc_issuer = \"https://x\"\n",
 		"official name":            s3 + "[[marketplaces]]\nname = \"official\"\nindex_url = \"https://plugins.example.org/index.json\"\nidentity_regexp = \"^https://x/\"\noidc_issuer = \"https://x\"\n",
 		"unanchored identity":      s3 + "[[marketplaces]]\nname = \"acme\"\nindex_url = \"https://plugins.example.org/index.json\"\nidentity_regexp = \".*\"\noidc_issuer = \"https://x\"\n",
