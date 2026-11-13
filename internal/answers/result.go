@@ -59,6 +59,9 @@ type Plan struct {
 	// read only the spool: the bytes they answer on are the hashed ones.
 	// A follow-up on a handle is not checked: its spool does not change.
 	SHA256 string
+	// With carries the plugins' typed values, the detail sink and the
+	// plan's cost (With.Pins is replaced by Pins).
+	With With
 }
 
 type Deps struct {
@@ -125,7 +128,7 @@ func ExecutePlan(ctx context.Context, p Plan, d Deps) (res Result, ref *Refusal,
 	if max <= 0 {
 		max = DefaultMaxPerHandle
 	}
-	if len(p.Plugins) > max {
+	if p.With.cost(p.Plugins) > max {
 		return Result{}, refuse(CodeTooManyPlugins), nil
 	}
 
@@ -160,7 +163,9 @@ func ExecutePlan(ctx context.Context, p Plan, d Deps) (res Result, ref *Refusal,
 		}
 	}
 
-	answers, entries, err := d.Runner.AnswerPinned(ctx, h, p.Plugins, p.Pins)
+	w := p.With
+	w.Pins = p.Pins
+	answers, entries, err := d.Runner.AnswerWith(ctx, h, p.Plugins, w)
 	audit = append(audit, entries...)
 	switch {
 	case errors.Is(err, ErrTooManyPlugins):

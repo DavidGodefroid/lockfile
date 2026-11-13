@@ -55,11 +55,12 @@ type ProfileIn struct {
 type NoIn struct{}
 
 type PlanIn struct {
-	Profile string   `json:"profile,omitempty" jsonschema:"profile of the console; may be left out when exactly one console runs"`
-	Key     string   `json:"key,omitempty" jsonschema:"exact object key, as the user gave it (or handle, not both)"`
-	Handle  string   `json:"handle,omitempty" jsonschema:"handle of a file already fetched, for follow-up questions (or key, not both)"`
-	Plugins []string `json:"plugins" jsonschema:"plugins to run, from lockfile_plugins"`
-	Intent  string   `json:"intent,omitempty" jsonschema:"one line telling the user why, at most 200 bytes"`
+	Profile string            `json:"profile,omitempty" jsonschema:"profile of the console; may be left out when exactly one console runs"`
+	Key     string            `json:"key,omitempty" jsonschema:"exact object key, as the user gave it (or handle, not both)"`
+	Handle  string            `json:"handle,omitempty" jsonschema:"handle of a file already fetched, for follow-up questions (or key, not both)"`
+	Plugins []string          `json:"plugins" jsonschema:"plugins to run, from lockfile_plugins"`
+	Intent  string            `json:"intent,omitempty" jsonschema:"one line telling the user why, at most 200 bytes"`
+	Inputs  map[string]string `json:"inputs,omitempty" jsonschema:"for plugins with inputs: each \"<plugin>.<input>\" bound to a placeholder such as \"${email}\"; the human types its value at approval and you never see it; a literal value is refused"`
 }
 
 type RunIn struct {
@@ -88,9 +89,11 @@ type PluginsOut struct {
 }
 
 type PlanOut struct {
-	PlanID  string        `json:"plan_id,omitempty"`
-	Answers int           `json:"answers,omitempty"`
-	Refusal *refusal.Info `json:"refusal,omitempty"`
+	PlanID  string `json:"plan_id,omitempty"`
+	Answers int    `json:"answers,omitempty"`
+	// HeldInputs names the placeholders the console holds a value for.
+	HeldInputs []string      `json:"held_inputs,omitempty"`
+	Refusal    *refusal.Info `json:"refusal,omitempty"`
 	pendingOut
 }
 
@@ -179,6 +182,7 @@ func New(pinned string) *mcp.Server {
 					head += " UNOFFICIAL MARKETPLACE"
 				}
 				lines = append(lines, head, "  ? "+p.Question, "  1 = "+p.One, "  0 = "+p.Zero)
+				lines = append(lines, clientcmd.InputLines(p)...)
 			}
 			return mcpkit.Text(strings.Join(lines, "\n")), PluginsOut{Plugins: list}, nil
 		})
@@ -191,18 +195,24 @@ func New(pinned string) *mcp.Server {
 			}
 			stop := mcpkit.Progress(ctx, req, 0, mcpkit.WaitingMessage(product.P))
 			plan, err := clientcmd.Plan(ctx, profile, rpc.PlanParams{Key: in.Key, Handle: in.Handle, Plugins: in.Plugins, Intent: in.Intent,
-				Requester: mcpkit.RequesterFromEnv()})
+				Inputs: in.Inputs, Requester: mcpkit.RequesterFromEnv()})
 			stop()
 			var pe *clientcmd.PendingError
 			if errors.As(err, &pe) {
 				res, out := mcpkit.PendingOn(pe.Lock, pe.Instance, pe.Ticket)
-				return res, PlanOut{pendingOut: pendingOf(out)}, nil
+				if t := clientcmd.HeldText(pe.HeldInputs); t != "" {
+					res.Content = append(res.Content, &mcp.TextContent{Text: t})
+				}
+				return res, PlanOut{pendingOut: pendingOf(out), HeldInputs: pe.HeldInputs}, nil
 			}
 			if err != nil {
 				return refusedOr(err, PlanOut{})
 			}
-			return mcpkit.Text(fmt.Sprintf("plan %s approved: it reveals at most %d answers; run it once with lockfile_run", plan.PlanID, plan.Answers)),
-				PlanOut{PlanID: plan.PlanID, Answers: plan.Answers}, nil
+			text := fmt.Sprintf("plan %s approved: it reveals at most %d answers; run it once with lockfile_run", plan.PlanID, plan.Answers)
+			if t := clientcmd.HeldText(plan.HeldInputs); t != "" {
+				text += "\n" + t
+			}
+			return mcpkit.Text(text), PlanOut{PlanID: plan.PlanID, Answers: plan.Answers, HeldInputs: plan.HeldInputs}, nil
 		})
 
 	mcp.AddTool(s, &mcp.Tool{Name: ToolRun, Description: "Run an approved plan once: 1, 0 or no answer (null, plugin_error: not a 0) per plugin, and the handle for follow-ups."},

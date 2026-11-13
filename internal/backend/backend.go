@@ -64,6 +64,8 @@ type Backend struct {
 	cur    *session // the session of the last Connect
 	// given holds the answers already returned on each handle.
 	given map[workspace.Handle][]answers.Answer
+	// vt holds the values the human typed this session.
+	vt vault
 
 	stop chan struct{}
 	done chan struct{}
@@ -191,7 +193,8 @@ func (b *Backend) expireLoop() {
 	}
 }
 
-// Close stops the expiry loop and removes every fetched file.
+// Close stops the expiry loop, wipes the typed values and removes every
+// fetched file.
 func (b *Backend) Close() error {
 	select {
 	case <-b.stop:
@@ -200,6 +203,7 @@ func (b *Backend) Close() error {
 	}
 	close(b.stop)
 	<-b.done
+	b.vt.wipe()
 	if ws, _ := b.current(); ws != nil {
 		return ws.Close()
 	}

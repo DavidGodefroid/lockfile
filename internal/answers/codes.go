@@ -21,6 +21,14 @@ const (
 	// CodeStale: the fetched bytes are not the ones the plan was approved
 	// on (their sha256 differs); no plugin ran on them.
 	CodeStale Code = "stale"
+	// CodeLiteralInput: a plugin input was bound to something other than
+	// a placeholder (${name}): only the human types a value. The literal
+	// is never echoed.
+	CodeLiteralInput Code = "literal_input"
+	// CodeInputInvalid: a value the human typed does not fit its input's
+	// kind or size, or the console no longer holds a reused one; nothing
+	// ran, and the value is never echoed.
+	CodeInputInvalid Code = "input_invalid"
 )
 
 // Codes is the closed list.
@@ -29,6 +37,7 @@ var Codes = []Code{
 	CodePluginNotInstalled, CodePluginTampered, CodePluginYanked, CodeSandboxUnavailable,
 	CodeProcNotHidden,
 	CodeApprovalDenied, CodeApprovalTimeout, CodeHandleExpired, CodeStale,
+	CodeLiteralInput, CodeInputInvalid,
 }
 
 // Valid reports whether c is in the closed list.

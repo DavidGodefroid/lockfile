@@ -18,6 +18,9 @@ const (
 // the agent did not send. Clients print these, never the console's text.
 const (
 	MsgPlanParams = "invalid params: give exactly one of key and handle, 1 or more distinct plugins, an intent of at most 200 bytes"
+	// MsgPlanInputs refuses inputs that do not bind exactly the inputs of
+	// the planned plugins.
+	MsgPlanInputs = "invalid params: bind every input of every plugin, and nothing else, as \"<plugin>.<input>\": \"${name}\""
 	MsgParams     = "invalid params"
 	MsgNoSuchPlan = "unknown, used or expired plan, or the policy changed since it was approved: plan again"
 	MsgConnLost   = "the console lost its connection to the source; the human must restart or reconnect it"
@@ -43,10 +46,17 @@ type PlanParams struct {
 	Handle  string   `json:"handle,omitempty"`
 	Plugins []string `json:"plugins"`
 	Intent  string   `json:"intent,omitempty"`
+	// Inputs binds each input of each plugin ("<plugin>.<input>") to a
+	// placeholder ("${email}"): the human types its value, the agent never
+	// gives or sees one. A literal is refused (E_LITERAL_INPUT).
+	Inputs map[string]string `json:"inputs,omitempty"`
 	// Requester is the agent behind the request (mcpkit.RequesterFromEnv):
 	// in hub mode the plan is bound to its token.
 	Requester ipc.Requester `json:"requester,omitzero"`
 }
+
+// MaxPlanInputs bounds PlanParams.Inputs.
+const MaxPlanInputs = 64
 
 // PlanResult names an approved plan, run once with file.run.
 type PlanResult struct {
@@ -60,6 +70,10 @@ type PlanResult struct {
 	Ticket   string `json:"ticket,omitempty"`
 	Lock     string `json:"lock,omitempty"`
 	Instance string `json:"instance,omitempty"`
+	// HeldInputs names the placeholders whose values this console holds
+	// already (typed earlier this session): a plan reusing one asks the
+	// human for no new value. Names only.
+	HeldInputs []string `json:"held_inputs,omitempty"`
 }
 
 // RunParams runs an approved plan, or in hub mode the plan of a decided
@@ -91,6 +105,16 @@ type PluginInfo struct {
 	Question    string `json:"question"`
 	One         string `json:"one"`
 	Zero        string `json:"zero"`
+	// Inputs are the plugin's inputs (protocol 2), each bound by the plan
+	// to a placeholder as "<plugin>.<name>".
+	Inputs []PluginInput `json:"inputs,omitempty"`
+}
+
+// PluginInput is one input of a plugin: a value the human types.
+type PluginInput struct {
+	Name     string `json:"name"`
+	Kind     string `json:"kind"`
+	MaxBytes int    `json:"max_bytes"`
 }
 
 // Status is lockfile's part of the status method.

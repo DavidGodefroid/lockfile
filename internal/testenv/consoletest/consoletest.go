@@ -141,6 +141,9 @@ func SameUserIsolation(t testing.TB) *console.IsolationEnv {
 type Plugin struct {
 	Name, Binary, Question string
 	TimeoutS               int
+	// InputKind, when set, installs a protocol-2 manifest with one input
+	// "needle" of that kind, and detail (testenv.InputsManifest).
+	InputKind string
 }
 
 // Options shape a test console.
@@ -171,6 +174,9 @@ type Options struct {
 	// Now is the console's clock (hub mode: tickets, decisions, plans);
 	// nil is time.Now.
 	Now func() time.Time
+	// ShowResults is the console's clear results start switch (lockkit
+	// refuses it at desktop levels 1 and 2).
+	ShowResults bool
 	// MayRefuse lets the console end before it listens (a start refused):
 	// Start returns it with Err set instead of failing the test.
 	MayRefuse bool
@@ -277,6 +283,11 @@ func Start(t testing.TB, o Options) *Console {
 		if to == 0 {
 			to = 2
 		}
+		if p.InputKind != "" {
+			kind := p.InputKind
+			testenv.InstallManifest(t, store, p.Name, testenv.BuildPlugin(t, bin), func(bare string) []byte { return testenv.InputsManifest(bare, kind) })
+			continue
+		}
 		testenv.Install(t, store, p.Name, testenv.BuildPlugin(t, bin), q, to)
 	}
 	c := &Console{IO: NewScriptIO(o.Answers...), Work: filepath.Join(t.TempDir(), "work"), Root: root, Profile: "samples", done: make(chan error, 1)}
@@ -359,7 +370,7 @@ func (c *Console) launch(t testing.TB, o Options) {
 		defer b.Close()
 		c.done <- console.Run(ctx, product.P, b, console.Options{
 			Profile: "samples", IO: c.IO, StateDir: c.state, Quantum: -1, Sanitizer: b.Sanitizer(),
-			Isolation: c.iso, Harden: func() error { return nil }, Ready: func(s string) { ready <- s }, Hub: o.Hub, Now: o.Now, OnHub: b.OnHub,
+			Isolation: c.iso, Harden: func() error { return nil }, Ready: func(s string) { ready <- s }, Hub: o.Hub, Now: o.Now, OnHub: b.OnHub, ShowResults: o.ShowResults,
 		})
 	}()
 	t.Cleanup(func() {

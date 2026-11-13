@@ -43,6 +43,8 @@ var wireKeys = []string{
 	"queued", "busy",
 	// a plan or run pending on the hub (console.PendingResp)
 	"status", "ticket", "lock", "instance",
+	// plugin inputs (protocol 2) and the placeholders a console holds
+	"inputs", "name", "kind", "max_bytes", "held_inputs",
 }
 
 // ClientKeys are the keys the CLI and MCP outputs add around the wire's
@@ -53,6 +55,7 @@ var ClientKeys = []string{"consoles", "console", "sources", "plugins", "refusal"
 var numericKeys = map[string]bool{
 	"id": true, "code": true, "result": true, "answers": true, "protocol_major": true, "level": true,
 	"idle_timeout_in_s": true, "session_ends_in_s": true, "protocol": true, "answer_quantum_ms": true,
+	"max_bytes": true,
 }
 
 // ClosedVocab is the closed vocabulary plus extra: the agent's own inputs,
@@ -64,6 +67,7 @@ func ClosedVocab(extra ...string) Vocab {
 		"official": true, "acme": true, "1.0.0": true, "yes": true, "no": true, answers.WarningUnofficial: true,
 		rpc.MsgPlanParams: true, rpc.MsgParams: true, rpc.MsgNoSuchPlan: true, rpc.MsgConnLost: true,
 		rpc.MsgPending: true, rpc.MsgClosed: true, rpc.MsgInternal: true, rpc.MsgRunTicket: true,
+		rpc.MsgPlanInputs: true, "text": true, "email": true, "digits": true,
 		// Pending on the hub: the status, the lock and the instance the
 		// tests' hub knows the console by (consoletest.HubInstance), and the
 		// fixed text the CLI and MCP print with the ticket.

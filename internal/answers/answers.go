@@ -4,6 +4,7 @@
 package answers
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"strings"
@@ -112,18 +113,48 @@ func (p Pin) Matches(e plugin.LockEntry) bool {
 // plugin_tampered without running. The check is made on the opened file,
 // so a plugin update between the approval and the run cannot slip in.
 func (r *Runner) AnswerPinned(ctx context.Context, h workspace.Handle, plugins []string, pins map[string]Pin) ([]Answer, []AuditEntry, error) {
+	return r.AnswerWith(ctx, h, plugins, With{Pins: pins})
+}
+
+// With is what a plan adds to its plugins' runs.
+type With struct {
+	// Pins: see AnswerPinned.
+	Pins map[string]Pin
+	// Inputs are, per plugin with inputs, the canonical JSON of the values
+	// the human typed for them (the plugin's fd 6). A plugin whose
+	// manifest declares inputs and has none here does not run.
+	Inputs map[string][]byte
+	// Detail, when set, gets the human-only detail a plugin with detail
+	// wrote (fd 7, capped): for the console window, never the agent or
+	// the audit.
+	Detail func(plugin string, detail []byte)
+	// Cost is how many answers the plan counts against the handle's
+	// budget (0: one per plugin).
+	Cost int
+}
+
+// cost is w's cost for plugins.
+func (w With) cost(plugins []string) int {
+	if w.Cost > 0 {
+		return w.Cost
+	}
+	return len(plugins)
+}
+
+// AnswerWith is AnswerPinned with w's inputs, detail and cost.
+func (r *Runner) AnswerWith(ctx context.Context, h workspace.Handle, plugins []string, w With) ([]Answer, []AuditEntry, error) {
 	probe, _, err := r.WS.OpenFile(h)
 	if err != nil {
 		return nil, nil, err
 	}
 	probe.Close()
-	if err := r.reserve(h, len(plugins)); err != nil {
+	if err := r.reserve(h, w.cost(plugins)); err != nil {
 		return nil, nil, err
 	}
 	answers := make([]Answer, 0, len(plugins))
 	audit := make([]AuditEntry, 0, len(plugins))
 	for _, name := range plugins {
-		a, e, err := r.one(ctx, h, name, pins)
+		a, e, err := r.one(ctx, h, name, w)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -136,7 +167,8 @@ func (r *Runner) AnswerPinned(ctx context.Context, h workspace.Handle, plugins [
 	return answers, audit, nil
 }
 
-func (r *Runner) one(ctx context.Context, h workspace.Handle, name string, pins map[string]Pin) (Answer, AuditEntry, error) {
+func (r *Runner) one(ctx context.Context, h workspace.Handle, name string, w With) (Answer, AuditEntry, error) {
+	pins := w.Pins
 	a := Answer{Plugin: name, Official: !strings.Contains(name, "/")}
 	e := AuditEntry{Plugin: name}
 	bin, inst, err := r.Store.Open(name)
@@ -165,13 +197,35 @@ func (r *Runner) one(ctx context.Context, h workspace.Handle, name string, pins 
 		}
 	}
 
+	spec := sandbox.Spec{Binary: bin, Limits: inst.Manifest.Limits, Protocol: inst.Manifest.Protocol}
+	if len(inst.Manifest.Inputs) > 0 {
+		if spec.Inputs = w.Inputs[name]; spec.Inputs == nil {
+			// The console holds no value for it: a console-side failure,
+			// never a run on an empty value.
+			e.ConsoleError = "no typed values for the plugin's inputs"
+			a.Error = pluginspec.AgentErrorCode
+			return a, e, nil
+		}
+	}
+	// A plugin with detail always gets its fd 7, whether the detail is
+	// printed or dropped: what it may write to never depends on the
+	// console's switches.
+	var detail bytes.Buffer
+	if inst.Manifest.Detail {
+		spec.Detail = &detail
+	}
 	in, _, err := r.WS.OpenFile(h)
 	if err != nil {
 		return Answer{}, AuditEntry{}, err
 	}
 	defer in.Close()
-	out, rep, err := r.Run(ctx, sandbox.Spec{Binary: bin, Input: in, Limits: inst.Manifest.Limits})
+	spec.Input = in
+	out, rep, err := r.Run(ctx, spec)
 	e.Report = rep
+	if detail.Len() > 0 && ctx.Err() == nil && w.Detail != nil {
+		w.Detail(name, detail.Bytes())
+	}
+	clear(detail.Bytes())
 	if ctx.Err() != nil {
 		return Answer{}, AuditEntry{}, ctx.Err()
 	}

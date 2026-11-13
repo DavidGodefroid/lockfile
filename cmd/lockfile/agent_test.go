@@ -116,7 +116,7 @@ func TestCLIPlanRun(t *testing.T) {
 func cliVocab(inputs ...string) testenv.Vocab {
 	extra := append([]string{
 		"lockfile:", "refusal", "retry:", "usage: lockfile",
-		"plan [--profile P] [--instance NAME] (--key KEY | --handle HANDLE) --plugin NAME... [--intent TEXT] [--run] [--json]",
+		"plan [--profile P] [--instance NAME] (--key KEY | --handle HANDLE) --plugin NAME... [--input PLUGIN.INPUT='${NAME}'...] [--intent TEXT] [--run] [--json]",
 		clientcmd.UnknownProfileHint("other"),
 		"handle", "no answer", "(unofficial marketplace)", "released", "UNOFFICIAL MARKETPLACE",
 		"plan approved: it reveals at most answers", "run it once: lockfile run --profile",

@@ -92,7 +92,7 @@ func TestToolsList(t *testing.T) {
 		t.Fatal(err)
 	}
 	var names []string
-	allowed := []string{"profile", "key", "handle", "plugins", "intent", "plan_id"}
+	allowed := []string{"profile", "key", "handle", "plugins", "intent", "inputs", "plan_id"}
 	for _, tool := range res.Tools {
 		names = append(names, tool.Name)
 		b, _ := json.Marshal(tool.InputSchema)

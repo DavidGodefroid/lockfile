@@ -68,17 +68,40 @@ func Run(ctx context.Context, s Spec) (pluginspec.Outcome, Report, error) {
 	if err != nil {
 		return pluginspec.Outcome{}, rep, err
 	}
+	// fd 3 input, fd 4 plugin binary, fd 5 trampoline status, fd 6 the
+	// typed values, fd 7 the detail (nil: closed in the child).
+	extra := []*os.File{in, bin, statW, nil, nil}
+	hasInputs, hasDetail := "0", "0"
+	if s.Inputs != nil {
+		vals, err := sealedMemfd(s.Inputs)
+		if err != nil {
+			return pluginspec.Outcome{}, rep, fmt.Errorf("sandbox: inputs: %w", err)
+		}
+		closers = append(closers, vals)
+		extra[3], hasInputs = vals, "1"
+	}
+	var detR *os.File
+	if s.Detail != nil {
+		var detW *os.File
+		if detR, detW, err = pipe(); err != nil {
+			return pluginspec.Outcome{}, rep, err
+		}
+		extra[4], hasDetail = detW, "1"
+	}
+	for len(extra) > 3 && extra[len(extra)-1] == nil {
+		extra = extra[:len(extra)-1]
+	}
 
 	cmd := &exec.Cmd{
 		Path: "/proc/self/exe",
 		Args: []string{"lockfile-sandbox", trampolineArg,
-			strconv.Itoa(l.CPUSeconds), strconv.FormatInt(l.Memory, 10)},
-		Env:    []string{protocolEnv},
-		Dir:    "/",
-		Stdout: outW,
-		Stderr: errW,
-		// fd 3 input, fd 4 plugin binary, fd 5 trampoline status.
-		ExtraFiles:  []*os.File{in, bin, statW},
+			strconv.Itoa(l.CPUSeconds), strconv.FormatInt(l.Memory, 10),
+			strconv.Itoa(max(s.Protocol, 1)), hasInputs, hasDetail},
+		Env:         []string{protocolEnv(s.Protocol)},
+		Dir:         "/",
+		Stdout:      outW,
+		Stderr:      errW,
+		ExtraFiles:  extra,
 		SysProcAttr: &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGKILL},
 	}
 	start := time.Now()
@@ -90,6 +113,11 @@ func Run(ctx context.Context, s Spec) (pluginspec.Outcome, Report, error) {
 	outW.Close()
 	errW.Close()
 	statW.Close()
+	for _, f := range extra[3:] {
+		if f != nil {
+			f.Close()
+		}
+	}
 
 	type stdout struct {
 		b         []byte
@@ -110,6 +138,15 @@ func Run(ctx context.Context, s Spec) (pluginspec.Outcome, Report, error) {
 		b, _ := io.ReadAll(io.LimitReader(statR, 4096))
 		statc <- string(b)
 	}()
+	detc := make(chan []byte, 1)
+	if detR != nil {
+		go func() {
+			b, _ := readCapped(detR, pluginspec.MaxDetail)
+			detc <- b
+		}()
+	} else {
+		detc <- nil
+	}
 
 	// Wait for the exit without reaping, so the process group id stays
 	// reserved until the whole group has been killed.
@@ -162,7 +199,17 @@ func Run(ctx context.Context, s Spec) (pluginspec.Outcome, Report, error) {
 		errR.Close()
 		rep.StderrBytes = <-errc
 	}
+	var detail []byte
+	select {
+	case detail = <-detc:
+	case <-grace:
+		detR.Close()
+		detail = <-detc
+	}
 	status := <-statc
+	if len(detail) > 0 && status == "" && ctxErr == nil {
+		_, _ = s.Detail.Write(detail)
+	}
 
 	ws, _ := cmd.ProcessState.Sys().(syscall.WaitStatus)
 	rep.ExitCode = ws.ExitStatus()
@@ -190,6 +237,26 @@ func Run(ctx context.Context, s Spec) (pluginspec.Outcome, Report, error) {
 // offset, no write access whatever f was opened with.
 func reopen(f *os.File) (*os.File, error) {
 	return os.OpenFile(fmt.Sprintf("/proc/self/fd/%d", f.Fd()), os.O_RDONLY|syscall.O_CLOEXEC, 0)
+}
+
+// sealedMemfd is a read-only open of a memfd holding b, sealed against
+// any write, growth or shrink: what the plugin reads its typed values
+// from. The memory is the kernel's, freed with the last descriptor; the
+// name says what it is, never what it holds.
+func sealedMemfd(b []byte) (*os.File, error) {
+	fd, err := unix.MemfdCreate("lockfile-inputs", unix.MFD_CLOEXEC|unix.MFD_ALLOW_SEALING)
+	if err != nil {
+		return nil, err
+	}
+	rw := os.NewFile(uintptr(fd), "lockfile-inputs")
+	defer rw.Close()
+	if n, err := rw.Write(b); err != nil || n != len(b) {
+		return nil, fmt.Errorf("write: %v", err)
+	}
+	if _, err := unix.FcntlInt(rw.Fd(), unix.F_ADD_SEALS, unix.F_SEAL_SHRINK|unix.F_SEAL_GROW|unix.F_SEAL_WRITE|unix.F_SEAL_SEAL); err != nil {
+		return nil, fmt.Errorf("seal: %w", err)
+	}
+	return reopen(rw)
 }
 
 // readCapped keeps the first max bytes of r and drains the rest, so a

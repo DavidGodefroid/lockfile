@@ -258,6 +258,7 @@ func runPlugins(e env, args []string) int {
 				head += "  UNOFFICIAL MARKETPLACE"
 			}
 			lines = append(lines, head, "  ? "+p.Question, "  1 = "+p.One, "  0 = "+p.Zero)
+			lines = append(lines, clientcmd.InputLines(p)...)
 		}
 		return lines
 	})
@@ -270,7 +271,7 @@ func (m *multi) String() string     { return strings.Join(*m, ",") }
 func (m *multi) Set(v string) error { *m = append(*m, v); return nil }
 
 func runPlan(e env, args []string) int {
-	const use = "plan [--profile P] [--instance NAME] (--key KEY | --handle HANDLE) --plugin NAME... [--intent TEXT] [--run] [--json]"
+	const use = "plan [--profile P] [--instance NAME] (--key KEY | --handle HANDLE) --plugin NAME... [--input PLUGIN.INPUT='${NAME}'...] [--intent TEXT] [--run] [--json]"
 	f := newAgentFlags("plan")
 	key := f.fs.String("key", "", "exact object key")
 	handle := f.fs.String("handle", "", "handle of a file already fetched")
@@ -278,8 +279,21 @@ func runPlan(e env, args []string) int {
 	andRun := f.fs.Bool("run", false, "run the plan once approved")
 	var plugins multi
 	f.fs.Var(&plugins, "plugin", "plugin to run (repeat)")
+	var bound multi
+	f.fs.Var(&bound, "input", "bind a plugin input to a placeholder the human types, as PLUGIN.INPUT='${NAME}' (repeat)")
 	if pos, err := f.parse(args); err != nil || len(pos) != 0 || (*key == "") == (*handle == "") || len(plugins) == 0 {
 		return usageErr(e, use)
+	}
+	var inputs map[string]string
+	for _, b := range bound {
+		k, v, ok := strings.Cut(b, "=")
+		if !ok || k == "" {
+			return usageErr(e, use)
+		}
+		if inputs == nil {
+			inputs = map[string]string{}
+		}
+		inputs[k] = v
 	}
 	if !setInstance(e, *f.instance, use) {
 		return product.ExitUsage
@@ -290,7 +304,7 @@ func runPlan(e env, args []string) int {
 	}
 	ctx, stop := agentContext()
 	defer stop()
-	p := rpc.PlanParams{Key: *key, Handle: *handle, Plugins: plugins, Intent: *intent, Requester: mcpkit.RequesterFromEnv()}
+	p := rpc.PlanParams{Key: *key, Handle: *handle, Plugins: plugins, Intent: *intent, Inputs: inputs, Requester: mcpkit.RequesterFromEnv()}
 	if *andRun {
 		res, err := clientcmd.PlanAndRun(ctx, profile, p)
 		if err != nil {

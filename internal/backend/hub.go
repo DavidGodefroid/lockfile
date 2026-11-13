@@ -39,6 +39,9 @@ type hubBody struct {
 	SHA256  string              `json:"sha256,omitempty"`
 	Plugins []string            `json:"plugins"`
 	Pins    []profile.PluginPin `json:"pins"`
+	// Inputs binds each plugin input to a placeholder name: names only,
+	// the values come typed in the decision or held by the console.
+	Inputs map[string]string `json:"inputs,omitempty"`
 	// Unfetched: the object could not be fetched at plan time. The plan
 	// goes to the hub all the same and its run refuses fetch_failed: the
 	// agent learns nothing about the file before an approval, as on the
@@ -96,7 +99,7 @@ func (b *Backend) hubPlan(ctx context.Context, req ipc.Request, env console.Env,
 	// about the file's size or the fetch.
 	start := b.o.Now()
 	defer func() { _ = answers.Quantize(ctx, start, pr.AnswerQuantum, b.o.Now) }()
-	body := hubBody{Profile: pr.Name, Key: pl.key, Handle: string(pl.handle), Plugins: pl.plugins, Pins: pl.pins}
+	body := hubBody{Profile: pr.Name, Key: pl.key, Handle: string(pl.handle), Plugins: pl.plugins, Pins: pl.pins, Inputs: pl.bindings}
 	content := "" // the hub's masked screen only (hubScreens)
 	if pl.key != "" {
 		if _, err := env.Session(ctx); err != nil {
@@ -140,9 +143,22 @@ func (b *Backend) hubPlan(ctx context.Context, req ipc.Request, env console.Env,
 	sc, masked := hubScreens(sc, content)
 	sc.Hub = &console.HubTicket{PlanID: stored.ID, Caller: caller, Risk: ticket.RiskReadPII,
 		Requester: ticket.Requester{Agent: p.Requester.Agent}, Masked: masked}
+	// The names this console holds no value for are asked on the
+	// approval (lox run, no echo), sealed to the ticket's one-use key; a
+	// plan whose names are all held asks none (its screen says reused),
+	// and is never auto-approved either (planScreen).
+	var ask []string
+	for _, n := range pl.names() {
+		if _, held := b.vt.info(n); !held {
+			ask = append(ask, n)
+		}
+	}
+	if len(ask) > 0 {
+		sc.Hub.Kind, sc.Hub.Subject, sc.Hub.Inputs = ticket.KindRead, &ticket.Subject{Profile: pr.Name}, ask
+	}
 	a := env.Approve(ctx, req.ID, sc)
 	if a.Pending != nil {
-		return a.Refusal
+		return withHeld(a.Refusal, b.heldInputs())
 	}
 	_ = h.Store.End(stored.ID, caller, plans.Withdrawn, "not submitted")
 	if a.Approved {
@@ -150,6 +166,26 @@ func (b *Backend) hubPlan(ctx context.Context, req ipc.Request, env console.Env,
 		return console.ErrResp(req.ID, ipc.CodeInternal, msgInternal)
 	}
 	return product.ApprovalRefusal(req.ID, a.Refusal)
+}
+
+// withHeld adds held_inputs (names only) to a pending answer.
+func withHeld(r ipc.Response, held []string) ipc.Response {
+	if len(held) == 0 || r.Error != nil {
+		return r
+	}
+	var m map[string]json.RawMessage
+	if json.Unmarshal(r.Result, &m) != nil {
+		return r
+	}
+	raw, err := json.Marshal(held)
+	if err != nil {
+		return r
+	}
+	m["held_inputs"] = raw
+	if out, err := json.Marshal(m); err == nil {
+		r.Result = out
+	}
+	return r
 }
 
 // hubRun is file.run in hub mode: the plan of a ticket the hub decided
@@ -192,7 +228,9 @@ func (b *Backend) hubRun(ctx context.Context, req ipc.Request, env console.Env, 
 		}
 		return hubRefusal(req.ID, p.Ticket, h.Instance, err)
 	}
-	pl := &plan{id: run.ID, peerUID: caller.UID, key: body.Key, handle: workspace.Handle(body.Handle), plugins: body.Plugins, pins: body.Pins}
+	// The values typed for this ticket, opened by Begin: wiped once run.
+	defer wipeValues(run.Inputs)
+	pl := &plan{id: run.ID, peerUID: caller.UID, key: body.Key, handle: workspace.Handle(body.Handle), plugins: body.Plugins, pins: body.Pins, bindings: body.Inputs}
 	b.auditDecision(ctx, env, p.Ticket, pl, d, audit.EventApproved)
 	var resp ipc.Response
 	if body.Unfetched {
@@ -201,7 +239,7 @@ func (b *Backend) hubRun(ctx context.Context, req ipc.Request, env console.Env, 
 		_ = answers.Quantize(ctx, start, pol.P.AnswerQuantum, b.o.Now)
 		resp = product.Refuse(req.ID, answers.CodeFetchFailed)
 	} else {
-		resp = b.execute(ctx, req, env, pol, pl, body.SHA256)
+		resp = b.execute(ctx, req, env, pol, pl, body.SHA256, run.Inputs)
 	}
 	reason := ""
 	if resp.Error != nil {
@@ -323,6 +361,9 @@ func (b *Backend) auditDecision(ctx context.Context, env console.Env, id string,
 	rec.Approver, rec.Facade, rec.HubSig = &d.Approver, d.Facade, d.Sig
 	if pl != nil {
 		rec.PlanID, rec.Key, rec.Handle, rec.Plugins = pl.id, pl.key, string(pl.handle), pl.plugins
+		if names := pl.names(); len(names) > 0 {
+			rec.Inputs = names
+		}
 	}
 	env.Audit(rec)
 }

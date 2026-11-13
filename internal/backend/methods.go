@@ -17,6 +17,7 @@ import (
 	"github.com/DavidGodefroid/lockfile/internal/rpc"
 	"github.com/DavidGodefroid/lockfile/internal/source"
 	"github.com/DavidGodefroid/lockfile/internal/workspace"
+	"github.com/DavidGodefroid/lockfile/pluginspec"
 )
 
 const (
@@ -59,6 +60,9 @@ func (b *Backend) plugins(ctx context.Context, req ipc.Request, env console.Env)
 		if !in.Official {
 			info.Warning = answers.WarningUnofficial
 		}
+		for _, x := range in.Manifest.Inputs {
+			info.Inputs = append(info.Inputs, rpc.PluginInput{Name: x.Name, Kind: x.Kind, MaxBytes: x.MaxBytes})
+		}
 		out = append(out, info)
 	}
 	return console.OKResp(req.ID, out)
@@ -78,6 +82,16 @@ func (b *Backend) plan(ctx context.Context, req ipc.Request, env console.Env) ip
 	if (p.Key == "") == (p.Handle == "") || len(p.Plugins) == 0 || len(p.Intent) > rpc.MaxIntent || hasDup(p.Plugins) {
 		return console.ErrResp(req.ID, ipc.CodeInvalidParams, msgPlanParams)
 	}
+	if len(p.Inputs) > rpc.MaxPlanInputs {
+		return console.ErrResp(req.ID, ipc.CodeInvalidParams, rpc.MsgPlanInputs)
+	}
+	// A value the agent wrote is refused before anything else looks at
+	// it, and never echoed: only the human types one.
+	bindings, ok := rpc.Bindings(p.Inputs)
+	p.Inputs = nil
+	if !ok {
+		return product.Refuse(req.ID, answers.CodeLiteralInput)
+	}
 	pol := policyOf(env)
 	if pol == nil {
 		return console.ErrResp(req.ID, ipc.CodeInternal, msgInternal)
@@ -87,7 +101,7 @@ func (b *Backend) plan(ctx context.Context, req ipc.Request, env console.Env) ip
 	if err != nil {
 		return console.ErrResp(req.ID, ipc.CodeInternal, msgInternal)
 	}
-	pl := &plan{peerUID: peerUID(ctx), plugins: p.Plugins, policyFP: config.Fingerprint(pol)}
+	pl := &plan{peerUID: peerUID(ctx), plugins: p.Plugins, bindings: bindings, policyFP: config.Fingerprint(pol)}
 	if p.Key != "" {
 		k, err := source.CheckKey(pr.Prefix, p.Key)
 		if err != nil {
@@ -103,7 +117,7 @@ func (b *Backend) plan(ctx context.Context, req ipc.Request, env console.Env) ip
 		}
 		f.Close()
 	}
-	if runner.Used(pl.handle)+len(p.Plugins) > pr.MaxPluginsPerHandle {
+	if runner.Used(pl.handle)+pl.cost() > pr.MaxPluginsPerHandle {
 		return product.Refuse(req.ID, answers.CodeTooManyPlugins)
 	}
 	if _, _, err := b.o.Probe(); err != nil {
@@ -133,15 +147,19 @@ func (b *Backend) plan(ctx context.Context, req ipc.Request, env console.Env) ip
 		pl.pins = append(pl.pins, pin)
 		shown = append(shown, screenPlugin{Name: name, Version: in.Version, Marketplace: in.Marketplace, Official: in.Official, Manifest: in.Manifest})
 	}
+	if !checkBindings(bindings, shown) {
+		return console.ErrResp(req.ID, ipc.CodeInvalidParams, rpc.MsgPlanInputs)
+	}
 	id, err := newPlanID()
 	if err != nil {
 		return console.ErrResp(req.ID, ipc.CodeInternal, msgInternal)
 	}
 	pl.id = id
 	record := func(base audit.Base) audit.Record {
+		base.Inputs = pl.names()
 		return Record{Base: base, PlanID: id, Key: pl.key, Handle: string(pl.handle), Plugins: pl.plugins}
 	}
-	sc := planScreen(pl.key, p.Key, p.Handle, shown, p.Intent, record)
+	sc := planScreen(pl.key, p.Key, p.Handle, shown, p.Intent, record, bindings, &b.vt)
 	if h := console.HubOf(env); h != nil {
 		return b.hubPlan(ctx, req, env, h, pol, pl, p, sc)
 	}
@@ -150,7 +168,15 @@ func (b *Backend) plan(ctx context.Context, req ipc.Request, env console.Env) ip
 		return product.ApprovalRefusal(req.ID, a.Refusal)
 	}
 	b.plans.add(pl)
-	return console.OKResp(req.ID, rpc.PlanResult{PlanID: id, Answers: len(p.Plugins)})
+	return console.OKResp(req.ID, rpc.PlanResult{PlanID: id, Answers: pl.cost(), HeldInputs: b.heldInputs()})
+}
+
+// heldInputs is the names of the values held, nil for none.
+func (b *Backend) heldInputs() []string {
+	if n := b.vt.names(); len(n) > 0 {
+		return n
+	}
+	return nil
 }
 
 func hasDup(s []string) bool {
@@ -176,12 +202,14 @@ func (b *Backend) run(ctx context.Context, req ipc.Request, env console.Env) ipc
 	if pol == nil || config.Fingerprint(pol) != pl.policyFP || !b.pinsInstalled(pl.pins) {
 		return console.ErrResp(req.ID, ipc.CodeNoSuchPlan, msgNoSuchPlan)
 	}
-	return b.execute(ctx, req, env, pol, pl, "")
+	return b.execute(ctx, req, env, pol, pl, "", nil)
 }
 
 // execute runs an approved plan once (sha, when set, is the sha256 the
-// fetched bytes must have) and answers at the next quantum.
-func (b *Backend) execute(ctx context.Context, req ipc.Request, env console.Env, pol *profile.Policy, pl *plan, sha string) ipc.Response {
+// fetched bytes must have) and answers at the next quantum. typed are
+// the values the human typed for the plan's ticket (hub mode; the caller
+// wipes them): the plan's other placeholders take the values held.
+func (b *Backend) execute(ctx context.Context, req ipc.Request, env console.Env, pol *profile.Policy, pl *plan, sha string, typed map[string][]byte) ipc.Response {
 	// Checked again at run time: an approval can wait minutes, during which
 	// the sandbox may go or another account's process join /proc.
 	if _, _, err := b.o.Probe(); err != nil {
@@ -204,7 +232,23 @@ func (b *Backend) execute(ctx context.Context, req ipc.Request, env console.Env,
 	if err != nil {
 		return console.ErrResp(req.ID, ipc.CodeInternal, msgInternal)
 	}
-	res, ref, entries := answers.ExecutePlan(ctx, answers.Plan{Profile: pr.Name, Key: pl.key, Handle: pl.handle, Plugins: pl.plugins, Pins: runPins(pl.pins), SHA256: sha},
+	with := answers.With{Cost: pl.cost(), Detail: detailPrinter(env, pl.id)}
+	if len(pl.bindings) > 0 {
+		vals, ok := b.planValues(env, pl, typed)
+		if !ok {
+			start := b.o.Now()
+			b.auditRun(ctx, env, pl, nil, string(answers.CodeInputInvalid))
+			_ = answers.Quantize(ctx, start, pr.AnswerQuantum, b.o.Now)
+			return product.Refuse(req.ID, answers.CodeInputInvalid)
+		}
+		with.Inputs = pluginInputs(pl.bindings, vals)
+		defer wipeValues(with.Inputs)
+		for n, v := range vals {
+			b.vt.keep(n, v, b.o.Now())
+		}
+		wipeValues(vals)
+	}
+	res, ref, entries := answers.ExecutePlan(ctx, answers.Plan{Profile: pr.Name, Key: pl.key, Handle: pl.handle, Plugins: pl.plugins, Pins: runPins(pl.pins), SHA256: sha, With: with},
 		answers.Deps{
 			Sources:        map[string]source.Source{pr.Name: sess.src},
 			MaxObjectBytes: func(string) int64 { return pr.MaxObjectBytes },
@@ -219,12 +263,55 @@ func (b *Backend) execute(ctx context.Context, req ipc.Request, env console.Env,
 		return product.Refuse(req.ID, ref.Code)
 	}
 	b.auditRun(ctx, env, pl, entries, "")
+	for _, n := range pl.names() {
+		b.vt.replayed(n, pl.file())
+	}
 	b.mu.Lock()
 	h := workspace.Handle(res.Handle)
 	b.given[h] = append(b.given[h], res.Answers...)
 	b.mu.Unlock()
 	env.Println("plan " + pl.id + ": answered")
 	return console.OKResp(req.ID, res)
+}
+
+// planValues gathers and checks the values of pl's placeholders (typed for
+// its ticket, else held), or tells the human on the console why not, by
+// name and kind only: never a value. The caller wipes the values.
+func (b *Backend) planValues(env console.Env, pl *plan, typed map[string][]byte) (map[string][]byte, bool) {
+	manifests, err := b.manifests(pl.pins)
+	if err != nil {
+		env.Println("plan " + pl.id + ": refused " + string(answers.CodeInputInvalid) + ": a plugin's manifest cannot be read")
+		return nil, false
+	}
+	vals, missing, bad, kind := valuesFor(pl.names(), typed, &b.vt, pl.bindings, manifests)
+	switch {
+	case missing != "":
+		env.Println(console.Paint.Warn("${" + missing + "}: no value is held for it (it was never typed, or the console restarted); plan again"))
+		return nil, false
+	case bad != "":
+		env.Println(console.Paint.Warn("${" + bad + "}: not a valid " + kind + "; plan again"))
+		return nil, false
+	}
+	return vals, true
+}
+
+// manifests are the manifests of the pinned plugins, installed as pinned.
+func (b *Backend) manifests(pins []profile.PluginPin) (map[string]pluginspec.Manifest, error) {
+	installed, err := b.store.Installed()
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]pluginspec.Manifest, len(pins))
+	for _, pin := range pins {
+		i := slices.IndexFunc(installed, func(in plugin.Installed) bool {
+			return in.Name == pin.Name && !in.Tampered && samePin(pin, in)
+		})
+		if i < 0 {
+			return nil, plugin.ErrTampered
+		}
+		out[pin.Name] = installed[i].Manifest
+	}
+	return out, nil
 }
 
 // runPins hands the approved pins of a plan to the runner, which checks them

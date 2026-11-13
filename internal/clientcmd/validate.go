@@ -47,7 +47,24 @@ func validText(s string) bool {
 func validPluginInfo(p rpc.PluginInfo) bool {
 	return validPlugin(p.Plugin) && pluginspec.ValidVersion(p.Version) && marketplaceRe.MatchString(p.Marketplace) &&
 		validText(p.Question) && validText(p.One) && validText(p.Zero) &&
-		(p.Warning == "" || p.Warning == answers.WarningUnofficial)
+		(p.Warning == "" || p.Warning == answers.WarningUnofficial) && validInputs(p.Inputs)
+}
+
+func validInputs(ins []rpc.PluginInput) bool {
+	if len(ins) > pluginspec.MaxInputs {
+		return false
+	}
+	for _, in := range ins {
+		switch in.Kind {
+		case pluginspec.KindText, pluginspec.KindEmail, pluginspec.KindDigits:
+		default:
+			return false
+		}
+		if !pluginspec.ValidInputName(in.Name) || in.MaxBytes < 1 || in.MaxBytes > pluginspec.MaxInputBytes {
+			return false
+		}
+	}
+	return true
 }
 
 func validStatus(s rpc.Status) bool {

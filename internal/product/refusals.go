@@ -43,6 +43,10 @@ var refusals = map[answers.Code]refusalDef{
 		"the handle expired or was released", "plan again with the key"},
 	answers.CodeStale: {"E_STALE", refusal.RetryRewrite,
 		"the file changed since the plan was approved", "plan again with the key: the new content needs a new approval"},
+	answers.CodeLiteralInput: {"E_LITERAL_INPUT", refusal.RetryRewrite,
+		"a plugin input is bound to a literal value", "bind the input to a placeholder like ${email}; the human types the value"},
+	answers.CodeInputInvalid: {"E_INPUT_INVALID", refusal.RetryRewrite,
+		"a typed value does not fit its input, or is no longer held", "plan again; the human types the value"},
 }
 
 func init() {

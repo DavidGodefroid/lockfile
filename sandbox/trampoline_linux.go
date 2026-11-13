@@ -15,6 +15,8 @@ import (
 const (
 	fdBinary = 4
 	fdStatus = 5
+	fdInputs = 6
+	fdDetail = 7
 	// pluginPath is the plugin binary as the trampoline sees it: through
 	// the inherited fd, so the executed file is the one the store hashed.
 	pluginPath = "/proc/self/fd/4"
@@ -51,8 +53,24 @@ const (
 )
 
 func trampoline(args []string) error {
-	if len(args) != 2 {
-		return fmt.Errorf("trampoline: want 2 arguments, got %d", len(args))
+	if len(args) != 5 {
+		return fmt.Errorf("trampoline: want 5 arguments, got %d", len(args))
+	}
+	protocol, err := strconv.Atoi(args[2])
+	if err != nil || protocol < 1 {
+		return fmt.Errorf("trampoline: protocol: %q", args[2])
+	}
+	// The plugin keeps fd 6 (its typed values) and fd 7 (its detail) only
+	// when the console gave them.
+	var keep []int
+	for i, fd := range []int{fdInputs, fdDetail} {
+		switch args[3+i] {
+		case "1":
+			keep = append(keep, fd)
+		case "0":
+		default:
+			return fmt.Errorf("trampoline: fd %d flag: %q", fd, args[3+i])
+		}
 	}
 	cpu, err := strconv.ParseUint(args[0], 10, 64)
 	if err != nil {
@@ -63,10 +81,16 @@ func trampoline(args []string) error {
 		return fmt.Errorf("trampoline: memory: %w", err)
 	}
 	runtime.LockOSThread()
-	// The plugin keeps fds 0-3 only, whatever the console left inheritable.
+	// The plugin keeps fds 0-3 (and 6, 7 when given) only, whatever the
+	// console left inheritable.
 	if err := unix.CloseRange(fdBinary, ^uint(0), unix.CLOSE_RANGE_CLOEXEC); err != nil {
 		for fd := fdBinary; fd < 4096; fd++ {
 			syscall.CloseOnExec(fd)
+		}
+	}
+	for _, fd := range keep {
+		if _, err := unix.FcntlInt(uintptr(fd), unix.F_SETFD, 0); err != nil {
+			return fmt.Errorf("trampoline: fd %d: %w", fd, err)
 		}
 	}
 
@@ -122,7 +146,7 @@ func trampoline(args []string) error {
 	if err := loadFilter(filter); err != nil {
 		return fmt.Errorf("%s: seccomp: %v", ErrUnsupported, err)
 	}
-	err = syscall.Exec(pluginPath, []string{"plugin"}, []string{protocolEnv})
+	err = syscall.Exec(pluginPath, []string{"plugin"}, []string{protocolEnv(protocol)})
 	return fmt.Errorf("exec plugin: %w", err)
 }
 
