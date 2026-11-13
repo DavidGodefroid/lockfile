@@ -36,8 +36,11 @@ func main() {
 	if _, err := unix.Pwrite(6, []byte("x"), 0); err == nil {
 		ok = false
 	}
-	_, err = unix.FcntlInt(7, unix.F_GETFD, 0)
-	if (err == nil) != (wantDetail == "1") {
+	// Without a detail fd the Go runtime may hold fd 7 itself: only a
+	// pipe there is the console's.
+	var st unix.Stat_t
+	pipe := unix.Fstat(7, &st) == nil && st.Mode&unix.S_IFMT == unix.S_IFIFO
+	if pipe != (wantDetail == "1") {
 		ok = false
 	}
 	if ok {

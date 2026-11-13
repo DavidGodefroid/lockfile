@@ -26,7 +26,10 @@ func main() {
 		os.Exit(2)
 	}
 	i := bytes.Index(data, []byte(in.Needle))
-	if _, err := unix.FcntlInt(7, unix.F_GETFD, 0); err == nil {
+	// fd 7 is the console's detail pipe only when it is a pipe: without
+	// one, the Go runtime may have opened fd 7 for itself.
+	var st unix.Stat_t
+	if unix.Fstat(7, &st) == nil && st.Mode&unix.S_IFMT == unix.S_IFIFO {
 		d := os.NewFile(7, "detail")
 		if i >= 0 {
 			fmt.Fprintf(d, "found at byte %d\x1b[2J", i)

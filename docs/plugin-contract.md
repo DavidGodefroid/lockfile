@@ -60,7 +60,7 @@ limits = { cpu_s = 20, memory = "512MiB", timeout_s = 30 }
 |---|---|
 | Input | the file as an inherited **read-only fd 3**; no path |
 | Typed values (protocol 2, with `inputs`) | **read-only fd 6**: a memfd sealed against writes, growth and shrinking, holding the canonical JSON of the plugin's inputs (`{"needle":"..."}`, keys sorted); never argv, env or a path |
-| Detail (protocol 2, with `detail = true`) | **write fd 7**: the first 4 KiB are kept, the rest drained unread; printed escaped on the console window under `shown here only; the agent got 1/0`, **only when clear results are on** (Ctrl-O or `:results`, which lockkit refuses at desktop security levels 1 and 2), otherwise discarded; never to the agent, the audit or the hub |
+| Detail (protocol 2, with `detail = true`) | **write fd 7**, a pipe, given on every run of such a plugin (a plugin without `detail` has no fd 7, and its Go runtime may use that number): the first 4 KiB are kept, the rest drained unread; printed escaped on the console window under `shown here only; the agent got 1/0`, **only when clear results are on** (Ctrl-O or `:results`, which lockkit refuses at desktop security levels 1 and 2), otherwise discarded; never to the agent, the audit or the hub |
 | stdin | `/dev/null` |
 | Environment | empty except `LOCKFILE_PLUGIN_PROTOCOL=<the manifest's protocol>`; cwd `/` |
 | Filesystem | Landlock: execute and read its own binary only |

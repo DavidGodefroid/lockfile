@@ -207,8 +207,11 @@ func (r *Runner) one(ctx context.Context, h workspace.Handle, name string, w Wit
 			return a, e, nil
 		}
 	}
+	// A plugin with detail always gets its fd 7, whether the detail is
+	// printed or dropped: what it may write to never depends on the
+	// console's switches.
 	var detail bytes.Buffer
-	if inst.Manifest.Detail && w.Detail != nil {
+	if inst.Manifest.Detail {
 		spec.Detail = &detail
 	}
 	in, _, err := r.WS.OpenFile(h)
@@ -219,10 +222,10 @@ func (r *Runner) one(ctx context.Context, h workspace.Handle, name string, w Wit
 	spec.Input = in
 	out, rep, err := r.Run(ctx, spec)
 	e.Report = rep
-	if detail.Len() > 0 && ctx.Err() == nil {
+	if detail.Len() > 0 && ctx.Err() == nil && w.Detail != nil {
 		w.Detail(name, detail.Bytes())
-		clear(detail.Bytes())
 	}
+	clear(detail.Bytes())
 	if ctx.Err() != nil {
 		return Answer{}, AuditEntry{}, ctx.Err()
 	}
