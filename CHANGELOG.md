@@ -2,19 +2,54 @@
 
 ## Unreleased
 
+## v0.9.0 (2026-11-13)
+
 Builds on lockkit v0.19.0 (from v0.14.1).
 
-- **Public-key trust roots** for unofficial marketplaces (DavidGodefroid/lockfile#68, lockkit
-  v0.18.0's key mode): `marketplace add NAME --index URL --public-key cosign.pub` trusts a
-  cosign public key (ECDSA P-256/P-384, Ed25519, RSA >= 2048) instead of a keyless identity,
-  never both. The index, manifests and binaries are checked with `cosign verify-blob --key`, a
-  Rekor entry required. `public_key` in the config holds the key inline (the base64 body of the
-  PEM, on one line), so the config's approval covers it; it is checked at load, never quoted in
-  an error, and shown as its SHA-256 fingerprint (`public_key_sha256` in JSON). A changed key
-  is a loosening on `:review`.
+### Breaking
+
+- lockkit v0.18.0 (DavidGodefroid/lockkit#120): the status answer no longer carries
+  `auto_approve`, so `status` and `sources` no longer print `auto`: lockhub decides. A client
+  that reads `auto_approve` gets false.
+- lockkit v0.18.0 (DavidGodefroid/lockkit#120): a config value that embeds a bearer token, an
+  `Authorization:` header or a URL with userinfo (`https://TOKEN@host`) is refused as a secret
+  ("looks like it embeds a secret (a password or a token)").
+- With a managed configuration (`/etc/lockfamily/managed.toml`), a profile beyond its
+  `[lockfile.bounds]`, or a profile of yours named as a managed one, is refused and the console
+  exits 3 (see Added). Without the file, nothing changes.
+- Plain `http://` S3 endpoints are refused on a production profile, to `localhost` as well,
+  which was accepted before (DavidGodefroid/lockfile#62).
+
+### Behaviour
+
+- **Hub ticket limits**: the console opens at most 30 tickets a human decides per 5 minutes
+  (was 10) and 30 pending ones (was 20); a ticket `lox run`'s auto mode decides leaves that
+  count, and a safety cap of 300 tickets per window counts every one. The profile's
+  `tickets_per_window`, `ticket_window` and `max_pending` set those limits; more tickets, a
+  shorter window or more pending tickets is a loosening, reviewed like the others (the typed
+  profile name on production), a lowering applies at once. The status screen shows the limits
+  in force (DavidGodefroid/lockkit#150).
 - lockkit v0.19.0: the hub screen's masking of object keys catches more phone formats and
   e-mail addresses with an apostrophe.
+- **Launcher**: it mounts the machine's managed directory (`/etc/lockfamily`,
+  `/Library/Application Support/lockfamily` on macOS) read-only on `/etc/lockfamily` in its
+  containers, as `lox run` does in its locks: `lockfile managed show`, `managed check`, `doctor`,
+  `profile`, `init` and the other commands run from the host see the company's managed
+  configuration. No directory: no mount; a file, a dangling link or a `:` in the path stops the
+  launcher (DavidGodefroid/lockfile#69).
 
+### Added
+
+- **Managed configuration**: lockfile enforces the `[lockfile]` section of the company's
+  `managed.toml` (lockfamily#31): `[lockfile.profiles.<name>]` served as written (a profile of
+  yours with that name is refused), `[lockfile.defaults]` for what your config leaves unset, and
+  `[lockfile.bounds]` you may tighten, never loosen: production, source, hosts, buckets,
+  credentials, timers, limits, `max_workspace_bytes` and marketplaces; `[family] vault.required`
+  allows only Vault credentials. The console refuses a policy beyond them at start and at every
+  poll, with no prompt, citing the managed key (`blocked by company policy: …`), and exits 3.
+  New `lockfile managed show` and `lockfile managed check [--profile NAME]` (the check `lox run`
+  runs before it starts the lock), and a `managed` line in `lockfile doctor`. See
+  docs/configuration.md#managed-configuration (DavidGodefroid/lockfile#63).
 - **Placeholders typed by the human** (plugin protocol 2): a plugin may declare up to 4 `inputs`
   (`text`, `email` or `digits`, at most 1024 bytes) named in its question as `${name}`. The
   agent binds them to placeholders (`--input 'pdf.contains.needle=${email}'`, MCP `inputs`); a
@@ -31,38 +66,24 @@ Builds on lockkit v0.19.0 (from v0.14.1).
   results are on (Ctrl-O, level 0); never to the agent, the audit or the hub.
 - Plugins get `LOCKFILE_PLUGIN_PROTOCOL` set to their manifest's protocol; `status` reports
   plugin protocol 2.
+- **Public-key trust roots** for unofficial marketplaces (DavidGodefroid/lockfile#68, lockkit
+  v0.18.0's key mode): `marketplace add NAME --index URL --public-key cosign.pub` trusts a
+  cosign public key (ECDSA P-256/P-384, Ed25519, RSA >= 2048) instead of a keyless identity,
+  never both. The index, manifests and binaries are checked with `cosign verify-blob --key`, a
+  Rekor entry required. `public_key` in the config holds the key inline (the base64 body of the
+  PEM, on one line), so the config's approval covers it; it is checked at load, never quoted in
+  an error, and shown as its SHA-256 fingerprint (`public_key_sha256` in JSON). A changed key
+  is a loosening on `:review`.
+- **Local S3 store under `lox run`**: an S3 `endpoint` may be plain `http://` to
+  `host.docker.internal` (the host, as `lox run` maps it), as it was to `localhost`, so a MinIO
+  or LocalStack without TLS on your machine works from the console's container; `lox run`'s
+  allowlist reaches it. The policy review and the status screen show `WARNING the connection to
+  the S3 endpoint HOST:PORT is NOT encrypted`, and `lockfile doctor` and `profile add` (both run
+  by `lox add`) warn too. An endpoint on `localhost` or a loopback address is flagged the same
+  way: under `lox run` it is the lock's own container, use `host.docker.internal`
+  (DavidGodefroid/lockfile#62).
 
-- **Managed configuration**: lockfile enforces the `[lockfile]` section of the company's
-  `managed.toml` (lockfamily#31): `[lockfile.profiles.<name>]` served as written (a profile of
-  yours with that name is refused), `[lockfile.defaults]` for what your config leaves unset, and
-  `[lockfile.bounds]` you may tighten, never loosen: production, source, hosts, buckets,
-  credentials, timers, limits, `max_workspace_bytes` and marketplaces; `[family] vault.required`
-  allows only Vault credentials. The console refuses a policy beyond them at start and at every
-  poll, with no prompt, citing the managed key (`blocked by company policy: …`), and exits 3.
-  New `lockfile managed show` and `lockfile managed check [--profile NAME]` (the check `lox run`
-  runs before it starts the lock), and a `managed` line in `lockfile doctor`. See
-  docs/configuration.md#managed-configuration (DavidGodefroid/lockfile#63).
-- **Launcher**: it mounts the machine's managed directory (`/etc/lockfamily`,
-  `/Library/Application Support/lockfamily` on macOS) read-only on `/etc/lockfamily` in its
-  containers, as `lox run` does in its locks: `lockfile managed show`, `managed check`, `doctor`,
-  `profile`, `init` and the other commands run from the host see the company's managed
-  configuration. No directory: no mount; a file, a dangling link or a `:` in the path stops the
-  launcher (DavidGodefroid/lockfile#69).
-- The status no longer reports an auto mode (`auto_approve`, gone from lockkit's status answer in
-  v0.18.0): lockhub decides.
-
-- **Hub ticket limits**: the console opens at most 30 tickets a human decides per 5 minutes
-  (was 10) and 30 pending ones (was 20); a ticket `lox run`'s auto mode decides leaves that
-  count, and a safety cap of 300 tickets per window counts every one. The profile's
-  `tickets_per_window`, `ticket_window` and `max_pending` set those limits; more tickets, a
-  shorter window or more pending tickets is a loosening, reviewed like the others (the typed
-  profile name on production), a lowering applies at once. The status screen shows the limits
-  in force (DavidGodefroid/lockkit#150).
-- **Official marketplace unreachable**: a failed download of the official index or of its
-  signature (an HTTP error such as 404, a host that does not answer) now says that the
-  official marketplace is unreachable or not published and gives its URL, instead of a bare
-  `HTTP 404`. A daily `official-index` workflow checks that the index answers and verifies
-  against the pinned identity (lockfile#61).
+### Fixed
 
 - **Several lockfile locks, one MCP server**: when lea mounts several lockfile locks and neither
   `--instance` nor `LOCKFILE_INSTANCE` chooses one, `lockfile mcp` (the one server `lockfile
@@ -71,16 +92,13 @@ Builds on lockkit v0.19.0 (from v0.14.1).
   profile. `lockfile mcp` also starts when the instance cannot be resolved, and every tool,
   `lockfile_status` first, says why, instead of a closed connection
   (DavidGodefroid/lockfile#60).
-
-- **Local S3 store under `lox run`**: an S3 `endpoint` may be plain `http://` to
-  `host.docker.internal` (the host, as `lox run` maps it), as it was to `localhost`, so a MinIO
-  or LocalStack without TLS on your machine works from the console's container; `lox run`'s
-  allowlist reaches it. Plain `http://` is refused on a production profile (to `localhost` as
-  well, which it accepted before). The policy review and the status screen show `WARNING the
-  connection to the S3 endpoint HOST:PORT is NOT encrypted`, and `lockfile doctor` and `profile
-  add` (both run by `lox add`) warn too. An endpoint on `localhost` or a loopback address is
-  flagged the same way: under `lox run` it is the lock's own container, use
-  `host.docker.internal` (DavidGodefroid/lockfile#62).
+- **Official marketplace unreachable**: a failed download of the official index or of its
+  signature (an HTTP error such as 404, a host that does not answer) now says that the
+  official marketplace is unreachable or not published and gives its URL, instead of a bare
+  `HTTP 404`. A daily `official-index` workflow checks that the index answers and verifies
+  against the pinned identity (lockfile#61).
+- Tests: the thread-cap sandbox test no longer starves plugins started by other test binaries
+  under the same uid (DavidGodefroid/lockfile#72).
 
 ## v0.8.1 (2026-11-07)
 
