@@ -44,9 +44,8 @@ func consoleAsMe(t *testing.T) {
 }
 
 // statusConsole serves profile's console of instance, in dir/instance: it
-// answers hello and status, and counts the connections it accepts on
-// the returned channel.
-func statusConsole(t *testing.T, dir, instance, profile string) <-chan struct{} {
+// answers hello and status, and counts the connections it accepts.
+func statusConsole(t *testing.T, dir, instance, profile string) *dials {
 	t.Helper()
 	path, err := client.SocketPathInstance(product.P, "/", profile, instance)
 	if err != nil {
@@ -63,37 +62,25 @@ func statusConsole(t *testing.T, dir, instance, profile string) <-chan struct{} 
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { ln.Close() })
-	got := make(chan struct{}, 64)
-	go func() {
-		for {
-			c, err := ln.Accept()
-			if err != nil {
-				return
-			}
-			select {
-			case got <- struct{}{}:
-			default:
-			}
-			go func() {
-				defer c.Close()
-				r := bufio.NewReader(c)
-				for {
-					var req ipc.Request
-					if ipc.ReadMsg(r, &req) != nil {
-						return
-					}
-					resp := console.OKResp(req.ID, console.StatusResult{Profile: profile, Product: rpc.Status{Protocol: 1, Sandbox: "ok"}})
-					if req.Method == ipc.MethodHello {
-						resp = console.OKResp(req.ID, ipc.HelloResult{ProtocolMajor: ipc.ProtocolMajor, Profile: profile})
-					}
-					if ipc.WriteMsg(c, resp) != nil {
-						return
-					}
+	return serveDials(t, ln, func(c net.Conn) {
+		go func() {
+			defer c.Close()
+			r := bufio.NewReader(c)
+			for {
+				var req ipc.Request
+				if ipc.ReadMsg(r, &req) != nil {
+					return
 				}
-			}()
-		}
-	}()
-	return got
+				resp := console.OKResp(req.ID, console.StatusResult{Profile: profile, Product: rpc.Status{Protocol: 1, Sandbox: "ok"}})
+				if req.Method == ipc.MethodHello {
+					resp = console.OKResp(req.ID, ipc.HelloResult{ProtocolMajor: ipc.ProtocolMajor, Profile: profile})
+				}
+				if ipc.WriteMsg(c, resp) != nil {
+					return
+				}
+			}
+		}()
+	})
 }
 
 // Instance resolution with 0, 1 and 2 locks listed by lea: none is the
@@ -147,17 +134,17 @@ func TestInstanceSeveralRoutedByProfile(t *testing.T) {
 		!slices.Equal(src, []rpc.Source{{Profile: "backups"}, {Profile: "docs"}}) {
 		t.Fatalf("sources: exit %d, stdout %q stderr %q", code, out, errText)
 	}
-	drained(ftp)
-	drained(s3)
+	ftp.count(t)
+	s3.count(t)
 	for _, c := range []struct {
 		profile   string
-		hit, miss <-chan struct{}
+		hit, miss *dials
 	}{{"docs", ftp, s3}, {"backups", s3, ftp}} {
 		code, out, errText := runArgs(t, "", "status", "--profile", c.profile)
 		if code != product.ExitOK || !strings.Contains(out, c.profile+": console up") {
 			t.Errorf("status %s: exit %d, stdout %q stderr %q", c.profile, code, out, errText)
 		}
-		if !dialled(c.hit) || drained(c.miss) {
+		if c.hit.count(t) == 0 || c.miss.count(t) != 0 {
 			t.Errorf("status %s did not reach its lock only", c.profile)
 		}
 	}
@@ -289,17 +276,17 @@ func TestMCPSeveralLocks(t *testing.T) {
 	if isErr || text != "backups\ndocs" {
 		t.Fatalf("lockfile_sources: %q (error %v)", text, isErr)
 	}
-	drained(ftp)
-	drained(s3)
+	ftp.count(t)
+	s3.count(t)
 	for _, c := range []struct {
 		profile   string
-		hit, miss <-chan struct{}
+		hit, miss *dials
 	}{{"docs", ftp, s3}, {"backups", s3, ftp}} {
 		text, isErr := s.call("lockfile_status", map[string]any{"profile": c.profile})
 		if isErr || !strings.HasPrefix(text, c.profile+": console up") {
 			t.Errorf("lockfile_status %s: %q (error %v)", c.profile, text, isErr)
 		}
-		if !dialled(c.hit) || drained(c.miss) {
+		if c.hit.count(t) == 0 || c.miss.count(t) != 0 {
 			t.Errorf("lockfile_status %s did not reach its lock only", c.profile)
 		}
 	}
