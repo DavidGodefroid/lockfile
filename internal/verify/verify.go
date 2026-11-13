@@ -10,10 +10,12 @@ import (
 
 // TrustRoot is who may sign: a keyless identity (certificate identity
 // regexp and OIDC issuer) or a public key, exactly one of the two.
+// PublicKey is a PEM cosign public key ("-----BEGIN PUBLIC KEY-----"); a
+// string keeps TrustRoot comparable.
 type TrustRoot struct {
 	IdentityRegexp string
 	OIDCIssuer     string
-	PublicKeyPath  string
+	PublicKey      string
 }
 
 // Official is the trust root of the official marketplace: its release
@@ -36,11 +38,11 @@ func OfficialRelease(name, version string) TrustRoot {
 func (r TrustRoot) Validate() error {
 	keyless := r.IdentityRegexp != "" || r.OIDCIssuer != ""
 	switch {
-	case keyless && r.PublicKeyPath != "":
+	case keyless && r.PublicKey != "":
 		return errors.New("verify: trust root has both an identity and a key")
 	case keyless && (r.IdentityRegexp == "" || r.OIDCIssuer == ""):
 		return errors.New("verify: keyless trust root needs an identity regexp and an OIDC issuer")
-	case !keyless && r.PublicKeyPath == "":
+	case !keyless && r.PublicKey == "":
 		return errors.New("verify: empty trust root")
 	}
 	return nil

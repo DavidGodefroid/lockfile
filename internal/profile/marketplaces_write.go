@@ -96,8 +96,12 @@ func AppendMarketplace(path string, r RawMarketplace) (Trust, error) {
 	if len(data) > 0 {
 		b.WriteString("\n")
 	}
-	fmt.Fprintf(&b, "[[marketplaces]]\nname = %s\nindex_url = %s\nidentity_regexp = %s\noidc_issuer = %s\n",
-		tomlString(t.Name), tomlString(t.IndexURL), tomlString(t.IdentityRegexp), tomlString(t.OIDCIssuer))
+	fmt.Fprintf(&b, "[[marketplaces]]\nname = %s\nindex_url = %s\n", tomlString(t.Name), tomlString(t.IndexURL))
+	if t.PublicKey != "" {
+		fmt.Fprintf(&b, "public_key = %s\n", tomlString(t.PublicKey))
+	} else {
+		fmt.Fprintf(&b, "identity_regexp = %s\noidc_issuer = %s\n", tomlString(t.IdentityRegexp), tomlString(t.OIDCIssuer))
+	}
 	return t, writeConfig(path, []byte(b.String()), mode)
 }
 

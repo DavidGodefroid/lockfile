@@ -116,7 +116,7 @@ lockfile plugin remove NAME</code></pre>
 lockfile marketplace list
 lockfile marketplace remove acme</code></pre>
   <div class="prose">
-    <p>An unofficial marketplace publishes the same index format, signed keyless by its own CI identity. Keyless signers only: <code>--public-key</code> is refused.</p>
+    <p>An unofficial marketplace publishes the same index format, signed keyless by its own CI identity (<code>--identity-regexp</code>), or with a cosign key pair (<code>--public-key cosign.pub</code>, a Rekor entry required). The config holds the key itself, and screens show its SHA-256 fingerprint.</p>
     <p>It needs its name typed when added. It is flagged in red on every approval screen and in every agent result (<code>warning: unofficial_marketplace</code>), and is never auto-approved.</p>
   </div>
 </section>

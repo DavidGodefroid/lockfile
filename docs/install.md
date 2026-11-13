@@ -115,5 +115,4 @@ mode (plans decided on [lockhub](https://github.com/DavidGodefroid/lockhub), in
 Linux kernel with Landlock and seccomp (they sandbox the plugins).
 
 Roadmap, not in this release: an onboarding wizard of lockfile's own
-(`setup`), a macOS console, public-key trust roots for unofficial
-marketplaces.
+(`setup`) and a macOS console.
