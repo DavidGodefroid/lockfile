@@ -479,6 +479,10 @@ func (p Profile) Console() console.Profile {
 		Name: p.Name, Production: p.Production, Where: p.Where(), User: p.User,
 		Credentials: p.Credentials, VaultPath: p.VaultPath, CredentialsTTL: p.CredentialsTTL,
 		IdleTimeout: p.IdleTimeout, MaxSession: p.MaxSession,
+		// The console gives them to its hub client on start and whenever
+		// a policy comes in force, so a raise counts only once reviewed
+		// (lockkit#150).
+		TicketLimits: p.TicketLimits(),
 	}
 	switch p.Source {
 	case SourceS3:

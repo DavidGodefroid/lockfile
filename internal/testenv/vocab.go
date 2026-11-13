@@ -36,7 +36,7 @@ var wireKeys = []string{
 	"handle", "answers", "plugin", "version", "official", "warning",
 	"plan_id", "released", "marketplace", "question", "one", "zero",
 	// lockkit hello and status, lockfile's status part
-	"protocol_major", "console_version", "profile", "production", "auto_approve",
+	"protocol_major", "console_version", "profile", "production",
 	"allow_unmask", "show_results", "idle_timeout_in_s", "session_ends_in_s", "level",
 	"product", "protocol", "sandbox", "answer_quantum_ms",
 	// change.request, sources and status (busy: documented addition)

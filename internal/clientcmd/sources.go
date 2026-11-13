@@ -27,7 +27,6 @@ import (
 type Status struct {
 	Profile        string     `json:"profile"`
 	Production     bool       `json:"production"`
-	AutoApprove    bool       `json:"auto_approve"`
 	Level          int        `json:"level"`
 	IdleTimeoutInS int        `json:"idle_timeout_in_s"`
 	SessionEndsInS int        `json:"session_ends_in_s"`
@@ -143,8 +142,8 @@ func StatusLines(out []StatusEntry) []string {
 			continue
 		}
 		s := en.Console
-		lines = append(lines, fmt.Sprintf("%s: console up, production %s, auto %s, security level %d, plugin protocol %d, sandbox %s",
-			s.Profile, yesNo(s.Production), yesNo(s.AutoApprove), s.Level, s.Product.Protocol, s.Product.Sandbox))
+		lines = append(lines, fmt.Sprintf("%s: console up, production %s, security level %d, plugin protocol %d, sandbox %s",
+			s.Profile, yesNo(s.Production), s.Level, s.Product.Protocol, s.Product.Sandbox))
 	}
 	return lines
 }

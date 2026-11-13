@@ -65,7 +65,7 @@ whitelist (`internal/testenv`): any key, value or word outside it fails.
 | `stale` (`E_STALE`) | the plan was approved on a content hash (hub mode) and the fetched bytes differ; **residual**: says "this file changed since the approval", never how; no plugin ran on the new bytes, and the spool is released |
 | approval outcome (`approval_denied`, `approval_timeout`) | a human decision; the reason the human types is never forwarded |
 | refusals `key_outside_prefix`, `too_many_plugins`, `unknown_profile`, `plugin_not_installed`, `plugin_tampered`, `plugin_yanked`, `sandbox_unavailable`, `proc_not_hidden`, `handle_expired` (as `E_*` codes with a static hint) | computed from the request and the local install, before or without reading the file |
-| `status` (console up, production, auto mode (always off: lockhub decides), security level, idle/session timers, plugin protocol, sandbox ok, approved `answer_quantum`) | console state and configuration |
+| `status` (console up, production, security level, idle/session timers, plugin protocol, sandbox ok, approved `answer_quantum`) | console state and configuration |
 
 Never sent: size, media type, sha256, key listings, file or path names, page or byte counts,
 library or OS error text, per-plugin timing, progress during a run (the MCP server's run

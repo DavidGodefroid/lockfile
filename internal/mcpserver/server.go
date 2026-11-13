@@ -126,7 +126,7 @@ func New(pinned string) *mcp.Server {
 	s := mcpkit.New(product.P, product.Version, Instructions)
 	resolve := func(arg string) (string, error) { return clientcmd.Resolve(pinned, arg) }
 
-	mcp.AddTool(s, &mcp.Tool{Name: ToolStatus, Description: "State of the running lockfile consoles (or of one profile's): production, auto mode, security level, plugin protocol, sandbox."},
+	mcp.AddTool(s, &mcp.Tool{Name: ToolStatus, Description: "State of the running lockfile consoles (or of one profile's): production, security level, plugin protocol, sandbox."},
 		func(ctx context.Context, req *mcp.CallToolRequest, in ProfileIn) (*mcp.CallToolResult, StatusOut, error) {
 			p, err := clientcmd.StatusProfile(pinned, in.Profile)
 			if err != nil {

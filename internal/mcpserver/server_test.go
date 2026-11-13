@@ -151,7 +151,7 @@ var textTemplates = []string{
 	mcpkit.Untrusted("plugin descriptions", "the plugin manifests"), mcpkit.Untrusted("answers", "lockfile plugins"),
 	"UNOFFICIAL MARKETPLACE", "(unofficial marketplace)", "null (plugin_error: no answer, not a 0)",
 	"plan approved: it reveals at most answers; run it once with lockfile_run", "handle", "released",
-	"console up, production no, auto no, security level, plugin protocol, sandbox ok",
+	"console up, production no, security level, plugin protocol, sandbox ok",
 	"busy with another request (waiting for the human or a run)",
 }
 

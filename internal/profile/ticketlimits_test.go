@@ -117,3 +117,17 @@ func TestTicketLimitsDescribe(t *testing.T) {
 		t.Errorf("describe %q", got)
 	}
 }
+
+// The console reads the ticket limits from the policy's profile and gives
+// them to its hub client whenever a policy comes in force (lockkit#150).
+func TestTicketLimitsReachTheConsole(t *testing.T) {
+	p, err := parseMain(t, "tickets_per_window = 2\nticket_window = \"10m\"\nmax_pending = 7\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pol := &Policy{P: p}
+	want := hubclient.Limits{MaxPending: 7, RateN: 2, RateWindow: 10 * time.Minute, RateTotal: hubclient.RateTotal}
+	if got := pol.Profile().TicketLimits; got != want {
+		t.Fatalf("console profile limits %+v, want %+v", got, want)
+	}
+}
