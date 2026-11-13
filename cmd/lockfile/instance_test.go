@@ -44,9 +44,9 @@ func instanceSetup(t *testing.T) string {
 }
 
 // listenInstance listens on profile's console socket of instance, which
-// must be in dir/instance, and signals each connection it accepts (and
+// must be in dir/instance, and counts the connections it accepts (and
 // closes at once).
-func listenInstance(t *testing.T, dir, instance, profile string) <-chan struct{} {
+func listenInstance(t *testing.T, dir, instance, profile string) *dials {
 	t.Helper()
 	path, err := client.SocketPathInstance(product.P, "/", profile, instance)
 	if err != nil {
@@ -63,48 +63,7 @@ func listenInstance(t *testing.T, dir, instance, profile string) <-chan struct{}
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { ln.Close() })
-	got := make(chan struct{}, 16)
-	go func() {
-		for {
-			c, err := ln.Accept()
-			if err != nil {
-				return
-			}
-			// Signal first: the client returns once the connection closes.
-			select {
-			case got <- struct{}{}:
-			default:
-			}
-			c.Close()
-		}
-	}()
-	return got
-}
-
-// drained reports whether ch received anything, and empties it.
-func drained(ch <-chan struct{}) bool {
-	seen := false
-	for {
-		select {
-		case <-ch:
-			seen = true
-		default:
-			return seen
-		}
-	}
-}
-
-// dialled waits for the listener to report a connection, then empties ch. The
-// client can return before the accepting goroutine has been scheduled, so a
-// positive check must not read the channel at the instant the command returns.
-func dialled(ch <-chan struct{}) bool {
-	select {
-	case <-ch:
-		drained(ch)
-		return true
-	case <-time.After(5 * time.Second):
-		return false
-	}
+	return serveDials(t, ln, func(c net.Conn) { c.Close() })
 }
 
 // --instance orders reaches the socket in <socket dir>/orders: status of a
@@ -118,25 +77,25 @@ func TestInstanceDialsItsDirectory(t *testing.T) {
 		{"plugins", "--profile", "samples", "--instance", "orders"},
 	} {
 		runArgs(t, "", args...)
-		if !dialled(got) {
+		if got.count(t) == 0 {
 			t.Errorf("%v: nothing dialled %s", args, filepath.Join(dir, "orders"))
 		}
 	}
 	// Without --instance, the socket directory itself, as before.
 	runArgs(t, "", "status", "--profile", "samples")
-	if drained(got) {
+	if got.count(t) != 0 {
 		t.Fatal("status without --instance dialled the orders lock")
 	}
 	// LOCKFILE_INSTANCE and the one lock lea lists pick it too.
 	t.Setenv("LOCKFILE_INSTANCE", "orders")
 	runArgs(t, "", "status", "--profile", "samples")
-	if !dialled(got) {
+	if got.count(t) == 0 {
 		t.Fatal("LOCKFILE_INSTANCE=orders did not dial the orders lock")
 	}
 	t.Setenv("LOCKFILE_INSTANCE", "")
 	t.Setenv("LEA_LOCKFILE_INSTANCES", "orders")
 	runArgs(t, "", "status", "--profile", "samples")
-	if !dialled(got) {
+	if got.count(t) == 0 {
 		t.Fatal("the one listed lock was not dialled")
 	}
 }
@@ -252,7 +211,7 @@ func TestMCPInstance(t *testing.T) {
 		}
 	}()
 	select {
-	case <-got:
+	case <-got.first:
 	case code := <-done:
 		w.Close()
 		t.Fatalf("mcp ended (exit %d) before dialling: %s", code, errb.String())
