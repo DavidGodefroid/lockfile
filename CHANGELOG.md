@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.10.0 (2026-11-14)
+
 Builds on lockkit v0.20.0 (from v0.19.0).
 
 ### Breaking
