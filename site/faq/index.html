@@ -66,7 +66,7 @@
 </section>
 <section aria-labelledby="os">
   <h2 id="os">Which operating systems?</h2>
-  <p>The console needs Linux, with Docker: Landlock and seccomp sandbox the plugins. On Windows, WSL 2 with Docker Desktop. The agent side (CLI and MCP server) also runs on macOS. Builds are for amd64 and arm64. <a href="../install/#requirements">Requirements</a>.</p>
+  <p>The console needs Linux, with Docker: Landlock and seccomp sandbox the plugins. On Windows, WSL 2 with Docker Desktop. The install script also installs the launcher on macOS, and the agent side (CLI and MCP server) runs there, but the console has no macOS build; the Homebrew formula is Linux only. Builds are for amd64 and arm64. <a href="../install/#requirements">Requirements</a>.</p>
 </section>
 <section aria-labelledby="agents">
   <h2 id="agents">Which AI agents does it work with?</h2>
@@ -76,7 +76,7 @@
 <section aria-labelledby="sees">
   <h2 id="sees">What exactly does the agent see?</h2>
   <p>Per plugin: <code>1</code>, <code>0</code>, or no answer (<code>result: null</code> with <code>plugin_error</code>).</p>
-  <p>Around that, only items from closed lists: random handles and plan ids, plugin metadata from signed manifests, profile names, approval outcomes, refusal codes and the console state. Never the file’s bytes, size, type, hash, name or a listing. <a href="../security/#visible">The exhaustive list</a>.</p>
+  <p>Around that, only items from closed lists: random handles, plan and ticket ids, a pending answer with the lock’s instance name, plugin metadata from signed manifests (inputs included), the placeholder names a console holds (<code>held_inputs</code>), profile names, approval outcomes, refusal codes and the console state. Never the file’s bytes, size, type, hash, name or a listing. <a href="../security/#visible">The exhaustive list</a>.</p>
 </section>
 <section aria-labelledby="key">
   <h2 id="key">How does the agent know which file to ask about?</h2>
@@ -89,12 +89,12 @@
 </section>
 <section aria-labelledby="self-approve">
   <h2 id="self-approve">Can the agent approve its own plans, or turn approval off?</h2>
-  <p>No. Every plan is a ticket that you answer in <code>lox run</code> (or <code>lox approve</code>), outside the agent. The console’s own decisions stay at its terminal, in a separate account and container.</p>
-  <p>No socket method approves, installs a plugin or loosens the policy. An unofficial plugin is never auto-approved.</p>
+  <p>No. Every plan is a lockhub ticket, decided in <code>lox run</code> (or <code>lox approve</code>) outside the agent: by you, or by a <code>lox run</code> auto rule you keep. The console’s own decisions stay at its terminal, in a separate account and container.</p>
+  <p>No socket method approves, installs a plugin or loosens the policy. A plan with an unofficial plugin or with typed values is never auto-approved.</p>
 </section>
 <section aria-labelledby="ask-anything">
   <h2 id="ask-anything">Can a plugin answer any question, like “is the amount above 10 000”?</h2>
-  <p>The official marketplace refuses such questions at review. Questions are about format, structure, integrity or rendering, never about what the content means or says, and plugins take no parameters.</p>
+  <p>The official marketplace refuses such questions at review. Questions are about format, structure, integrity or rendering, never about what the content means or says, and plugins take no value the agent chooses. A protocol-2 plugin may take up to 4 values that you type at approval.</p>
   <p>An unofficial marketplace may not apply the same review. That is why its plugins are flagged in red and never auto-approved. <a href="../plugins/">Plugins</a>.</p>
 </section>
 <section aria-labelledby="many">
@@ -116,7 +116,7 @@
 </section>
 <section aria-labelledby="own-plugin">
   <h2 id="own-plugin">Can I write my own plugin?</h2>
-  <p>Yes: a plugin reads the file from fd 3 and writes <code>1</code> or <code>0</code>. Submit it to the official marketplace, or publish your own marketplace signed by your CI identity. <a href="../plugins/#write">Write a plugin</a>.</p>
+  <p>Yes: a plugin reads the file from fd 3 and writes <code>1</code> or <code>0</code>. Submit it to the official marketplace, or publish your own marketplace signed by your CI identity or a cosign key pair. <a href="../plugins/#write">Write a plugin</a>.</p>
 </section>
 <section aria-labelledby="not-yet">
   <h2 id="not-yet">What does lockfile not do yet?</h2>
@@ -165,7 +165,7 @@
       </nav>
     </div>
     <div class="wrap footer-bottom">
-      <p>Pre-release (v0.8.x). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
+      <p>Pre-release (v0.10.x). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
       <p><a href="https://lockfamily.dev">lockfamily.dev</a> · <a href="https://github.com/DavidGodefroid/lockfamily">the family on GitHub</a></p>
     </div>
   </footer>

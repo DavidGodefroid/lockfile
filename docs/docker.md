@@ -3,7 +3,7 @@
 lockfile runs in Docker, with nothing on your machine but Docker, the
 `lockfile` launcher and the seccomp profile of the console's container. The
 launcher is a short shell script ([`scripts/lockfile`](../scripts/lockfile)):
-every command you type, `lockfile console`, `lockfile plugin install`,
+every command you type, `lockfile profile add`, `lockfile plugin install`,
 `lockfile mcp` and the others, runs in the lockfile image, never in a binary
 of its own on your machine.
 
@@ -67,7 +67,9 @@ and the archive against `checksums.txt`. It then installs the launcher as
 `/usr/local/bin/lockfile` and the seccomp profile as
 `/usr/local/share/lockfile/seccomp.json` (with `sudo` when needed;
 `LOCKFILE_INSTALL_DIR` and `LOCKFILE_SHARE_DIR` choose other directories),
-root-owned, and writes the verified image digests into the launcher: it runs
+root-owned when it installs with `sudo` (the default directories; into
+directories you can write it installs as you), and writes the verified image
+digests into the launcher: it runs
 the image by digest, never by a tag that could be moved. Docker pulls it on
 first use. On Windows, install it in WSL 2 with Docker Desktop's WSL
 integration (whose kernel must have Landlock: `lockfile doctor` tells).
@@ -85,10 +87,10 @@ does.
 
 | Command | Runs as | Volumes, mounts |
 |---|---|---|
-| `console` | `lockfile`, in a container of its own per profile (`lockfile-console-<n>`; `LOCKFILE_CONSOLE_NAME` names it), under the seccomp profile, with no capability, `no-new-privileges`, a read-only root with a 64 MB `/tmp`, at most 512 processes and 4 GB of memory, no log driver, `--add-host=host.docker.internal:host-gateway` | `lockfile-run`, `lockfile-home` |
+| `console` (legacy: the console runs under `lox run`, below) | `lockfile`, in a container of its own per profile (`lockfile-console-<n>`; `LOCKFILE_CONSOLE_NAME` names it), under the seccomp profile, with no capability, `no-new-privileges`, a read-only root with a 64 MB `/tmp`, at most 512 processes and 4 GB of memory, no log driver, `--add-host=host.docker.internal:host-gateway`; it starts only with the hub flags `lox run` writes, and no agent command reaches its socket | `lockfile-run`, `lockfile-home` |
 | `profile`, `marketplace` | you (your uid and gid): they write the workspace's configuration | the workspace's `.lockfile/` only, at its own path ([below](#the-console-of-lox-run)) |
 | `plugin`, `audit`, `forget` | `lockfile` | the home of the console `lox run` starts, and its profile copy, read-only (`--instance NAME` picks one of several); none without `lox run`: they exit 2 and say why |
-| `doctor` | `lockfile`, under the seccomp profile | lox run's socket volume of the lock, read-only, its home and its profile copy, read-only, when there is one; none otherwise |
+| `doctor` | `lockfile`, under the seccomp profile | lox run's socket volume of the lock, read-only, its home (read-write) and its profile copy, read-only, when there is one; none otherwise |
 | `init`, `doctor --fix` | you (your uid and gid): they write your agents' files | your home, and the project (the nearest directory up holding `.lockfile/`, or else `.git`), each at its own path |
 | the agent commands: `mcp`, `status`, `sources`, `plugins`, `plan`, `run`, `answers`, `release` | `agent` | the socket volume of the workspace's lockfile lock that `lox run` starts, read-only, only ([below](#the-socket-of-lox-runs-lock)) |
 | everything else: `help`... | `agent` | none |
@@ -99,11 +101,14 @@ The launcher reads:
   your own build (below);
 - `LOCKFILE_VAULT=1`: the image with the `vault` CLI
   ([Credentials from Vault](#credentials-from-vault));
-- `LOCKFILE_DOCKER_ARGS`: more `docker run` arguments, split on spaces and
-  never globbed, for example the read-only mount of a `local` source:
-  `LOCKFILE_DOCKER_ARGS="-v /data/samples:/srv/lockfile/samples:ro" lockfile console --profile samples`;
-- `VAULT_ADDR`, `VAULT_NAMESPACE`: passed to the console; `VAULT_CACERT`
-  too, with its file mounted read-only at its own path.
+- `LOCKFILE_DOCKER_ARGS`: more `docker run` arguments for the containers the
+  launcher itself runs, split on spaces and never globbed (for example
+  `LOCKFILE_DOCKER_ARGS="--network NAME"`). It never reaches the console
+  `lox run` starts, which compose runs;
+- `VAULT_ADDR`, `VAULT_NAMESPACE`: passed to the launcher's legacy console;
+  `VAULT_CACERT` too, with its file mounted read-only at its own path. The
+  console `lox run` starts takes them from `lockfamily.yaml`
+  ([Credentials from Vault](#credentials-from-vault)).
 
 ### The company's managed configuration
 
@@ -172,7 +177,7 @@ prove. Anything else fails closed.
 What these checks are for: mistakes (a stale or copied `up.json`, another
 workspace's lock, a volume or compose file of the same name) and files
 others than you can write. They are no boundary against an agent that
-runs as you on the host with Docker access (Claude Code started in a
+runs as you on the host with Docker access (an agent CLI started in your
 terminal usually does): it can write `up.json`, make volumes and
 containers with any labels, or `docker exec` into lox run's containers.
 Even then it holds none of the console's credentials and cannot sign a
@@ -202,27 +207,28 @@ cosign (and the Vault CLI, below) by sha256.
 
 ### Migrating
 
-From the former Docker guide: its `docker run ... lockfile ...` commands keep
-working, but the launcher replaces them; the `lockfile-run` and
-`lockfile-home` volumes are the same. An agent entry that runs
-`docker run -i --rm -v lockfile-run:/run/lockfile lockfile mcp` keeps
-working; `lockfile init` writes `lockfile mcp`, which now goes through the
-launcher.
+From the former Docker guide: its `docker run ... lockfile ...` commands and
+the fixed `lockfile-run` volume are gone. The console runs under `lox run`,
+whose socket is in the lock's own volume, so an agent entry that runs
+`docker run -i --rm -v lockfile-run:/run/lockfile lockfile mcp` reaches no
+console any more: wire the agent again with `lockfile init <agent>`, which
+writes `lockfile mcp`, through the launcher.
 
 From a release before 0.3: the image's accounts moved from locksql's ids
 (10000-10002) to lockfile's own, `lockfile-clients` 10030, `lockfile` 10031
 and `agent` 10032. The launcher gives the files of `lockfile-run` and
-`lockfile-home` the new ids before the console, `doctor` and the commands on
-the home volume, once (it changes only the old ids): in a throwaway container
-of the image, as root with `CAP_CHOWN` and `CAP_DAC_READ_SEARCH` only and no
-network. Without the launcher, run the same once before the console:
+`lockfile-home` the new ids before its legacy `console` command, once (it
+changes only the old ids): in a throwaway container of the image, as root
+with `CAP_CHOWN` and `CAP_DAC_READ_SEARCH` only and no network. Without the
+launcher, run the same once, with the image of your release pinned (`:X.Y.Z`
+or its digest; releases publish no `:latest`):
 
 ```sh
 docker run --rm --security-opt seccomp=/usr/local/share/lockfile/seccomp.json \
   --cap-drop=ALL --cap-add=CHOWN --cap-add=DAC_READ_SEARCH \
   --security-opt no-new-privileges --read-only --network none --user 0:0 \
   -v lockfile-run:/run/lockfile -v lockfile-home:/home/lockfile \
-  ghcr.io/davidgodefroid/lockfile migrate-ids
+  ghcr.io/davidgodefroid/lockfile:X.Y.Z migrate-ids
 ```
 
 An agent in a container of its own that reached the console through the gid
@@ -294,13 +300,13 @@ Inside a container, a few things differ from a host:
   lockfile profile add --profile samples --source local --path /srv/lockfile/samples
   ```
 
-  and start the console with
-  `LOCKFILE_DOCKER_ARGS="-v /data/samples:/srv/lockfile/samples:ro"` (below).
-  The files must be readable by uid 10031.
+  The directory must be mounted read-only at that path in the console's
+  container; `LOCKFILE_DOCKER_ARGS` does not reach the console `lox run`
+  starts. The files must be readable by uid 10031.
 - **`localhost` is the container itself.** A server on your machine is
   `host.docker.internal`, which the launcher maps to your machine; a server
-  in another container is reached by its name on a shared network
-  (`LOCKFILE_DOCKER_ARGS="--network NAME" lockfile console ...`). A local
+  in another container is reached by its name on a network the lock's
+  container joins (lockhub's `docs/networks.md`). A local
   S3-compatible store without TLS (MinIO, LocalStack) is
   `endpoint = "http://host.docker.internal:9000"`: plain `http://` is
   accepted to `host.docker.internal` and `localhost` only, never on a
@@ -359,10 +365,11 @@ lox attach samples   # the console's policy review (detach: Ctrl-P Ctrl-Q)
 lox approve          # the agent's plans
 ```
 
-The rest of this page describes the launcher's own console container (`lockfile console` with
-the hub flags `lox run` writes, and for example
-`LOCKFILE_DOCKER_ARGS="-v /data/samples:/srv/lockfile/samples:ro"`). The launcher takes from the
-container what the console never needs: every capability, privilege gain
+The launcher's own `console` command is legacy: it starts only with the hub flags `lox run`
+writes, on the fixed `lockfile-run` and `lockfile-home` volumes, which no agent command
+mounts, and `plugin`, `audit` and `forget` act on the home of `lox run`'s console, not on
+`lockfile-home`. Use `lox run`. Either way the console's container is stripped of
+what the console never needs: every capability, privilege gain
 (the plugin sandbox sets `no_new_privs` itself), a writable root; and bounds
 its processes and memory (a plugin may take up to 2 GB). The console refuses
 to run any plugin, with a message naming the reason, when Landlock or
@@ -383,9 +390,10 @@ The console reads `VAULT_ADDR` and `VAULT_NAMESPACE` from its environment,
 which the launcher passes on, and `VAULT_CACERT`, whose file the launcher
 mounts read-only at the same path:
 
-```sh
-LOCKFILE_VAULT=1 VAULT_ADDR=https://vault.example.com lockfile console --profile docs
-```
+Under `lox run`, set `vault: true` on the lock and the workspace's `vault:` block in
+`lockfamily.yaml` (`lox add` writes both): `lox run` then runs the `-vault` image and passes
+`VAULT_ADDR`, `VAULT_NAMESPACE` and the CA (lockhub's `docs/lox-run.md`, Vault).
+`LOCKFILE_VAULT=1` and `VAULT_ADDR` in your shell reach only the launcher's legacy console.
 
 The console account needs no `vault login`: at start the console asks
 `Vault token for <VAULT_ADDR>:` in its terminal (no echo) and keeps the
@@ -401,9 +409,9 @@ vault login -method=oidc -no-store -token-only
 `-no-store -token-only` prints the token and writes no `~/.vault-token`.
 A plain `vault login` would store the token in your account, where the
 agent runs: the agent could read it and fetch the login from Vault itself,
-bypassing the console. The console does not read a stored token (`VAULT_TOKEN`
-wins), so a stored one can be deleted. For the same reason,
-do not leave `VAULT_TOKEN` set in that shell. When Vault refuses a read
+bypassing the console. Neither the launcher nor `lox run` passes `VAULT_TOKEN` to the
+console, and the console reads no stored token, so a stored one can be deleted. For the
+same reason, do not leave `VAULT_TOKEN` set in that shell. When Vault refuses a read
 (`not authenticated or not allowed`: the token is expired or revoked, or
 its policy may not read `vault_path`), the console asks for a token again;
 three refusals in a row stop the connection.
@@ -447,17 +455,21 @@ launcher cannot start the MCP server: the agent runs the `lockfile` binary
 inside its own container as a client of the console
 container; the two share only the socket volume. The console checks every
 peer by uid against its own container's accounts, where the agent's uid has
-none: name it when you start the console, with the release image as it is:
+none: list it in the lock's `allowed_uids` in `lockfamily.yaml`, which `lox run` reviews
+with you and passes to the console as `--allowed-uids` (`lox add` adds your uid when lea
+is installed):
 
-```sh
-lockfile console --profile samples --allowed-uids 1000
+```yaml
+locks:
+  samples:
+    type: lockfile
+    allowed_uids: [1000]
 ```
 
-or at build time, in an image of your own:
+or bake it into an image of your own, which `lockfamily.yaml` then names by digest:
 
 ```sh
 docker build -t lockfile --build-arg ALLOWED_UIDS=1000 .
-LOCKFILE_IMAGE=lockfile lockfile console --profile samples
 ```
 
 `--allowed-uids` and `ALLOWED_UIDS` are comma-separated lists of uids: the
@@ -487,8 +499,10 @@ The agent's image needs what a client host has:
   the socket directory is mode 2750 and the sockets 0660, group
   `lockfile-clients`.
 
-Start it with `-v lockfile-run:/run/lockfile`; `lockfile init claude` then
-needs no change, and `lockfile status` checks the link.
+Start it with the lock's socket volume, read-only:
+`--mount type=volume,src=lockfamily-<8 hex of sha256(workspace)>_<instance>-run,dst=/run/lockfile,readonly`
+(`lox run` names it in `.lockfamily/up.json`; lea mounts it for its agents).
+`lockfile init claude` then needs no change, and `lockfile status` checks the link.
 
 ## What Docker does and does not separate
 
@@ -519,7 +533,7 @@ Otherwise it refuses, naming the condition. So **never start the console
 with `--pid=host`** (the host's processes, your agent's among them, would
 share its `/proc`; the console refuses), **nor with
 `--pid=container:…`**, nor start an agent container with
-`--pid=container:lockfile-console` (the agent would list the plugins; the
+`--pid=container:` the console's container (the agent would list the plugins; the
 console refuses once it sees the agent's process). What remains is the host's
 own pid namespace, which lists every container's processes: the host's
 accounts read them unless the host's `/proc` has `hidepid=invisible`. In the

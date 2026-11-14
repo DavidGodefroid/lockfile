@@ -67,7 +67,8 @@ connection; every audit record of the connection carries
 loosening, reviewed at `:review`; a production profile with it does not
 start ("unconfined is never allowed on a production profile"), and a managed
 `[family] require_confined_agent = true` refuses unconfined agents whatever
-the profile says. The client and the console must be of the same version:
+the profile says (enforced by lockkit's console from v0.20.0:
+[`console/confine.go`](https://github.com/DavidGodefroid/lockkit/blob/main/console/confine.go)). The client and the console must be of the same version:
 an older console refuses a v0.10.0 client's `hello`.
 
 ## Managed configuration
@@ -152,11 +153,15 @@ Commands:
   and signature, lockfile's bounds and defaults and the managed profile
   names; `no managed configuration` without one (exit 0); a refused file
   (not root's, invalid, bad signature) prints lockkit's error, exit 3.
-- `lockfile managed check [--profile NAME]` loads your config and the
-  managed file as the console does and prints one `blocked by company
+- `lockfile managed check [--profile NAME]` loads the config it finds and
+  the managed file as the console does and prints one `blocked by company
   policy: …` line per violation (exit 3), else `N profile(s) within the
   company policy (Managed by …)` (exit 0). It opens no connection and reads
-  no credential; `lox run` runs it before it starts the lock.
+  no credential. `lox run` runs it in the lock's image, on the reviewed
+  profile copy, before it starts the lock: that is the check of your
+  profiles. Typed on the host, the launcher runs it with the managed
+  directory but no workspace or config volume, so it does not read your
+  workspace's `.lockfile/config.toml`.
 - `lockfile doctor` has a `managed` line: the file in force, `no managed
   configuration`, or why it is refused.
 - A console refused by the managed file exits 3.

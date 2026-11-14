@@ -80,14 +80,14 @@
   <ol class="steps prose">
     <li><p><strong>The agent picks its questions.</strong> <code>lockfile plugins</code> lists the installed plugins: each one’s question and what <code>1</code> and <code>0</code> mean. The agent knows the exact key from you or from a ticket: there is no listing and no stat.</p></li>
     <li><p><strong>The agent submits a plan.</strong> <code>lockfile plan --key K --plugin X --plugin Y</code>, or the <code>lockfile_plan</code> MCP tool.</p>
-      <p>The console validates the request alone, without touching the source. The profile exists, the key is under its <code>prefix</code>, every plugin is installed and verified, and the count stays within <code>max_plugins_per_handle</code>.</p></li>
-    <li><p><strong>You approve.</strong> The plan becomes a ticket on lockhub: the key as the agent typed it, each plugin with its question, version and marketplace, and how many answers the plan reveals. You answer it in <code>lox run</code>: <code>y</code> approves, <code>n</code> denies.</p></li>
-    <li><p><strong>The console fetches.</strong> The file goes into a fresh <code>0700</code> workspace in the console account. An object above <code>max_object_bytes</code> is refused while streaming.</p>
+      <p>The console validates the request: the profile exists, the key is under its <code>prefix</code>, every plugin is installed and verified, and the count stays within <code>max_plugins_per_handle</code>. It then fetches the file once to hash it. The sha256 and size go only to the masked screen lockhub shows you, never to the agent; a file that cannot be fetched is told only after an approval, as <code>fetch_failed</code>.</p></li>
+    <li><p><strong>You decide.</strong> The plan becomes a ticket on lockhub: the canonical key (and a <code>typed</code> line when the agent typed it otherwise), each plugin with its question, version and marketplace, how many answers the plan reveals, and the file’s sha256 and size. The agent hears <code>pending</code> with the ticket. You answer it in <code>lox run</code> (<code>y</code> approves, <code>n</code> denies), or a <code>lox run</code> auto rule does; a plan with an unofficial plugin or typed values always waits for a human.</p></li>
+    <li><p><strong>The agent runs the ticket; the console fetches again.</strong> <code>lockfile run TICKET</code>. The file goes into a fresh <code>0700</code> workspace in the console account, and bytes other than the approved ones are refused (<code>E_STALE</code>). An object above <code>max_object_bytes</code> is refused while streaming.</p>
       <p>Any fetch failure (missing, too big, denied, network) reaches the agent as one code, <code>fetch_failed</code>. The cause goes to the audit.</p></li>
     <li><p><strong>Each plugin runs in its own sandbox</strong> with the file as a read-only fd 3. It must write exactly <code>1</code> or <code>0</code> and exit 0. Anything else is <code>plugin_error</code> with <code>result: null</code>.</p></li>
     <li><p><strong>The answers come back together</strong>, at the next multiple of <code>answer_quantum</code> after the run started. The agent gets a handle (<code>f_…</code>) for follow-up questions.</p></li>
   </ol>
-  <p class="prose">An approved plan runs once, for the peer that asked, within 10 minutes and with the policy unchanged. <code>plan --run</code> asks for approval and runs it in one call.</p>
+  <p class="prose">An approved ticket runs once, for the agent that asked, with the policy unchanged. The console keeps the plan 24 hours; a ticket that expired before its run is asked again as a new ticket for the same plan, which the agent hears as <code>pending</code>.</p>
 </section>
 
 <section aria-labelledby="screen">
@@ -105,6 +105,7 @@
 │   ? Does the file start like a PDF?   1 = `%PDF-` appears within the first 1024 bytes   0 = no PDF header
 │
 │ this plan reveals at most 2 answers about the file
+│ sha256 9f2c…e41a · 48213 bytes
 ╰─ pending: ticket 01J…</code></pre>
   <h3 id="follow-up">A follow-up on the same file</h3>
   <pre tabindex="0" class="term"><code>╭─ SAMPLES · follow-up on f_8Kq2xR · 1 answers ─────
@@ -118,7 +119,7 @@
 │ this plan reveals at most 1 answers about the file
 ╰─ pending: ticket 01J…</code></pre>
   <div class="prose">
-    <p>There is no size, type, hash or path on the screen: no source has been touched yet.</p>
+    <p>The <code>sha256</code> line is on lockhub’s masked screen only: the console window and the agent never get a size, type, hash or path. A follow-up fetches nothing, so its screen has no such line.</p>
     <p>A plugin from an unofficial marketplace adds a red <code>▲ UNOFFICIAL MARKETPLACE</code> line, and its plan is never auto-approved.</p>
   </div>
 </section>
@@ -128,12 +129,16 @@
   <pre tabindex="0" class="term"><code><span class="cmt"># What can I ask?</span>
 lockfile plugins --json
 
-<span class="cmt"># Ask, and wait for the human</span>
+<span class="cmt"># Ask: the answer is pending, with a ticket</span>
 lockfile plan --key invoices/2026/10/abc123.pdf \
-  --plugin file.non-empty --plugin format.is-pdf --run --json
+  --plugin file.non-empty --plugin format.is-pdf --json
+
+<span class="cmt"># Once the human decided it in lox run, run the ticket</span>
+lockfile run TICKET --json
 
 <span class="cmt"># One more question on the same file, no refetch</span>
-lockfile plan --handle f_8Kq2xR --plugin pdf.parses --run --json
+lockfile plan --handle f_8Kq2xR --plugin pdf.parses --json
+lockfile run TICKET --json
 
 <span class="cmt"># What was already answered, then delete the fetched file now</span>
 lockfile answers f_8Kq2xR --json
@@ -144,10 +149,10 @@ lockfile release f_8Kq2xR</code></pre>
   <thead><tr><th scope="col">Command</th><th scope="col">MCP tool</th><th scope="col">What</th></tr></thead>
   <tbody>
   <tr><td><code>lockfile status</code></td><td><code>lockfile_status</code></td><td>the running consoles’ state</td></tr>
-  <tr><td><code>lockfile sources</code></td><td><code>lockfile_sources</code></td><td>profiles of the running consoles (<code>busy</code>: waiting on the human)</td></tr>
+  <tr><td><code>lockfile sources</code></td><td><code>lockfile_sources</code></td><td>profiles of the running consoles (<code>busy</code>: waiting for the human or a run)</td></tr>
   <tr><td><code>lockfile plugins</code></td><td><code>lockfile_plugins</code></td><td>questions, meaning of 1 and 0</td></tr>
-  <tr><td><code>lockfile plan --key K --plugin X…</code></td><td><code>lockfile_plan</code></td><td>ask the human to approve</td></tr>
-  <tr><td><code>lockfile run PLAN_ID</code></td><td><code>lockfile_run</code></td><td>run an approved plan once</td></tr>
+  <tr><td><code>lockfile plan --key K --plugin X…</code></td><td><code>lockfile_plan</code></td><td>ask the human to approve: answers <code>pending</code> with a ticket</td></tr>
+  <tr><td><code>lockfile run TICKET</code></td><td><code>lockfile_run</code></td><td>run the decided ticket once</td></tr>
   <tr><td><code>lockfile answers HANDLE</code></td><td><code>lockfile_answers</code></td><td>answers already given</td></tr>
   <tr><td><code>lockfile release HANDLE</code></td><td><code>lockfile_release</code></td><td>delete the fetched file now</td></tr>
   </tbody>
@@ -155,14 +160,14 @@ lockfile release f_8Kq2xR</code></pre>
   </div>
   <div class="prose">
     <p>Every agent command and <code>lockfile mcp</code> take <code>--instance NAME</code>, to reach one lock among several of this type. Without it, the one <code>lockfile mcp</code> server reaches them all and routes each call to the lock that serves its profile.</p>
-    <p>Exit codes depend on the outcome only, never on an answer: <code>0</code> answered, <code>1</code> no console or error, <code>2</code> refused, <code>3</code> denied or no answer in time, <code>64</code> usage.</p>
+    <p>Exit codes depend on the outcome only, never on an answer: <code>0</code> answered or pending, <code>1</code> no console or error, <code>2</code> refused, <code>3</code> denied or no answer in time, <code>64</code> usage.</p>
   </div>
 </section>
 
 <section aria-labelledby="refusals">
   <h2 id="refusals">Refusals the agent can act on</h2>
   <div class="prose">
-    <p>Every refusal but <code>E_FETCH_FAILED</code> is computed from the request and the local install, before or without reading the file.</p>
+    <p>Every refusal but <code>E_FETCH_FAILED</code> and <code>E_STALE</code> is computed from the request and the local install, before or without reading the file.</p>
     <p>Each one carries a stable code, a static hint and a retry rule: rewrite the request, ask the user, or stop.</p>
   </div>
   <div class="table-wrap" role="region" aria-label="Refusal codes" tabindex="0">
@@ -178,6 +183,10 @@ lockfile release f_8Kq2xR</code></pre>
   <tr><td><code>E_PLUGIN_YANKED</code></td><td>ask the user</td><td>the marketplace withdrew that version</td></tr>
   <tr><td><code>E_PLUGIN_TAMPERED</code></td><td>stop</td><td>an installed plugin does not match its lock entry (<code>lockfile plugin verify</code>)</td></tr>
   <tr><td><code>E_SANDBOX_UNAVAILABLE</code></td><td>stop</td><td>the plugin sandbox is unavailable (<code>lockfile doctor</code>)</td></tr>
+  <tr><td><code>E_PROC_NOT_HIDDEN</code></td><td>stop</td><td>other accounts can watch the plugins’ processes in <code>/proc</code> (<code>lockfile doctor</code>)</td></tr>
+  <tr><td><code>E_LITERAL_INPUT</code></td><td>rewrite</td><td>a plugin input is bound to a literal value; bind it to a placeholder like <code>${email}</code></td></tr>
+  <tr><td><code>E_INPUT_INVALID</code></td><td>rewrite</td><td>a typed value does not fit its input, or is no longer held; plan again</td></tr>
+  <tr><td><code>E_STALE</code></td><td>rewrite</td><td>the file changed since the plan was approved; plan again with the key</td></tr>
   <tr><td><code>E_FETCH_FAILED</code></td><td>stop</td><td>the key could not be fetched (the cause is in the audit only)</td></tr>
   </tbody>
   </table>
@@ -243,7 +252,7 @@ lockfile release f_8Kq2xR</code></pre>
       </nav>
     </div>
     <div class="wrap footer-bottom">
-      <p>Pre-release (v0.8.x). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
+      <p>Pre-release (v0.10.x). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
       <p><a href="https://lockfamily.dev">lockfamily.dev</a> · <a href="https://github.com/DavidGodefroid/lockfamily">the family on GitHub</a></p>
     </div>
   </footer>

@@ -95,8 +95,8 @@ less install.sh                     <span class="cmt"># read it first</span>
 LOCKFILE_VERSION=$V sh install.sh</code></pre>
   <div class="prose">
     <p>The script checks the signatures of <code>checksums.txt</code> and of the images against lockfile’s release workflow run on that exact tag. Then it checks the archive against <code>checksums.txt</code>.</p>
-    <p>It installs <code>/usr/local/bin/lockfile</code> and <code>/usr/local/share/lockfile/seccomp.json</code>, root-owned, with <code>sudo</code> if needed. The launcher runs the image by its verified digest; <code>lockfile version</code> prints both versions.</p>
-    <p>Each command runs with the account it needs. <code>console</code> runs as <code>lockfile</code> under the seccomp profile. <code>init</code> and <code>doctor --fix</code> run as you. The agent’s commands run as <code>agent</code>, with the socket volume only. <a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/docker.md#what-runs-where">What runs where</a>.</p>
+    <p>It installs <code>/usr/local/bin/lockfile</code> and <code>/usr/local/share/lockfile/seccomp.json</code>, with <code>sudo</code> if needed: root-owned when installed with <code>sudo</code> (the default directories); as you when the directories are yours to write. The launcher runs the image by its verified digest; <code>lockfile version</code> prints both versions.</p>
+    <p>Each command runs with the account it needs. The console, which <code>lox run</code> starts, runs as <code>lockfile</code> under the seccomp profile. <code>init</code> and <code>doctor --fix</code> run as you. The agent’s commands run as <code>agent</code>, with the socket volume only. <a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/docker.md#what-runs-where">What runs where</a>.</p>
   </div>
 </section>
 
@@ -112,7 +112,10 @@ lockfile profile add --profile docs --source s3 --bucket documents --region eu-w
 
 <span class="cmt"># SFTP with a key, host key checked against known_hosts</span>
 lockfile profile add --profile partner --source sftp --host sftp.example.org --user reader --auth key \
-  --key ~/.ssh/partner_ed25519 --known-hosts ~/.ssh/known_hosts --base-dir /outgoing
+  --key /home/lockfile/.config/lockfile/partner_ed25519 \
+  --known-hosts /home/lockfile/.config/lockfile/known_hosts --base-dir /outgoing
+<span class="cmt">#   after: install -m 0600 keys/partner_ed25519 keys/known_hosts .lockfile/
+#   (paths in the console's container, where lox run copies .lockfile/; an unquoted ~ would be your own home)</span>
 
 <span class="cmt"># A local directory, mounted read-only in the console's container</span>
 lockfile profile add --profile samples --source local --path /srv/lockfile/samples</code></pre>
@@ -122,7 +125,7 @@ bucket = "documents"
 region = "eu-west-1"
 endpoint = ""                 <span class="cmt"># S3-compatible server; https:// (http:// only to host.docker.internal or localhost, never production)</span>
 prefix = "invoices/"          <span class="cmt"># keys outside the prefix are refused</span>
-credentials = "vault"         <span class="cmt"># ask | vault</span>
+credentials = "vault"         <span class="cmt"># ask | vault | none (a local source, or an unencrypted sftp key)</span>
 vault_path = "secret/data/lockfile/docs"
 production = true             <span class="cmt"># tickets flagged production; widenings need the name typed</span>
 max_object_bytes = "50MiB"    <span class="cmt"># larger objects are not fetched</span>
@@ -130,7 +133,7 @@ max_plugins_per_handle = 16   <span class="cmt"># answers revealed about one fet
 handle_ttl = "30m"            <span class="cmt"># a fetched file is deleted after this</span>
 answer_quantum = "5s"         <span class="cmt"># results leave the console only on multiples of this</span></code></pre>
   <div class="prose">
-    <p>No file ever holds a secret. It is typed at console start (<code>ask</code>) or read from Vault (<code>vault</code>).</p>
+    <p>No file ever holds a secret. It is typed at console start (<code>ask</code>) or read from Vault (<code>vault</code>); <code>none</code> takes no secret.</p>
     <p>The full list of keys is in the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/usage.md#profiles-console-account">usage guide</a>.</p>
   </div>
 </section>
@@ -143,7 +146,7 @@ lox attach samples                           <span class="cmt"># the policy revi
   <div class="prose">
     <p>The console runs attached to lockhub only: <code>lockfile console</code> on its own refuses to start. lockhub’s <code>lox</code> declares the lock and starts it with its hub.</p>
     <p>It runs in a container of its own, under the shipped seccomp profile (never <code>seccomp=unconfined</code>), without capabilities, on a read-only root.</p>
-    <p>It checks the isolation, asks for the secret, connects and serves the profile’s socket. Every plan waits for your answer in <code>lox run</code>.</p>
+    <p>It checks the isolation, asks for the secret, connects and serves the profile’s socket. Every plan becomes a ticket, decided in <code>lox run</code> by you or an auto rule; a plan with an unofficial plugin or typed values always waits for a human.</p>
   </div>
 </section>
 
@@ -167,7 +170,7 @@ lockfile init codex --user          <span class="cmt"># every project of this ac
 lockfile doctor --fix               <span class="cmt"># wires the installed agents not wired yet (asks; --yes does not)</span></code></pre>
   <div class="prose">
     <p><code>lockfile init</code> writes the MCP command, <code>lockfile mcp</code>, which runs through the launcher in a throwaway container. Any MCP client works; <code>init</code> wires Claude Code, Codex, Cursor and Gemini CLI.</p>
-    <p>In Claude Code, <code>lockfile_status</code>, <code>lockfile_sources</code> and <code>lockfile_plugins</code> run without a prompt; plans and runs go through its permission prompt. Whatever the agent, every plan still waits for your answer in <code>lox run</code>.</p>
+    <p>In Claude Code, <code>lockfile_status</code>, <code>lockfile_sources</code> and <code>lockfile_plugins</code> run without a prompt; plans and runs go through its permission prompt. Whatever the agent, every plan is still decided on lockhub, in <code>lox run</code>.</p>
   </div>
 </section>
 
@@ -220,7 +223,7 @@ LOCKFILE_IMAGE=lockfile lockfile version</code></pre>
       </nav>
     </div>
     <div class="wrap footer-bottom">
-      <p>Pre-release (v0.8.x). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
+      <p>Pre-release (v0.10.x). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
       <p><a href="https://lockfamily.dev">lockfamily.dev</a> · <a href="https://github.com/DavidGodefroid/lockfamily">the family on GitHub</a></p>
     </div>
   </footer>

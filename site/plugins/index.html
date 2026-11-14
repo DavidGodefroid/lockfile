@@ -60,7 +60,8 @@
 <div class="prose">
   <p class="lead">A plugin answers one yes/no question about one file, fixed in its signed manifest. The only thing that leaves it is <code>1</code> or <code>0</code>.</p>
   <p>Questions are about format, structure, integrity or rendering, <strong>never about what the content means or says</strong>.</p>
-  <p>Plugins take no parameters. With one bit of output, a parameter is the way to aim that bit at the content (“does page 2 contain X?”). A variant is another plugin, with its own question and its own review.</p>
+  <p>Plugins take no value the agent chooses. With one bit of output, such a parameter is the way to aim that bit at the content (“does page 2 contain X?”). A variant is another plugin, with its own question and its own review.</p>
+  <p>A protocol-2 plugin may take up to 4 values (<code>inputs</code>) that the human types at approval: the agent only binds each one to a placeholder (<code>--input 'pdf.contains.needle=${email}'</code>), and a literal is refused (<code>E_LITERAL_INPUT</code>). Such a plan is never auto-approved. <a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/usage.md#placeholders-values-the-human-types">Placeholders</a>.</p>
 </div>
 
 <section aria-labelledby="official">
@@ -113,6 +114,7 @@ lockfile plugin remove NAME</code></pre>
   <h2 id="unofficial">Unofficial marketplaces</h2>
   <pre tabindex="0" class="term"><code>lockfile marketplace add acme --index https://plugins.acme.example/index.json \
   --identity-regexp '^https://github\.com/acme/lockfile-plugins/\.github/workflows/release\.yml@refs/tags/'
+lockfile marketplace add beta --index https://plugins.beta.example/index.json --public-key cosign.pub
 lockfile marketplace list
 lockfile marketplace remove acme</code></pre>
   <div class="prose">
@@ -136,7 +138,7 @@ accepts = ["application/pdf"]
 limits = { cpu_s = 20, memory = "512MiB", timeout_s = 30 }</code></pre>
   <ul class="prose">
     <li><code>accepts</code> documents the inputs; the console does not sniff the type, so the plugin checks its own input.</li>
-    <li>Changing <code>question</code>, <code>one</code> or <code>zero</code> needs a new major version, and users type the plugin name to accept it.</li>
+    <li>Changing <code>question</code>, <code>one</code> or <code>zero</code> needs a new major version (the official marketplace’s CI checks it; lockfile does not), and users type the plugin name to accept it.</li>
   </ul>
 
   <h3 id="runtime">The runtime</h3>
@@ -146,11 +148,13 @@ limits = { cpu_s = 20, memory = "512MiB", timeout_s = 30 }</code></pre>
   <thead><tr><th scope="col">What</th><th scope="col">Value</th></tr></thead>
   <tbody>
   <tr><td>Input</td><td>the file as an inherited <strong>read-only fd 3</strong>; no path</td></tr>
+  <tr><td>Typed values (protocol 2, with <code>inputs</code>)</td><td><strong>read-only fd 6</strong>: a sealed memfd holding the canonical JSON of the plugin’s inputs; never argv, env or a path</td></tr>
+  <tr><td>Detail (protocol 2, with <code>detail = true</code>)</td><td><strong>write fd 7</strong>, a pipe: the first 4 KiB are kept and printed on the console window only while clear results are on; never to the agent, the audit or the hub</td></tr>
   <tr><td>stdin</td><td><code>/dev/null</code></td></tr>
-  <tr><td>Environment</td><td>empty except <code>LOCKFILE_PLUGIN_PROTOCOL=1</code>; cwd <code>/</code></td></tr>
+  <tr><td>Environment</td><td>empty except <code>LOCKFILE_PLUGIN_PROTOCOL=&lt;1|2&gt;</code>, the manifest’s protocol; cwd <code>/</code></td></tr>
   <tr><td>Filesystem</td><td>Landlock: execute and read its own binary only</td></tr>
   <tr><td>Network</td><td>none (seccomp denies sockets; Landlock denies TCP with ABI ≥ 4)</td></tr>
-  <tr><td>Limits</td><td>CPU seconds, address space, no core, file size 0, few processes, wall-clock timeout then SIGKILL of the group</td></tr>
+  <tr><td>Limits</td><td>CPU seconds; memory (<code>RLIMIT_DATA</code> = <code>memory</code>, <code>RLIMIT_STACK</code> 8 MiB, <code>RLIMIT_AS</code> = <code>memory</code> + 4 GiB); no core; file size 0; no child processes (<code>fork</code>, <code>vfork</code>, <code>clone3</code> denied: threads only), at most 512 tasks more than the console’s account runs, never above the hard limit; wall-clock timeout then SIGKILL of the group</td></tr>
   <tr><td>stderr</td><td>drained and discarded; only its byte count is audited</td></tr>
   </tbody>
   </table>
@@ -212,7 +216,7 @@ limits = { cpu_s = 20, memory = "512MiB", timeout_s = 30 }</code></pre>
       </nav>
     </div>
     <div class="wrap footer-bottom">
-      <p>Pre-release (v0.8.x). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
+      <p>Pre-release (v0.10.x). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
       <p><a href="https://lockfamily.dev">lockfamily.dev</a> · <a href="https://github.com/DavidGodefroid/lockfamily">the family on GitHub</a></p>
     </div>
   </footer>
