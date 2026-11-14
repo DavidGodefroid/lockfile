@@ -240,6 +240,11 @@ The site, [davidgodefroid.github.io/lockfile](https://davidgodefroid.github.io/l
 - **Contributing:** issues and pull requests on
   [GitHub](https://github.com/DavidGodefroid/lockfile). Build with
   `CGO_ENABLED=0 go build ./cmd/lockfile` (Go 1.26+).
+- **Docs:** published at [lockfamily.dev/docs](https://lockfamily.dev/docs/)
+  from this repo's Markdown. Adding a file under `docs/`, or renaming or
+  removing a README H2 section, needs a matching change to
+  [lockfamily's `docs-site/nav.toml`](https://github.com/DavidGodefroid/lockfamily/blob/main/docs-site/nav.toml):
+  open a lockfamily PR, or the nightly docs build fails.
 - **Security:** the threat model and its limits are in
   [docs/security-model.md](docs/security-model.md). To report a
   vulnerability, contact the maintainer
