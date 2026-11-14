@@ -44,8 +44,11 @@ func TestUnconfinedAgentRefused(t *testing.T) {
 	if log := c.AuditLog(t); !strings.Contains(log, console.DecisionRefusedUnconfined) {
 		t.Errorf("no %s record:\n%s", console.DecisionRefusedUnconfined, log)
 	}
-	// A confined agent is served.
-	if _, resp := helloAs(t, c.Socket, &ipc.Confinement{Confined: true}); resp.Error != nil {
+	// A confined agent is served, unless this test process holds a group
+	// owning a runtime socket (docker, on a CI runner): the console then
+	// refuses it whatever it reports.
+	_, resp := helloAs(t, c.Socket, &ipc.Confinement{Confined: true})
+	if resp.Error != nil && (resp.Error.Code != ipc.CodeUnconfined || !strings.Contains(resp.Error.Message, "runtime_group")) {
 		t.Fatalf("confined hello: %+v", resp.Error)
 	}
 }
