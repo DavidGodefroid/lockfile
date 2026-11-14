@@ -3,6 +3,7 @@ package clientcmd
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/DavidGodefroid/lockkit/client"
 	"github.com/DavidGodefroid/lockkit/config"
+	"github.com/DavidGodefroid/lockkit/confine"
 	"github.com/DavidGodefroid/lockkit/ipc"
 	"github.com/DavidGodefroid/lockkit/mcpkit"
 
@@ -305,6 +307,13 @@ func probe(ctx context.Context, inst, path, profile string) (rpc.Source, bool) {
 	return rpc.Source{}, false
 }
 
+// confinement is this process's report for the hello, as lockkit's client
+// sends it: a console refuses a hello without one (old_client, lockkit#133).
+var confinement = sync.OnceValue(func() ipc.Confinement {
+	r := confine.Check(confine.RealEnv())
+	return ipc.Confinement{Confined: r.Confined, Reasons: r.Reasons}
+})
+
 // helloProfile reads the profile a console serves from its hello answer.
 func helloProfile(ctx context.Context, path string) (string, bool) {
 	var d net.Dialer
@@ -315,8 +324,12 @@ func helloProfile(ctx context.Context, path string) (string, bool) {
 	defer conn.Close()
 	stop := context.AfterFunc(ctx, func() { conn.Close() })
 	defer stop()
-	req := ipc.Request{JSONRPC: "2.0", ID: 1, Method: ipc.MethodHello}
-	req.Params = []byte(fmt.Sprintf(`{"protocol_major":%d,"client":%q}`, ipc.ProtocolMajor, product.P.Name))
+	conf := confinement()
+	params, err := json.Marshal(ipc.HelloParams{ProtocolMajor: ipc.ProtocolMajor, Client: product.P.Name, Confinement: &conf})
+	if err != nil {
+		return "", false
+	}
+	req := ipc.Request{JSONRPC: "2.0", ID: 1, Method: ipc.MethodHello, Params: params}
 	if ipc.WriteMsg(conn, req) != nil {
 		return "", false
 	}

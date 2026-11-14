@@ -87,6 +87,7 @@ type RawProfile struct {
 	VaultPath      string `toml:"vault_path"`
 	CredentialsTTL string `toml:"credentials_ttl"`
 	Production     bool   `toml:"production"`
+	Unconfined     bool   `toml:"unconfined"`
 	IdleTimeout    string `toml:"idle_timeout"`
 	MaxSession     string `toml:"max_session"`
 	// limits
@@ -266,6 +267,7 @@ func parseProfile(name string, r RawProfile) (Profile, error) {
 	}
 	p := Profile{Name: name, Source: r.Source, Prefix: r.Prefix}
 	p.Production, p.User, p.VaultPath = r.Production, r.User, r.VaultPath
+	p.Unconfined = r.Unconfined
 	if err := p.limits(r); err != nil {
 		return Profile{}, err
 	}
@@ -527,7 +529,7 @@ func (p Profile) Where() string {
 // Console is the profile as lockkit's console needs it.
 func (p Profile) Console() console.Profile {
 	c := console.Profile{
-		Name: p.Name, Production: p.Production, Where: p.Where(), User: p.User,
+		Name: p.Name, Production: p.Production, Unconfined: p.Unconfined, Where: p.Where(), User: p.User,
 		Credentials: p.Credentials, VaultPath: p.VaultPath, CredentialsTTL: p.CredentialsTTL,
 		IdleTimeout: p.IdleTimeout, MaxSession: p.MaxSession,
 		// The console gives them to its hub client on start and whenever

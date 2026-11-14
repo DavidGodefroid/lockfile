@@ -18,6 +18,7 @@ prefix = "invoices/"          # keys outside the prefix are refused
 credentials = "vault"         # ask | vault (none: local, or an unencrypted sftp key); no keychain in Docker
 vault_path = "secret/data/lockfile/docs"   # username = access key id, password = secret key
 production = true             # tickets flagged production; the console's widenings need the name typed
+# unconfined = true           # serve agents that do not run confined (never on production)
 max_object_bytes = "50MiB"    # larger objects are not fetched
 max_plugins_per_handle = 16   # answers revealed about one fetched file, at most
 handle_ttl = "30m"            # a fetched file is deleted after this
@@ -50,6 +51,24 @@ container. See [usage.md](usage.md#profiles-console-account).
 `production = true` (v0.8.0): the console's own widenings, the policy review
 at start and a loosening at `:review`, take the profile name typed instead of
 `y`; its tickets are flagged production on every lockhub facade.
+
+**Confined agents** (v0.10.0, lockkit v0.20.0). The console serves only an
+agent that runs confined: its lockfile client reports, in its `hello`, that
+it runs in a container with no host runtime socket (Docker's), no Lock
+Family state and a read-only `.lockfamily/`, as under lea. Any other agent,
+or a client older than v0.10.0 that sends no report (`old_client`), is
+refused at `hello` ("this agent does not run confined (…); run it inside
+lea, or ask the human to set unconfined = true on this non-production
+profile"), audited `refused-unconfined` with its reasons. `unconfined = true`
+on a profile lets it in: the console then protects against mistakes, not
+against a compromised agent, and says so in red at start and at every such
+connection; every audit record of the connection carries
+`"unconfined":true` and its hub tickets `flags.unconfined`. Setting it is a
+loosening, reviewed at `:review`; a production profile with it does not
+start ("unconfined is never allowed on a production profile"), and a managed
+`[family] require_confined_agent = true` refuses unconfined agents whatever
+the profile says. The client and the console must be of the same version:
+an older console refuses a v0.10.0 client's `hello`.
 
 ## Managed configuration
 

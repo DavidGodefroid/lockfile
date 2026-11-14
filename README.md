@@ -192,6 +192,10 @@ The approval screen, the agent's commands and MCP tools, and exit codes:
   descriptions only guide the agent; the console's checks are the guarantee.
 - **OS separation.** The console runs as the `lockfile` account in its own
   container; the kernel checks every peer on the socket.
+- **Confined agents only.** An agent that does not run confined (in a
+  container, no runtime socket, no Lock Family state) is refused, unless a
+  non-production profile sets `unconfined = true`
+  ([docs/configuration.md](docs/configuration.md#configuring-lockfile)).
 - **Bounded leakage.** `max_plugins_per_handle` (16) caps the answers about one
   file, and each approval states how many a plan reveals.
 - **Audit for you only.** Key, size, sha256 and each plugin's outcome go to a
