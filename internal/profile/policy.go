@@ -229,6 +229,9 @@ func (p *Policy) Describe() []string {
 	if pr.Production {
 		lines = append(lines, "PRODUCTION")
 	}
+	if pr.Unconfined {
+		lines = append(lines, "WARNING unconfined: agents that do not run confined are served")
+	}
 	for _, w := range pr.EndpointWarnings() {
 		lines = append(lines, "WARNING "+w)
 	}

@@ -37,7 +37,7 @@ func dialWire(t *testing.T, path string) *wire {
 	}
 	t.Cleanup(func() { c.Close() })
 	w := &wire{t: t, conn: c, r: bufio.NewReader(c)}
-	if _, resp := w.call(ipc.MethodHello, ipc.HelloParams{ProtocolMajor: ipc.ProtocolMajor, Client: "e2e"}); resp.Error != nil {
+	if _, resp := w.call(ipc.MethodHello, ipc.HelloParams{ProtocolMajor: ipc.ProtocolMajor, Client: "e2e", Confinement: &ipc.Confinement{Confined: true}}); resp.Error != nil {
 		t.Fatalf("hello: %+v", resp.Error)
 	}
 	return w

@@ -55,7 +55,7 @@ func startConsole(t *testing.T, answersScript []string, plugins ...string) *cons
 		t.Fatal(err)
 	}
 	cfg := filepath.Join(t.TempDir(), "config.toml")
-	body := "[profiles.samples]\nsource = \"local\"\npath = \"" + root + "\"\nprefix = \"invoices/\"\nanswer_quantum = \"1s\"\n"
+	body := "[profiles.samples]\nsource = \"local\"\npath = \"" + root + "\"\nprefix = \"invoices/\"\nanswer_quantum = \"1s\"\nunconfined = true\n"
 	if err := os.WriteFile(cfg, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}

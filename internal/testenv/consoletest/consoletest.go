@@ -264,6 +264,11 @@ func Start(t testing.TB, o Options) *Console {
 	if !strings.Contains(o.Profile, "answer_quantum") {
 		body += "answer_quantum = \"1s\"\n"
 	}
+	// The tests dial from the host, where lockkit's client reports itself
+	// unconfined (lockkit#133); a production profile cannot let it in.
+	if !strings.Contains(o.Profile, "unconfined") && !strings.Contains(o.Profile, "production") {
+		body += "unconfined = true\n"
+	}
 	body += o.Profile
 	cfg := filepath.Join(t.TempDir(), "config.toml")
 	if err := os.WriteFile(cfg, []byte(body), 0o600); err != nil {

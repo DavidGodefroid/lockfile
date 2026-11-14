@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+Builds on lockkit v0.20.0 (from v0.19.0).
+
+### Breaking
+
+- Agents that do not run confined are refused by default (lockkit v0.20.0,
+  DavidGodefroid/lockkit#133): the console refuses at `hello`, with `CodeUnconfined` (-32009),
+  an agent whose client reports it does not run confined (outside a container, with a host
+  runtime socket, Lock Family state or a writable `.lockfamily/`) or sends no report (a client
+  older than this release), and audits it `refused-unconfined`. The new profile key
+  `unconfined = true` lets such an agent in on a non-production profile (a loosening, reviewed at
+  `:review`; red banner; `"unconfined":true` on its audit records, `flags.unconfined` on its hub
+  tickets); a production profile with it does not start. Ship the client and the console of
+  the same version: an older console refuses the new `hello`
+  ([configuration.md](docs/configuration.md#configuring-lockfile), DavidGodefroid/lockfile#83).
+
+### Fixed
+
+- `lockfile sources` and profile resolution sent their console probe's `hello` without a
+  confinement report, which a lockkit v0.20.0 console refuses as `old_client`: it now sends the
+  client's report (DavidGodefroid/lockfile#83).
+
 ## v0.9.1 (2026-11-13)
 
 ### Fixed
