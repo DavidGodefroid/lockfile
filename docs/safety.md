@@ -26,12 +26,15 @@ model in full: [security-model.md](security-model.md).
 - **Sandboxed plugins.** Landlock (execute and read its own binary only; TCP
   denied with ABI ≥ 4), seccomp (no sockets, `ptrace`, `mount`, `bpf`,
   `keyctl`, `execveat`, `memfd_create`, System V IPC, POSIX message queues,
-  signals to other processes), rlimits and a wall-clock timeout, an empty
-  environment, the file as a read-only fd 3, stdout capped at 3 bytes,
-  stderr discarded.
+  signals to other processes, child processes but threads), rlimits and a
+  wall-clock timeout, an environment holding only `LOCKFILE_PLUGIN_PROTOCOL`,
+  the file as a read-only fd 3 (typed values on fd 6), stdout capped at
+  3 bytes, stderr discarded. Path metadata (`stat`, `readlink`) stays visible.
 - **Signed everything.** Plugin binaries, manifests, the marketplace index
-  and lockfile's releases are checked against keyless cosign signatures. A
-  missing cosign refuses; there is no unsigned mode.
+  and lockfile's releases are checked against cosign signatures with a Rekor
+  entry: keyless for official plugins and releases, keyless or a pinned
+  public key for an unofficial marketplace. A missing cosign refuses; there
+  is no unsigned mode.
 - **Bounded leakage.** `max_plugins_per_handle` (16) caps the answers about
   one fetched file, and each approval states how many a plan reveals.
   Results are released on `answer_quantum` (5 s) multiples.

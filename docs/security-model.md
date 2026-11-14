@@ -39,10 +39,10 @@ documented.
 | The agent cannot drive the console | the console's terminal is its container's, which `lox run` starts and `lox attach` reaches (a `docker run -it`); lockkit's isolation checks run inside the container (no relay, the terminal belongs to the console account, X11 refused by `system.toml`). Residual: whoever runs `docker` commands can `attach` or `exec` into it ([docker.md](docker.md#what-docker-does-and-does-not-separate)) |
 | Only the clients group reaches the console | socket in the `lockfile-run` volume at `/run/lockfile` (2750, setgid group `lockfile-clients`), socket 0660, kernel peer credentials checked on every connection: a peer that is neither `lockfile`, nor in `lockfile-clients`, nor in `allowed_uids` (`ALLOWED_UIDS` at build time, or `console --allowed-uids` at start) is refused |
 | The agent cannot replace the binary the console runs | `/usr/local/bin/lockfile`, `/usr/local/bin/cosign` and `/etc/lockfile/*` owned by root in the image, which has no `sudo`; base images pinned by digest, cosign and the Vault CLI by sha256 |
-| A plugin cannot read anything but its input, nor talk to the network | Landlock (execute + read on its own binary only; TCP denied with ABI ≥ 4), seccomp (no sockets, ptrace, mount, bpf, keyctl, `execveat` and `memfd_create` (only its own binary executes, by Landlock), System V IPC, POSIX message queues, signals to other processes including through a descriptor owner, shared anonymous memory), rlimits (CPU, data and address space, a task cap relative to the account's tasks), empty environment, input as a read-only fd 3, stdout capped at 3 bytes, stderr discarded |
+| A plugin cannot open or read any file's content but its input (and its typed values), nor talk to the network | Landlock (execute + read on its own binary only; TCP denied with ABI ≥ 4; it blocks opens, not `stat`, `statx`, `readlink` or `access`: path metadata stays visible), seccomp (default allow, with a deny list: no sockets, ptrace, mount, bpf, keyctl, `execveat` and `memfd_create` (only its own binary executes, by Landlock), `fork`/`vfork`/`clone3` (threads only), System V IPC, POSIX message queues, signals to other processes including through a descriptor owner, shared anonymous memory), rlimits (CPU, data and address space, a task cap relative to the account's tasks), an environment holding only `LOCKFILE_PLUGIN_PROTOCOL`, input as a read-only fd 3 (typed values on fd 6), stdout capped at 3 bytes, stderr discarded |
 | A plugin answers only its signed question | the manifest's question/1/0 are signed with the binary; marketplace review; a changed question is a loosening the human types to accept; a plan runs only the version and hashes it was approved with, checked on the opened binary (an update in between answers `plugin_tampered`) |
 | A withdrawn version does not run | the yanked flag of the signed index, recorded in `plugins.lock` by `plugin install`/`update`/`verify`; the store refuses to open a yanked version (`plugin_yanked`); `lockfile doctor` reports the recorded ones. Residual: a version yanked upstream keeps running until one of those commands reads the index |
-| Plugins and releases are what their publisher built | cosign keyless signatures checked through lockkit `update` (index, manifest, binary, lockfile releases); no unsigned mode; a missing cosign refuses |
+| Plugins and releases are what their publisher built | cosign signatures checked through lockkit `update` (index, manifest, binary, lockfile releases), with a Rekor entry required: keyless for official plugins and lockfile releases, keyless or a pinned public key (`marketplace add --public-key`) for an unofficial marketplace; no unsigned mode; a missing cosign refuses |
 | The agent cannot widen the policy | no IPC method installs, trusts or loosens anything; `change.request` only queues text for the human |
 
 ## What the agent can see: the exhaustive list
@@ -132,7 +132,9 @@ the tag ruleset and does not replace it.
   the cap before streaming (concurrent fetches never exceed it together), and at most 64 files
   are held or being fetched at once.
 - The S3 SDK keeps the secret access key in the console's memory for the session; core dumps
-  are disabled.
+  are disabled (lockkit's console sets `RLIMIT_CORE` 0 and `PR_SET_DUMPABLE` 0 at start,
+  [`console/harden_linux.go`](https://github.com/DavidGodefroid/lockkit/blob/main/console/harden_linux.go),
+  and refuses to start a production profile when it cannot; plugins run with `RLIMIT_CORE` 0).
 - The audit log (`~lockfile/.local/state/lockfile/audit.log`, 0600) is the one place file
   metadata exists: key, size, sha256, fetch cause, each plugin's precise outcome, stderr byte
   count. Never file bytes. `lockfile audit` reads it, in the console account only.
@@ -158,9 +160,9 @@ the tag ruleset and does not replace it.
   - a plugin's detail (fd 7), printed only with clear results on (level 0), stays in the console
     terminal's scrollback (screen sharing, recording, a logging terminal).
 - Plugin resource caps are availability limits, not isolation: the task cap is `RLIMIT_NPROC`
-  set to the account's current task count (measured from the kernel) plus 512, so it is shared
-  with whatever else the account starts meanwhile, and root ignores it (the console never runs
-  as root). Memory is bounded by `RLIMIT_DATA` (the limit: private writable memory), `RLIMIT_STACK`
+  set to the account's current task count (measured from the kernel) plus 512, never above the
+  inherited hard limit, so it is shared with whatever else the account starts meanwhile, and
+  root ignores it (the console never runs as root). Memory is bounded by `RLIMIT_DATA` (the limit: private writable memory), `RLIMIT_STACK`
   (8 MiB, fixed) and `RLIMIT_AS` (limit + 4 GiB, so the Go runtime's address-space reservations
   fit at any limit). Past the limit a plugin can map only read-only private memory, which costs
   page tables at most (about 8 MiB for 4 GiB touched).

@@ -57,7 +57,7 @@
 
 <section class="hero" aria-labelledby="hero-title">
   <div class="hero-text">
-    <p class="eyebrow"><span class="badge">v0.8 pre-release</span>A Lock of the Lock&nbsp;Family · open&nbsp;source · Apache&nbsp;2.0</p>
+    <p class="eyebrow"><span class="badge">v0.10 pre-release</span>A Lock of the Lock&nbsp;Family · open&nbsp;source · Apache&nbsp;2.0</p>
     <h1 id="hero-title">Your agent asks about the file. <span class="key">It never reads it.</span></h1>
     <p class="lead">Any AI agent can ask yes/no questions about a file in S3, on SFTP or on disk. Signed, sandboxed plugins answer, and the agent only ever gets 1s and 0s.</p>
     <div class="install">
@@ -77,7 +77,7 @@
     <div class="ticket-face">
       <p class="ticket-head"><span>lockfile · profile files</span><span>lox run · ticket</span></p>
       <dl class="ticket-fields">
-        <div class="wide"><dt>Plan · 2 answers</dt><dd><span class="status asked">asked</span><code>invoices/2026/10/abc123.pdf</code><span class="note"><code>file.non-empty</code> and <code>format.is-pdf</code>, with their signed questions. Every plan waits for you.</span></dd></div>
+        <div class="wide"><dt>Plan · 2 answers</dt><dd><span class="status asked">asked</span><code>invoices/2026/10/abc123.pdf</code><span class="note"><code>file.non-empty</code> and <code>format.is-pdf</code>, with their signed questions. Every plan is a ticket, decided in <code>lox run</code>.</span></dd></div>
         <div class="wide"><dt>Answers</dt><dd><code>file.non-empty: 1</code> · <code>format.is-pdf: 0</code><span class="note">Not empty, not a PDF. No byte, name, size or type of the file.</span></dd></div>
       </dl>
       <p class="stamp">Approved · <kbd>y</kbd></p>
@@ -100,9 +100,11 @@
 
 <section aria-labelledby="answer">
   <h2 id="answer">What the agent gets</h2>
-  <p class="prose">One plan, two questions about one file. The agent names the key it was given and the plugins it wants. This is the whole answer:</p>
+  <p class="prose">One plan, two questions about one file. The agent names the key it was given and the plugins it wants, and hears <code>pending</code> with a ticket. Once you decide it in <code>lox run</code>, it runs the ticket. This is the whole answer:</p>
   <pre tabindex="0" class="term"><code>$ lockfile plan --key invoices/2026/10/abc123.pdf \
-    --plugin file.non-empty --plugin format.is-pdf --run --json
+    --plugin file.non-empty --plugin format.is-pdf --json
+{"status":"pending","ticket":"01J…","lock":"lockfile","instance":"files"}
+$ lockfile run 01J… --json
 {"handle":"f_8Kq2xR","answers":[
  {"plugin":"file.non-empty","version":"1.0.0","official":true,"result":1},
  {"plugin":"format.is-pdf","version":"1.0.0","official":true,"result":0}]}</code></pre>
@@ -127,7 +129,7 @@
 <tr><th scope="row">Agent never sees a byte of the file</th><td class="no">No</td><td class="yes">Yes</td></tr>
 <tr><th scope="row">Agent never sees the name, size, type or a listing</th><td class="no">No</td><td class="yes">Yes</td></tr>
 <tr><th scope="row">Agent never holds the storage credentials</th><td class="no">No</td><td class="yes">Yes</td></tr>
-<tr><th scope="row">A human approves every plan, outside the agent</th><td class="no">No</td><td class="yes">Yes</td></tr>
+<tr><th scope="row">Every plan is a ticket decided outside the agent, by you or your auto rules</th><td class="no">No</td><td class="yes">Yes</td></tr>
 <tr><th scope="row">Every question is fixed and signed in advance</th><td class="no">No</td><td class="yes">Yes</td></tr>
 <tr><th scope="row">The code that reads the file has no network</th><td class="no">No</td><td class="yes">Yes</td></tr>
 <tr><th scope="row">Answers released on a fixed time quantum</th><td class="no">No</td><td class="yes">Yes</td></tr>
@@ -141,8 +143,8 @@
 <section aria-labelledby="approve">
   <h2 id="approve">See what you approve</h2>
   <div class="prose">
-    <p>Before anything is fetched, the console draws the plan: the agent’s own request and the plugins’ signed questions. Nothing about the file is on it: no source has been touched yet.</p>
-    <p>The same screen goes to <a href="https://github.com/DavidGodefroid/lockhub">lockhub</a> as a ticket. Every lockfile plan waits there until you answer it in <code>lox run</code>.</p>
+    <p>The console draws the plan: the agent’s own request and the plugins’ signed questions. It then fetches the file once to hash it: the sha256 and size go only to the masked screen lockhub shows you, never to the agent. The run fetches again and refuses different bytes (<code>E_STALE</code>).</p>
+    <p>The screen goes to <a href="https://github.com/DavidGodefroid/lockhub">lockhub</a> as a ticket, which you decide in <code>lox run</code> unless a <code>lox run</code> auto rule does. A plan with an unofficial plugin or typed values always waits for a human.</p>
   </div>
   <figure>
     <pre tabindex="0" class="term" aria-label="The console's screen of a plan"><code>╭─ SAMPLES · file plan · 2 answers ─────
@@ -157,8 +159,9 @@
 │   ? Does the file start like a PDF?   1 = `%PDF-` appears within the first 1024 bytes   0 = no PDF header
 │
 │ this plan reveals at most 2 answers about the file
+│ sha256 9f2c…e41a · 48213 bytes
 ╰─ pending: ticket 01J…</code></pre>
-    <figcaption>On approval the console fetches the file into a private workspace, runs each plugin in its own sandbox, checks each answer and releases them together on the next answer quantum.</figcaption>
+    <figcaption>The sha256 line is on lockhub’s screen only. When the agent runs the approved ticket, the console fetches the file again into a private workspace, runs each plugin in its own sandbox, checks each answer and releases them together on the next answer quantum.</figcaption>
   </figure>
   <p class="prose"><code>n</code> denies; a reason you type is never forwarded to the agent. A production profile flags its tickets, and the console’s own widenings (its policy review, a plugin added) need the profile name typed.</p>
 </section>
@@ -167,10 +170,10 @@
   <h2 id="highlights">Highlights</h2>
   <ul class="cards">
     <li><span class="icon" aria-hidden="true">🔢</span><h3>Only 1s and 0s</h3><p>Everything the console sends the agent comes from a closed list, checked end to end over the socket. No size, type, hash, name, listing or error text.</p></li>
-    <li><span class="icon" aria-hidden="true">👤</span><h3>Human in the loop</h3><p>Every plan is a ticket you answer in <code>lox run</code>, outside the agent. The screen says how many answers the plan reveals.</p></li>
-    <li><span class="icon" aria-hidden="true">✍️</span><h3>Signed questions</h3><p>Each plugin answers one question fixed in its signed manifest. No parameters: a parameter would let the agent aim the bit at the content.</p></li>
-    <li><span class="icon" aria-hidden="true">🧱</span><h3>Sandboxed plugins</h3><p>Landlock, seccomp and rlimits: the file as a read-only fd 3, no path, no network, an empty environment, stdout capped at 3 bytes.</p></li>
-    <li><span class="icon" aria-hidden="true">🔏</span><h3>cosign everywhere</h3><p>Plugins, the marketplace index and lockfile’s own releases are checked against keyless cosign signatures. There is no unsigned mode.</p></li>
+    <li><span class="icon" aria-hidden="true">👤</span><h3>Human in the loop</h3><p>Every plan is a lockhub ticket, decided in <code>lox run</code> outside the agent, by you or an auto rule you set. The screen says how many answers the plan reveals.</p></li>
+    <li><span class="icon" aria-hidden="true">✍️</span><h3>Signed questions</h3><p>Each plugin answers one question fixed in its signed manifest. The agent chooses no value: one would let it aim the bit at the content. A protocol-2 plugin may take up to 4 values the human types at approval.</p></li>
+    <li><span class="icon" aria-hidden="true">🧱</span><h3>Sandboxed plugins</h3><p>Landlock, seccomp and rlimits: the file as a read-only fd 3, no path, no network, an environment holding only <code>LOCKFILE_PLUGIN_PROTOCOL</code>, stdout capped at 3 bytes.</p></li>
+    <li><span class="icon" aria-hidden="true">🔏</span><h3>cosign everywhere</h3><p>Plugins, the marketplace index and lockfile’s own releases are checked against cosign signatures with a Rekor entry: keyless for official ones, or a pinned public key for an unofficial marketplace. There is no unsigned mode.</p></li>
     <li><span class="icon" aria-hidden="true">⏱️</span><h3>Timing padded</h3><p>A run’s result leaves the console only at the next multiple of <code>answer_quantum</code> (5 s by default), so a fast or slow plugin tells nothing.</p></li>
     <li><span class="icon" aria-hidden="true">🗄️</span><h3>S3, SFTP, local</h3><p>Keys outside the profile’s prefix are refused, objects above <code>max_object_bytes</code> are not fetched, and a fetched file is deleted on release or expiry.</p></li>
     <li><span class="icon" aria-hidden="true">📜</span><h3>Audit for you only</h3><p>Key, size, sha256, fetch cause and each plugin’s precise outcome go to an audit log only the console account can read. Never file bytes.</p></li>
@@ -184,16 +187,16 @@
     <li><p>In your project, <code>lox add lockfile</code> asks where your files are (S3, SFTP or a local directory), sets up the lock and starts its console.</p>
       <pre tabindex="0"><code>cd your-project
 lox add lockfile</code></pre></li>
-    <li><p>Install the plugins you want. The console applies them after <code>:review</code> (<code>lox attach files</code>, where <code>files</code> is the name you gave the lock).</p>
+    <li><p>In a terminal of its own, outside any agent, keep <code>lox run</code> open. Every plan shows up there for your decision.</p>
+      <pre tabindex="0"><code>lox run</code></pre></li>
+    <li><p>With <code>lox run</code> up, install the plugins you want. The console applies them after <code>:review</code> (<code>lox attach files</code>, where <code>files</code> is the name you gave the lock).</p>
       <pre tabindex="0"><code>lockfile plugin install file.non-empty@1.0.0
 lockfile plugin install format.is-pdf@1.0.0
 lox attach files</code></pre></li>
-    <li><p>In a terminal of its own, outside any agent, keep <code>lox run</code> open. Every plan shows up there for your decision.</p>
-      <pre tabindex="0"><code>lox run</code></pre></li>
     <li><p>Start your agent in the project (<code>claude</code>, <code>codex</code>, <code>gemini</code>, …) and ask about a file by its exact key.</p></li>
   </ol>
   <div class="prose">
-    <p><code>lox add</code> wires Claude Code. For Codex, Cursor or Gemini CLI, also run <code>lockfile init codex</code> (or <code>cursor</code>, <code>gemini</code>).</p>
+    <p>To wire your agent, run <code>lockfile init &lt;agent&gt;</code> (<code>claude</code>, <code>codex</code>, <code>cursor</code> or <code>gemini</code>).</p>
     <p class="link-line"><a href="install/">Without Homebrew, or step by step: the install guide</a></p>
   </div>
 </section>
@@ -244,7 +247,7 @@ lox attach files</code></pre></li>
       </nav>
     </div>
     <div class="wrap footer-bottom">
-      <p>Pre-release (v0.8.x). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
+      <p>Pre-release (v0.10.x). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
       <p><a href="https://lockfamily.dev">lockfamily.dev</a> · <a href="https://github.com/DavidGodefroid/lockfamily">the family on GitHub</a></p>
     </div>
   </footer>

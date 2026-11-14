@@ -4,22 +4,26 @@ Two sides in two OS accounts. Only the console touches the file.
 
 ```
 agent account (CLI / MCP)            lockfile account (console)
-  lockfile plan/run/answers   ──UDS──▶  approve ─▶ fetch ─▶ workspace (0700)
-           ▲                    JSON-RPC                       │ fd 3, read-only
-           │                                                    ▼
-           └────── 1 / 0 per plugin ◀── strict check ◀── sandboxed plugin process
+  lockfile plan/run/answers   ──UDS──▶  hash ─▶ approve ─▶ fetch ─▶ workspace (0700)
+           ▲                    JSON-RPC                               │ fd 3, read-only
+           │                                                            ▼
+           └────────────── 1 / 0 per plugin ◀── strict check ◀── sandboxed plugin process
 ```
 
 1. The agent picks its questions from `lockfile plugins` (each lists its
    question and what 1 and 0 mean) and submits a plan with the exact key it
    was given: `lockfile plan --key K --plugin X…` (or the `lockfile_plan` MCP
    tool). There is no listing and no stat.
-2. The console validates the request alone, without touching the source:
-   profile, key under the profile's `prefix`, every plugin installed and
-   verified, the plugin count within `max_plugins_per_handle`. It draws the
-   approval screen and sends it to
+2. The console validates the request: profile, key under the profile's
+   `prefix`, every plugin installed and verified, the plugin count within
+   `max_plugins_per_handle`. It then fetches the file once to hash it: the
+   sha256 and size (or that the file could not be fetched) go only to the
+   masked screen lockhub shows you, never to the agent or the console
+   window. It draws the approval screen and sends it to
    [lockhub](https://github.com/DavidGodefroid/lockhub) as a ticket, which
-   waits for your answer in `lox run`:
+   you decide in `lox run` unless a `lox run` auto rule does (a plan with an
+   unofficial plugin or typed values always waits for a human). The agent
+   hears pending with the ticket:
 
    ```
    ╭─ SAMPLES · file plan · 2 answers ─────
@@ -34,11 +38,14 @@ agent account (CLI / MCP)            lockfile account (console)
    │   ? Does the file start like a PDF?   1 = `%PDF-` appears within the first 1024 bytes   0 = no PDF header
    │
    │ this plan reveals at most 2 answers about the file
+   │ sha256 9f2c…e41a · 48213 bytes
    ╰─ pending: ticket 01J…
    ```
 
-3. On approval the console fetches the file into a fresh `0700` workspace,
-   runs each plugin in its own sandbox, checks that it wrote exactly `1` or
+3. The agent runs the ticket (`lockfile run TICKET`). Once it is approved,
+   the console fetches the file again into a fresh `0700` workspace, refuses
+   bytes other than the ones you approved (`E_STALE`), runs each plugin in
+   its own sandbox, checks that it wrote exactly `1` or
    `0` and exited 0, and returns the answers together at the next multiple of
    `answer_quantum`, with a handle (`f_…`) for follow-up questions on the
    same file.
@@ -46,11 +53,11 @@ agent account (CLI / MCP)            lockfile account (console)
 | Command | MCP tool | What |
 |---|---|---|
 | `lockfile status` | `lockfile_status` | the running consoles' state |
-| `lockfile sources` | `lockfile_sources` | profiles of the running consoles (`busy`: waiting on the human) |
+| `lockfile sources` | `lockfile_sources` | profiles of the running consoles (`busy`: waiting for the human or a run) |
 | `lockfile plugins` | `lockfile_plugins` | questions, meaning of 1 and 0 |
-| `lockfile plan --key K --plugin X… [--run]` | `lockfile_plan` | ask the human to approve |
-| `lockfile run PLAN_ID` | `lockfile_run` | run an approved plan once |
-| `lockfile plan --handle H --plugin X… --run` | `lockfile_plan` + `lockfile_run` | follow-up on the same file |
+| `lockfile plan --key K --plugin X…` | `lockfile_plan` | ask the human to approve: answers pending with a ticket |
+| `lockfile run TICKET` | `lockfile_run` | run the approved ticket once |
+| `lockfile plan --handle H --plugin X…`, then `lockfile run TICKET` | `lockfile_plan` + `lockfile_run` | follow-up on the same file |
 | `lockfile answers HANDLE` | `lockfile_answers` | answers already given |
 | `lockfile release HANDLE` | `lockfile_release` | delete the fetched file now |
 
@@ -61,6 +68,7 @@ every lock it lists, each call reaching the lock that serves its profile).
 `lockfile console` and `lockfile hub-key` take an `--instance` too, but that
 one is the name lockhub gives the lock.
 
-Exit codes depend on the outcome only, never on an answer: 0 answered, 1 no
+Exit codes depend on the outcome only, never on an answer: 0 answered or
+pending, 1 no
 console or error, 2 refused, 3 denied or no answer in time, 64 usage. Full
 walkthrough: [usage.md](usage.md).

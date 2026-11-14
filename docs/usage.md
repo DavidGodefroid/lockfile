@@ -58,14 +58,16 @@ one to `.lockfile/config.toml`, validated, without touching the rest of the file
 ```sh
 lockfile profile add --profile docs --source s3 --bucket documents --region eu-west-1 --prefix invoices/ \
   --credentials vault --vault-path secret/data/lockfile/docs --production
+install -m 0600 keys/partner_ed25519 keys/known_hosts .lockfile/   # the copy lox run gives the console
 lockfile profile add --profile partner --source sftp --host sftp.example.org --user reader --auth key \
-  --key ~/.ssh/partner_ed25519 --known-hosts ~/.ssh/known_hosts --base-dir /outgoing
+  --key /home/lockfile/.config/lockfile/partner_ed25519 \
+  --known-hosts /home/lockfile/.config/lockfile/known_hosts --base-dir /outgoing
 lockfile profile add --profile samples --source local --path /srv/lockfile/samples   # mounted read-only, docker.md
 ```
 
 ```
 lockfile profile add [--non-interactive] [--json] [--project DIR] [--profile NAME] [--production]
-                     [--credentials ask|vault [--vault-path P]] --source local|s3|sftp <source flags>
+                     [--credentials ask|vault|none [--vault-path P]] --source local|s3|sftp <source flags>
 ```
 
 The source flags are named after the config keys below (`--known-hosts` for `known_hosts`, ...).
@@ -92,9 +94,9 @@ bucket = "documents"
 region = "eu-west-1"
 endpoint = ""                 # S3-compatible server; https:// (http:// only to host.docker.internal or localhost, never production)
 prefix = "invoices/"          # keys outside the prefix are refused
-credentials = "vault"         # ask | vault (none: local, or an unencrypted sftp key); keychain: not in Docker
+credentials = "vault"         # ask | vault | none (a local source, or an unencrypted sftp key); keychain: not in Docker
 vault_path = "secret/data/lockfile/docs"   # username = access key id, password = secret key
-production = true             # the profile name is typed for every approval
+production = true             # the console's own widenings (policy review, :review loosenings, :unmask) need the profile name typed
 max_object_bytes = "50MiB"    # larger objects are not fetched
 max_plugins_per_handle = 16   # answers revealed about one fetched file, at most
 handle_ttl = "30m"            # a fetched file is deleted after this
@@ -117,7 +119,8 @@ it was fetched with.
 Credentials: S3 takes the access key id as `user` and the secret access key as the secret;
 SFTP `auth = "password"` takes user + password; `auth = "key"` reads the private key (mode
 0600 or stricter, no symlink) in the lockfile account and takes its passphrase as the secret.
-A leading `~/` in `key` and `known_hosts` is the lockfile account's home.
+A leading `~/` in `key` and `known_hosts` is the lockfile account's home (`/home/lockfile`), not
+yours: quote it on a command line, or your shell expands it to your own home first.
 On SFTP a key whose path below `base_dir` goes through a symbolic link on the server, or that
 the server resolves outside `base_dir`, is not fetched (`fetch_failed`).
 The container has no OS keychain: use `ask` (typed in the console at each start) or `vault`
@@ -135,8 +138,10 @@ lockfile marketplace add beta --index https://plugins.beta.example/index.json --
 lockfile marketplace list | remove NAME
 ```
 
-In a separated setup every `plugin` and `marketplace` command, `list` and `verify` included,
-refuses to run outside the lockfile account (from another account the store looks empty).
+In a separated setup every `plugin` command, `list` and `verify` included, refuses to run
+outside the lockfile account (from another account the store looks empty). `marketplace` runs
+as you: it writes the workspace's `.lockfile/config.toml`, which `lox run` reviews and copies to
+the console ([docker.md](docker.md#the-console-of-lox-run)).
 
 A version its marketplace withdraws (yanked) refuses to run (`plugin_yanked`). The yanked
 status comes from the marketplace's signed index: `plugin install`, `plugin update` and
@@ -181,7 +186,8 @@ lockfile console --profile docs --hub URL [--hub-plain-http] --hub-key-file FILE
 
 The console is launched by `lox run` only (lockhub's CLI), which writes the hub flags: without
 `--hub`, `--hub-key-file` and `--instance` it refuses to start ("launched by `lox run` only").
-There is no standalone console and no auto mode.
+There is no standalone console, and the console itself has no auto mode: `lox run`'s auto rules
+decide on lockhub, never for a plan with an unofficial plugin or typed values.
 
 `--allowed-uids UID,...` lets these uids connect besides the members of `lockfile-clients`, as
 `allowed_uids` in the image's `/etc/lockfile/system.toml` does: an agent in a container of its
@@ -191,9 +197,11 @@ own whose uid has no account in the console's image
 
 Run in its container ([docker.md](docker.md#run-the-console)), it checks the isolation (the
 console account, its own terminal), the sandbox and `/proc`, asks for the secret, connects,
-and serves the profile's socket in `/run/lockfile` (the `lockfile-run` volume). Every plan shows an approval screen: the key as
-the agent typed it, each plugin with its question and the meaning of 1 and 0, how many answers
-the plan reveals, and a red line per unofficial plugin; it is decided on lockhub (below). Keys:
+and serves the profile's socket in `/run/lockfile` (under `lox run`, the lock's socket volume). Every plan shows an
+approval screen: the canonical key (and a `typed` line when the agent typed it otherwise), each
+plugin with its question and the meaning of 1 and 0, how many answers the plan reveals, and a
+red line per unofficial plugin; the masked screen lockhub shows adds the file's sha256 and size.
+It is decided on lockhub (below). Keys:
 `:review`, `:status`, `:quit`. Results show as `plan …: answered` or `refused <code>`; the
 answers, causes, sizes and hashes are in the audit:
 
@@ -226,6 +234,9 @@ serves its API at the root and authenticates the lock by signature).
 
 | lockfile | lockkit | lockhub |
 |---|---|---|
+| v0.10.0 | v0.20.0 | as v0.8.1; ship the client and the console of the same version (confinement report at `hello`) |
+| v0.9.1 | v0.19.0 | as v0.8.1 |
+| v0.9.0 | v0.19.0 | as v0.8.1 |
 | v0.8.1 | v0.14.1 | as v0.6.0; v0.10.0 or later for `lox run` (`lox up` is deprecated) |
 | v0.8.0 | v0.13.0 | as v0.6.0 |
 | v0.7.0 | v0.11.0 | as v0.6.0 |
@@ -260,21 +271,24 @@ LOCKFILE_INSTANCE: no lock of that name is mounted here`. `lockfile mcp` starts 
 instance: when it cannot be resolved (a bad name, a `LOCKFILE_INSTANCE` lea does not list), every
 tool, `lockfile_status` first, answers with the reason.
 `lockfile console` and `lockfile hub-key` take a different `--instance`: the name `lox run` gives
-the lock (the hub instance). `lockfile doctor` takes none.
+the lock (the hub instance). `lockfile doctor` takes the launcher's `--instance NAME`, which
+picks the `lox run` console it checks among several lockfile locks.
 
 | Command | MCP tool | What |
 |---|---|---|
 | `lockfile status [--profile P] [--instance NAME]` | `lockfile_status` | the running consoles' state (`busy`: see below) |
 | `lockfile sources [--instance NAME]` | `lockfile_sources` | profiles of the running consoles (`busy`: see below) |
 | `lockfile plugins [--profile P] [--instance NAME]` | `lockfile_plugins` | questions, meaning of 1 and 0 |
-| `lockfile plan --key K --plugin X… [--input PLUGIN.INPUT='${NAME}'…] [--intent T] [--run] [--profile P] [--instance NAME]` | `lockfile_plan` | ask the human to approve (inputs: see placeholders below) |
-| `lockfile run PLAN_ID [--profile P] [--instance NAME]` (hub mode: `TICKET`) | `lockfile_run` | run an approved plan once (hub mode: the ticket of a pending plan, once decided) |
-| `lockfile plan --handle H --plugin X… --run` | `lockfile_plan` + `lockfile_run` | follow-up on the same file |
+| `lockfile plan --key K --plugin X… [--input PLUGIN.INPUT='${NAME}'…] [--intent T] [--profile P] [--instance NAME]` | `lockfile_plan` | ask the human to approve: answers `pending` with a ticket (inputs: see placeholders below) |
+| `lockfile run TICKET [--profile P] [--instance NAME]` | `lockfile_run` | run the ticket of a pending plan once it is decided |
+| `lockfile plan --handle H --plugin X…`, then `lockfile run TICKET` | `lockfile_plan` + `lockfile_run` | follow-up on the same file |
 | `lockfile answers HANDLE [--profile P] [--instance NAME]` | `lockfile_answers` | answers already given |
 | `lockfile release HANDLE [--profile P] [--instance NAME]` | `lockfile_release` | delete the fetched file now (answers at the next `answer_quantum`) |
 
-Every command takes `--json` and `--profile P` (optional when one console runs). Exit codes
-depend on the outcome only, never on an answer: 0 answered, 1 no console running or another
+Every command takes `--json`, and every one but `sources` takes `--profile P` (optional when one
+console runs). `plan --run` stops at `pending` as `plan` does: a plan is always decided on
+lockhub first, so run the ticket. Exit codes depend on the outcome only, never on an answer: 0
+answered or `pending`, 1 no console running or another
 error, 2 refused (an `E_*` refusal; `unknown_profile` is 2 whether the client or the console finds
 it), 3 denied or no answer in time, 64 usage. `status` exits 1 when a profile it reports on has
 no console.
@@ -285,11 +299,12 @@ because it is serving another one: a plan waiting for the human, or a run until 
 listed while it is busy; passing its profile with `--profile` still reaches it.
 
 **Hub mode and expired tickets.** A ticket whose approval the console can no longer
-use (lockkit reports it expired; lockfile's `read_pii` tickets have no TTL, so this is a
-decision the console's clock refuses) is not a timeout: `lockfile run TICKET` and
+use (lockkit reports it expired: a pending ticket past its TTL, 1 h for lockkit's `read_pii`
+tickets, or an approval that aged; the console keeps the plan itself 24 h) is not a timeout:
+`lockfile run TICKET` and
 `lockfile_run` answer `pending` with a new ticket for the same plan, which the human approves
 again on lockhub, shown which plan inputs moved (by name: `profile`, `key`, `handle`,
-`sha256`, `plugins`, `pins`, `unfetched`; never values). Run the new ticket once decided. The console
+`sha256`, `plugins`, `pins`, `inputs`, `unfetched`; never values). Run the new ticket once decided. The console
 re-checks the policy and the plugins before it asks again (a changed policy is not renewed:
 plan again); the content cannot be checked without fetching it, so the renewal names
 `sha256` `unchecked` (never shown as unchanged, never one click) and the run checks it when
@@ -350,7 +365,7 @@ MCP server in a throwaway container with the socket volume only ([docker.md](doc
 It never asks and is idempotent. For every project instead: `lockfile init <agent> --user`, or
 `lockfile doctor --fix`, which wires every installed agent. Claude Code
 may call `lockfile_status`, `lockfile_sources` and `lockfile_plugins` without a prompt; plans
-and runs always go through Claude Code's permission prompt and the console.
+and runs always go through Claude Code's permission prompt, and are decided on lockhub (`lox run`).
 
 ## Updates
 

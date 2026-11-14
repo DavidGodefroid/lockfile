@@ -51,8 +51,9 @@ limits = { cpu_s = 20, memory = "512MiB", timeout_s = 30 }
   refused at review).
 - `accepts` documents the inputs; the console does not sniff the type, the plugin checks its
   own input.
-- Changing `question`, `one` or `zero` needs a new major version; users type the plugin name to
-  accept such an update.
+- Changing `question`, `one` or `zero` needs a new major version (the official marketplace's CI
+  checks it: `scripts/relcheck` in lockfile-marketplace; lockfile itself does not); users type
+  the plugin name to accept such an update.
 
 ## Runtime
 
@@ -66,7 +67,7 @@ limits = { cpu_s = 20, memory = "512MiB", timeout_s = 30 }
 | Filesystem | Landlock: execute and read its own binary only |
 | Network | none (seccomp denies sockets; Landlock denies TCP with ABI ≥ 4) |
 | Other syscalls denied | `ptrace`, `process_vm_*`, `mount`, `bpf`, `keyctl`, `perf_event_open`, `execveat` and `memfd_create` (only its own binary executes, by Landlock); System V IPC (`shm*`, `msg*`, `sem*`) and POSIX message queues (`mq_*`); signals or limits aimed at any process but itself (`kill`, `tgkill`, `prlimit64`, …, and a descriptor owner set with `fcntl` `F_SETOWN`/`F_SETOWN_EX`/`F_SETSIG` or `ioctl` `FIOSETOWN`/`SIOCSPGRP`); child processes (threads only); file metadata of any kind (`chmod`, `chown`, xattrs, times, `truncate`, inode flags through `ioctl` `FS_IOC_SETFLAGS`/`FS_IOC_FSSETXATTR` or `file_setattr`); other processes' memory layout (`move_pages`, `migrate_pages`, `get_robust_list`); `mmap` of shared anonymous memory or with `MAP_GROWSDOWN`. Denied calls fail with `EPERM` |
-| Limits | CPU seconds; memory: `memory` bounds the private writable memory the plugin maps (`RLIMIT_DATA` = `memory`; a Go plugin needs about 64 MiB to start, 128 MiB is a reasonable floor), its main-thread stack is fixed at 8 MiB (`RLIMIT_STACK`, soft and hard), and its address space is bounded at `memory` + 4 GiB (`RLIMIT_AS`: room for the Go runtime's reservations, which reach only read-only memory past `memory`); no core; file size 0; threads: at most 512 tasks more than the console's account runs when the plugin starts (`RLIMIT_NPROC`, measured from the kernel's count; past it thread creation fails with `EAGAIN`); wall-clock timeout then SIGKILL of the group |
+| Limits | CPU seconds; memory: `memory` bounds the private writable memory the plugin maps (`RLIMIT_DATA` = `memory`; a Go plugin needs about 64 MiB to start, 128 MiB is a reasonable floor), its main-thread stack is fixed at 8 MiB (`RLIMIT_STACK`, soft and hard), and its address space is bounded at `memory` + 4 GiB (`RLIMIT_AS`: room for the Go runtime's reservations, which reach only read-only memory past `memory`); no core; file size 0; threads: at most 512 tasks more than the console's account runs when the plugin starts, never above the inherited hard limit (`RLIMIT_NPROC`, measured from the kernel's count; past it thread creation fails with `EAGAIN`); wall-clock timeout then SIGKILL of the group |
 | stderr | drained and discarded; only its byte count is audited |
 
 ## Answer
@@ -93,7 +94,10 @@ a tag `<name>/vX.Y.Z` whose release workflow builds, hashes and signs (cosign ke
 binaries and the manifest, and a signed `index.json`.
 
 An unofficial marketplace publishes the same index format, signed keyless by its own CI
-identity; its users add it with `lockfile marketplace add`. Give them an identity pattern
+identity or with a cosign key pair (a Rekor entry is required either way); its users add it
+with `lockfile marketplace add`, by identity (`--identity-regexp`) or by public key
+(`--public-key cosign.pub`, [usage.md](usage.md#plugins-and-marketplaces-console-account)).
+For a keyless signer, give them an identity pattern
 that escapes every dot and pins the repository path, e.g.
 `^https://github\.com/acme/lockfile-plugins/\.github/workflows/release\.yml@refs/tags/`:
 `marketplace add` warns about an unescaped `.` or a path that other repositories also

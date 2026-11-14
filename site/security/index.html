@@ -73,10 +73,10 @@
   <tr><td>The agent cannot read the file, the credentials, the plugins or the audit</td><td>a separate OS account <code>lockfile</code> (home <code>0700</code>); <code>lockfile doctor</code> checks from the agent’s side that opening it fails</td></tr>
   <tr><td>The agent cannot drive the console</td><td>lockkit’s isolation checks: the console runs in a container of its own, as its own account, on its container’s terminal, which lockhub’s <code>lox</code> starts and <code>lox attach</code> reaches; X11 refused, relays refused. Residual: whoever runs <code>docker</code> commands can attach or exec into it (<a href="https://github.com/DavidGodefroid/lockfile/blob/main/docs/docker.md#what-docker-does-and-does-not-separate">what Docker does and does not separate</a>)</td></tr>
   <tr><td>Only the clients group reaches the console</td><td>socket directory <code>/run/lockfile</code> (<code>2750</code>, setgid group <code>lockfile-clients</code>), socket <code>0660</code>, kernel peer credentials checked on every connection</td></tr>
-  <tr><td>The agent cannot replace what the console runs</td><td>the console runs the release image by its cosign-verified digest; the launcher <code>/usr/local/bin/lockfile</code> and its seccomp profile are owned by root</td></tr>
-  <tr><td>A plugin cannot read anything but its input, nor talk to the network</td><td>Landlock (execute and read its own binary only; TCP denied with ABI ≥ 4), seccomp (no sockets, <code>ptrace</code>, <code>mount</code>, <code>bpf</code>, <code>keyctl</code>, <code>execveat</code> and <code>memfd_create</code> (only its own binary executes, by Landlock), System V IPC, POSIX message queues, signals to other processes including through a descriptor owner, shared anonymous memory), rlimits, empty environment, input as a read-only fd 3, stdout capped at 3 bytes, stderr discarded; no other account in the console’s pid namespace sees the plugins’ processes in <code>/proc</code> (see the <a href="#sandbox-hardening">sandbox hardening</a>)</td></tr>
+  <tr><td>The agent cannot replace what the console runs</td><td>the console runs the release image by its cosign-verified digest (<code>lox run</code> refuses an image that is not a digest reference and checks it with cosign before compose starts it); the launcher <code>/usr/local/bin/lockfile</code> and its seccomp profile are owned by root</td></tr>
+  <tr><td>A plugin cannot open or read any file’s content but its input (and its typed values), nor talk to the network</td><td>Landlock (execute and read its own binary only; TCP denied with ABI ≥ 4; it blocks opens, not <code>stat</code>, <code>statx</code>, <code>readlink</code> or <code>access</code>: path metadata stays visible), seccomp (default allow, with a deny list: no sockets, <code>ptrace</code>, <code>mount</code>, <code>bpf</code>, <code>keyctl</code>, <code>execveat</code> and <code>memfd_create</code> (only its own binary executes, by Landlock), <code>fork</code>/<code>vfork</code>/<code>clone3</code> (threads only), System V IPC, POSIX message queues, signals to other processes including through a descriptor owner, shared anonymous memory), rlimits, an environment holding only <code>LOCKFILE_PLUGIN_PROTOCOL</code>, input as a read-only fd 3 (typed values on fd 6), stdout capped at 3 bytes, stderr discarded; no other account in the console’s pid namespace sees the plugins’ processes in <code>/proc</code> (see the <a href="#sandbox-hardening">sandbox hardening</a>)</td></tr>
   <tr><td>A plugin answers only its signed question</td><td>the manifest’s question and meanings of 1 and 0 are signed with the binary; marketplace review; a changed question is a loosening the human types to accept</td></tr>
-  <tr><td>Plugins and releases are what their publisher built</td><td>cosign keyless signatures checked through lockkit (index, manifest, binary, lockfile releases and images); no unsigned mode; a missing cosign refuses</td></tr>
+  <tr><td>Plugins and releases are what their publisher built</td><td>cosign signatures with a Rekor entry, checked through lockkit (index, manifest, binary, lockfile releases and images): keyless for official plugins and releases, keyless or a pinned public key for an unofficial marketplace; no unsigned mode; a missing cosign refuses</td></tr>
   <tr><td>The agent cannot widen the policy</td><td>no socket method installs, trusts or loosens anything; a change request only queues text for the human</td></tr>
   </tbody>
   </table>
@@ -94,12 +94,14 @@
   <tr><td>plugin answer <code>1</code> / <code>0</code></td><td>the one allowed thing</td></tr>
   <tr><td><code>result: null</code> + <code>plugin_error</code></td><td>absence of an answer; <strong>residual</strong>: it depends on the file (a plugin failed on it); at most one symbol per plugin, capped by <code>max_plugins_per_handle</code></td></tr>
   <tr><td><code>fetch_failed</code></td><td>the plan could not start; <strong>residual</strong>: says “this key could not be fetched” (missing, too big, denied and network are not distinguished)</td></tr>
-  <tr><td>handle <code>f_…</code>, plan id <code>pl_…</code></td><td>random, from <code>crypto/rand</code></td></tr>
+  <tr><td>handle <code>f_…</code>, plan id <code>pl_…</code>, ticket id</td><td>random, from <code>crypto/rand</code></td></tr>
+  <tr><td>pending answer: <code>status: pending</code>, <code>ticket</code>, <code>lock</code>, <code>instance</code></td><td>the plan waits for a decision on lockhub; the instance is the name <code>lox run</code> gave the lock (configuration)</td></tr>
+  <tr><td>plugin <code>inputs</code> (name, <code>kind</code>, <code>max_bytes</code>), a plan’s <code>held_inputs</code></td><td>signed manifest metadata, and placeholder names the agent wrote itself: never a value</td></tr>
   <tr><td>plugin name, version, <code>official</code>, <code>warning: unofficial_marketplace</code>, question, meaning of 1/0</td><td>plugin metadata from the signed manifest</td></tr>
-  <tr><td>profile names and <code>production</code> flag, <code>busy</code></td><td>lockfile configuration; <code>busy</code> means the console is waiting for the human on another request</td></tr>
+  <tr><td>profile names and <code>production</code> flag, <code>busy</code></td><td>lockfile configuration; <code>busy</code> means the console is serving another request: waiting for the human or a run</td></tr>
   <tr><td><code>approval_denied</code>, <code>approval_timeout</code></td><td>a human decision; the reason the human types is never forwarded</td></tr>
   <tr><td>refusal codes (<code>E_*</code>, with a static hint)</td><td>computed from the request and the local install, before or without reading the file</td></tr>
-  <tr><td><code>status</code>: console up, production, auto mode (always off: lockhub decides), security level, timers, plugin protocol, sandbox ok</td><td>console state</td></tr>
+  <tr><td><code>status</code>: console version and protocol, profile, production, <code>allow_unmask</code>, <code>show_results</code>, desktop security level, idle and session timers, answer quantum, plugin protocol, sandbox ok</td><td>console state</td></tr>
   </tbody>
   </table>
   </div>
@@ -124,7 +126,7 @@
   <h2 id="at-rest">Data at rest</h2>
   <ul class="prose">
     <li><strong>Fetched files</strong> live in a random <code>0700</code> workspace in the console account. They are deleted on <code>release</code>, on handle expiry, on console exit, and swept at start. Deletion is an unlink, not a secure erase.</li>
-    <li><strong>Credentials</strong>: the S3 SDK keeps the secret access key in the console’s memory for the session; core dumps are disabled.</li>
+    <li><strong>Credentials</strong>: the S3 SDK keeps the secret access key in the console’s memory for the session; core dumps are disabled (lockkit’s console sets <code>RLIMIT_CORE</code> 0 and <code>PR_SET_DUMPABLE</code> 0 at start, and refuses to start a production profile when it cannot).</li>
     <li><strong>The audit log</strong> (<code>~lockfile/.local/state/lockfile/audit.log</code>, <code>0600</code>) is the one place file metadata exists: key, size, sha256, fetch cause, each plugin’s precise outcome, stderr byte count. Never file bytes. <code>lockfile audit</code> reads it, in the console account only.</li>
   </ul>
 </section>
@@ -202,7 +204,7 @@
       </nav>
     </div>
     <div class="wrap footer-bottom">
-      <p>Pre-release (v0.8.x). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
+      <p>Pre-release (v0.10.x). lockfile is licensed under the <a href="https://github.com/DavidGodefroid/lockfile/blob/main/LICENSE">Apache License 2.0</a>.</p>
       <p><a href="https://lockfamily.dev">lockfamily.dev</a> · <a href="https://github.com/DavidGodefroid/lockfamily">the family on GitHub</a></p>
     </div>
   </footer>

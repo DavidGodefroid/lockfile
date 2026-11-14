@@ -36,18 +36,22 @@ files in S3, on SFTP or in a local directory: it fetches the file, runs signed,
 sandboxed plugins on it, and returns only each plugin's answer. The agent only asks.
 
 > [!NOTE]
-> **Pre-release** (`v0.8.x`): a release may still change the config files,
-> the MCP tools or the CLI. Linux only: the plugin sandbox needs Landlock and seccomp.
+> **Pre-release** (`v0.10.x`): a release may still change the config files,
+> the MCP tools or the CLI. The console is Linux only: the plugin sandbox needs Landlock
+> and seccomp. `install.sh` also installs the launcher on macOS, where only the agent side
+> runs; the Homebrew formula is Linux only.
 
 ## Why lockfile
 
 - **The agent never reads the file.** No byte, name, size, type, path or
   listing reaches it: `1`, `0` or no answer, from a closed list.
 - **Approval outside the agent.** Each plan becomes a ticket on
-  [lockhub](https://github.com/DavidGodefroid/lockhub), and every lockfile plan
-  waits for your answer in `lox run`.
+  [lockhub](https://github.com/DavidGodefroid/lockhub), which you decide in
+  `lox run` unless a `lox run` auto rule does. A plan with an unofficial plugin
+  or typed values always waits for a human.
 - **Fixed, signed questions.** Each plugin answers one question from its
-  signed manifest, with no parameters to aim the bit at the content.
+  signed manifest. The agent chooses no value to aim the bit at the content:
+  a protocol-2 plugin may take up to 4 values, which the human types at approval.
 - **The code that reads the file is boxed.** Landlock, seccomp and rlimits:
   no network, no path, stdout capped at 3 bytes.
 
@@ -89,8 +93,15 @@ The launcher, its image, Vault, lea and building from source:
    lox add lockfile
    ```
 
-2. Install the plugins you want, then apply them at the console with
-   `:review` (`files` is the lock's default name):
+2. In a terminal of its own, outside any agent, keep `lox run` open. It
+   starts the console, and every plan shows up there:
+
+   ```sh
+   lox run
+   ```
+
+3. With `lox run` up, install the plugins you want, then apply them at the
+   console with `:review` (`files` is the lock's default name):
 
    ```sh
    lockfile plugin install file.non-empty@1.0.0
@@ -98,18 +109,11 @@ The launcher, its image, Vault, lea and building from source:
    lox attach files
    ```
 
-3. In a terminal of its own, outside any agent, keep `lox run` open. Every
-   plan shows up there:
-
-   ```sh
-   lox run
-   ```
-
 4. Start your agent in the project (`claude`, `codex`, `gemini`, …) and ask
    about a file by its exact key: *"is invoices/2026/10/abc123.pdf a valid PDF?"*
 
-`lox add` wires Claude Code; for Codex, Cursor or Gemini CLI, also run
-`lockfile init codex` (or `cursor`, `gemini`). With
+To wire your agent, run `lockfile init <agent>` (`claude`, `codex`, `cursor`
+or `gemini`). With
 [lea](https://github.com/DavidGodefroid/lea), run `lox add` in lea's projects
 directory, then `lea stop` and `lea`. Step by step, by hand:
 [docs/install.md](docs/install.md#first-plan-step-by-step).
@@ -128,8 +132,8 @@ to end over the socket. No size, type, hash, name, listing or error text.
 <td width="50%" valign="top">
 
 **👤 Human in the loop**<br>
-Every plan is a ticket you answer in `lox run`, outside the agent. The
-screen says how many answers the plan reveals.
+Every plan is a lockhub ticket, decided in `lox run` outside the agent, by
+you or by an auto rule you set. The screen says how many answers the plan reveals.
 
 </td>
 </tr>
@@ -138,7 +142,8 @@ screen says how many answers the plan reveals.
 
 **🔏 cosign everywhere**<br>
 Plugins, the marketplace index and lockfile's own releases are checked
-against keyless cosign signatures. There is no unsigned mode.
+against cosign signatures with a Rekor entry: keyless for official ones, or a
+pinned public key for an unofficial marketplace. There is no unsigned mode.
 
 </td>
 <td valign="top">
@@ -168,9 +173,12 @@ sequenceDiagram
     participant S as 🗄️ S3 / SFTP / disk
     participant P as 🧱 sandboxed plugins
     A->>C: plan --key K --plugin X --plugin Y
-    C->>L: ticket: the key and the plugins' signed questions
-    L-->>C: signed decision (you)
-    C->>S: fetch K into a 0700 workspace
+    C->>S: fetch K once, hash it (sha256 and size)
+    C->>L: ticket: key, signed questions, hash (your screen only)
+    C-->>A: pending, ticket T
+    L-->>C: signed decision (you or an auto rule)
+    A->>C: run T
+    C->>S: fetch K again into a 0700 workspace, refuse other bytes
     C->>P: the file as a read-only fd 3
     P-->>C: 1 or 0 each, checked strictly
     C-->>A: one bit per plugin, on the answer quantum
@@ -178,9 +186,11 @@ sequenceDiagram
 
 1. The agent picks plugins from `lockfile plugins` and plans with the exact
    key it was given. There is no listing and no stat.
-2. The console validates the plan without touching the source and sends
-   lockhub a ticket; you answer it in `lox run`.
-3. The console fetches the file, runs each plugin in its own sandbox and
+2. The console validates the plan, then fetches the file once to hash it. The
+   sha256 and size go only to your masked lockhub screen, never to the agent,
+   which hears pending with a ticket. You decide it in `lox run`.
+3. The agent runs the ticket. The console fetches the file again, refuses
+   different bytes (`E_STALE`), runs each plugin in its own sandbox and
    returns the answers together, with a handle for follow-up questions.
 
 The approval screen, the agent's commands and MCP tools, and exit codes:

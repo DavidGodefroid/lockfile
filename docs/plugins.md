@@ -2,12 +2,16 @@
 
 A plugin answers **one yes/no question about one file**, fixed in its signed
 manifest, about format, structure, integrity or rendering, never about what
-the content means or says. Plugins take no parameters: with one bit of
-output, a parameter would let the agent aim that bit at the content.
+the content means or says. Plugins take no value the agent chooses: with
+one bit of output, such a parameter would let the agent aim that bit at the
+content. A protocol-2 plugin may take up to 4 values (`inputs`) that the
+human types at approval; the agent only names placeholders
+([usage.md](usage.md#placeholders-values-the-human-types)).
 
 Official plugins live in
 [lockfile-marketplace](https://github.com/DavidGodefroid/lockfile-marketplace),
-whose signer is pinned in the binary. Its source holds 13 plugins:
+whose signer is pinned in the binary. Its source holds 13 plugins, each at
+1.0.0:
 
 | Plugin | Question |
 |---|---|
@@ -29,7 +33,8 @@ whose signer is pinned in the binary. Its source holds 13 plugins:
 lockfile plugin install pdf.parses@1.0.0        # exact versions only; signatures checked with cosign
 lockfile plugin update pdf.parses@1.1.0         # shows the manifest diff; a changed question needs the name typed
 lockfile plugin list | verify [NAME] | remove NAME
-lockfile marketplace add NAME --index URL --identity-regexp REGEXP
+lockfile marketplace add NAME --index URL --identity-regexp REGEXP   # keyless signer
+lockfile marketplace add NAME --index URL --public-key cosign.pub    # cosign key pair
 ```
 
 A running console applies a newly installed plugin after `:review`
