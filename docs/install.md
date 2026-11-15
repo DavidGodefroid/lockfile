@@ -11,14 +11,17 @@ each of them in the signed release image. Full guide:
 
 ```sh
 brew trust davidgodefroid/tap
-brew install davidgodefroid/tap/lox davidgodefroid/tap/lockfile
+brew install davidgodefroid/tap/lockfile davidgodefroid/tap/lox cosign
 ```
 
 Homebrew asks you to trust a third-party tap once. The `lockfile` formula is
 Linux only; it installs the same launcher and seccomp profile as
 `scripts/install.sh`, pinned to the same image digests. Each release tag bumps
 that formula ([homebrew-tap](https://github.com/DavidGodefroid/homebrew-tap)).
-`lox` is [lockhub](https://github.com/DavidGodefroid/lockhub)'s CLI. The whole
+`lox` is [lockhub](https://github.com/DavidGodefroid/lockhub)'s CLI: this
+release needs lox v0.12.0 or later. `lox add` and `lox run` verify every image
+with [cosign](https://docs.sigstore.dev/cosign/system_config/installation/)
+v2.5.0 or later, which the `lockfile` formula does not pull in. The whole
 Lock Family instead: `brew install davidgodefroid/tap/lockfamily`.
 
 Then let
@@ -49,7 +52,8 @@ by digest, cosign and the Vault CLI by sha256; the image has no `sudo`.
 
 ## First plan, step by step
 
-With lockfile's own installer and [cosign](https://docs.sigstore.dev/cosign/system_config/installation/):
+With lockfile's own installer, [cosign](https://docs.sigstore.dev/cosign/system_config/installation/)
+v2.5.0+ and lox v0.12.0+:
 
 ```sh
 # 1. The launcher and the seccomp profile the console runs under (cosign checks the
