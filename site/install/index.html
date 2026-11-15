@@ -66,11 +66,11 @@
   <div class="install">
     <div class="install-head"><span>Install with Homebrew</span></div>
     <pre tabindex="0" aria-label="Install commands"><code><span class="cmd">brew trust davidgodefroid/tap</span>
-<span class="cmd">brew install davidgodefroid/tap/lox davidgodefroid/tap/lockfile</span></code></pre>
+<span class="cmd">brew install davidgodefroid/tap/lockfile davidgodefroid/tap/lox cosign</span></code></pre>
     <p class="install-note">Homebrew asks you to trust a third-party tap once. The whole family instead: <code>brew install davidgodefroid/tap/lockfamily</code>.</p>
   </div>
   <div class="prose">
-    <p>The <code>lockfile</code> formula is Linux only. It installs the same launcher and seccomp profile as the install script, pinned to the same image digests. <code>lox</code> is <a href="https://github.com/DavidGodefroid/lockhub">lockhub</a>’s CLI.</p>
+    <p>The <code>lockfile</code> formula is Linux only. It installs the same launcher and seccomp profile as the install script, pinned to the same image digests. <code>lox</code> is <a href="https://github.com/DavidGodefroid/lockhub">lockhub</a>’s CLI; this release needs lox v0.12.0 or later. The formula does not pull in cosign, which <code>lox add</code> and <code>lox run</code> need.</p>
     <p>Then, in your project (with lea: in its projects directory), let <a href="https://github.com/DavidGodefroid/lockhub/blob/main/docs/lox-add.md"><code>lox add lockfile</code></a> ask for your file store, set up the lock and start its console:</p>
   </div>
   <pre tabindex="0"><code>lox add lockfile    <span class="cmt"># S3, SFTP or a local directory; the lock is named files by default</span>
@@ -83,7 +83,8 @@ lox run             <span class="cmt"># in a terminal of its own: serves the dec
   <ul class="prose">
     <li><strong>Docker on Linux</strong>, on a kernel with Landlock and seccomp, which sandbox the plugins (Landlock also denies TCP from kernel ABI 4). <code>lockfile doctor</code> reports what the kernel offers. Without them, plans are refused with <code>E_SANDBOX_UNAVAILABLE</code>.</li>
     <li><strong>On Windows</strong>, WSL 2 with Docker Desktop.</li>
-    <li><strong><a href="https://docs.sigstore.dev/cosign/system_config/installation/">cosign</a></strong> on <code>PATH</code>, for the install script and <code>lockfile update</code>. Without it nothing is installed: there is no unsigned mode. The image has its own cosign for the plugins.</li>
+    <li><strong><a href="https://github.com/DavidGodefroid/lockhub">lox</a> v0.12.0 or later</strong>, which sets up the lock and runs its console.</li>
+    <li><strong><a href="https://docs.sigstore.dev/cosign/system_config/installation/">cosign</a> v2.5.0 or later</strong> on <code>PATH</code>, for <code>lox add</code> and <code>lox run</code> (they verify every image), the install script and <code>lockfile update</code>. Without it nothing is installed: there is no unsigned mode. The image has its own cosign for the plugins.</li>
   </ul>
 </section>
 

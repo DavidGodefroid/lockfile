@@ -62,16 +62,19 @@ lockfile answers the one question an agent needs about them, and nothing else.
 
 ```sh
 brew trust davidgodefroid/tap
-brew install davidgodefroid/tap/lox davidgodefroid/tap/lockfile
+brew install davidgodefroid/tap/lockfile davidgodefroid/tap/lox cosign
 ```
 
 lockfile runs in Docker, on Linux (the formula is Linux only; on Windows, WSL 2
 with Docker Desktop). Homebrew installs the `lockfile` launcher, which runs
-every command in the release's image. `lox` is lockhub's CLI. The whole
-family instead: `brew install davidgodefroid/tap/lockfamily`.
+every command in the release's image. `lox` is lockhub's CLI: this release
+needs lox v0.12.0 or later. `lox add` and `lox run` verify every image with
+[cosign](https://docs.sigstore.dev/cosign/system_config/installation/) v2.5.0
+or later, which the `lockfile` formula does not pull in. The whole family
+instead: `brew install davidgodefroid/tap/lockfamily`.
 
-Without Homebrew, the signed install script of a release (needs
-[cosign](https://docs.sigstore.dev/cosign/system_config/installation/)):
+Without Homebrew, the signed install script of a release (needs cosign
+v2.5.0+; install lox v0.12.0+ beside the launcher):
 
 ```sh
 V=vX.Y.Z
