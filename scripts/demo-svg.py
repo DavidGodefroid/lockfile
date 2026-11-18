@@ -8,13 +8,22 @@ runs three signed, sandboxed plugins on it, and only their answers cross the
 socket back to the agent: 1, 1, 1. Pure SVG + CSS keyframes on one clock, so it
 plays on GitHub, on the site and in any browser.
 
-No on-screen text is invented:
+No on-screen text is typed by hand, but this is not a recording of a live
+session. Each screen is drawn by the code that draws it for real, run on the
+demo's plan:
 
-- the `lox run` terminal is scripts/demo-lox-run.json, frames drawn by
-  lockhub's own renderer (internal/loxrun, a Session at 92x25 fed the ticket
-  below; see the capture note in that pull request, DavidGodefroid/lockfile#91).
-  The ticket's screen is what internal/backend (planScreen, hubScreens) makes
-  of this plan with the official marketplace's manifests of the three plugins;
+- the `lox run` terminal is scripts/demo-lox-run.json: the frames lockhub's
+  own renderer wrote (internal/loxrun at 4d94ef1, lockkit v0.20.0), from a
+  Session on a 92x25 colour terminal in that package's test harness (a hub
+  queue in memory, a signed ticket), with the keys d then y, then the hub
+  state "consumed". Two limits follow. The harness follows no lock console,
+  so the header lacks the `locks … serving` line and the tabs line that a
+  real `lox run` serving a lockfile console draws. And the ticket was built
+  for the capture, as lockkit's console builds a plan's ticket (version 1,
+  read_pii, lock lockfile, instance files), not sent by a running console.
+  Its screen is what internal/backend (planScreen, hubScreens) makes of this
+  plan with the official marketplace's manifests of the three plugins. The
+  same note is in the JSON file's "note" key;
 - the agent's commands are the CLI's (docs/usage.md, "The agent side"); the
   pending line is lockkit's mcpkit.PendingText, the result lines are
   cmd/lockfile resultLines, the handle has workspace.newHandle's shape;
@@ -327,8 +336,9 @@ print(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}
       f'it in lox run; the agent runs the ticket, signed plugins run sandboxed on the file, '
       f'and only their answers, 1, 1 and 1, reach the agent.">')
 print("<title>lockfile: your agent asks about the file, it never reads it</title>")
+# Without motion: the still is the approval card, details open.
 print("<style>" + "\n".join(css) +
-      "\n@media (prefers-reduced-motion: reduce){*{animation-delay:-15s!important;"
+      "\n@media (prefers-reduced-motion: reduce){*{animation-delay:-6s!important;"
       "animation-play-state:paused!important}}</style>")
 print("\n".join(body))
 print("</svg>")
