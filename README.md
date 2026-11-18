@@ -16,9 +16,8 @@
 signed, sandboxed plugins answer, and the agent only ever gets 1s and 0s.</b></p>
 
 <p align="center">
-  <img alt="Demo: an agent (here Claude Code, left) asks three yes/no questions about an invoice. The plan is approved, signed plugins run sandboxed on the file, and only their answers, 1, 1 and 1, reach the agent." src="site/assets/demo.svg" width="900">
+  <img alt="Demo, step by step. 1: an agent (here Claude Code, left) runs lockfile plan with three yes/no plugins on an invoice and is told the plan is pending human approval. 2: the plan shows as a question in lox run (top right), the email address in its key masked. 3: you open the details, read each plugin's question, and press y to approve. 4: the agent runs the ticket; the lockfile console (bottom right) fetches the file and runs the three signed plugins in the sandbox. 5: only their answers, 1, 1 and 1, reach the agent." src="site/assets/demo.svg" width="900">
 </p>
-<p align="center"><sub>An agent (here Claude Code, left) and the lockfile console (right). Drawn before approvals moved to lockhub: today you approve the plan in <code>lox run</code>.</sub></p>
 
 <p align="center">
   <a href="#quick-start">Quick start</a> ·
